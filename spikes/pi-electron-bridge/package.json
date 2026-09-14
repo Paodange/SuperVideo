@@ -1,0 +1,17 @@
+{
+  "name": "supervideo-pi-electron-bridge-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "validate": "electron ."
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.85.1",
+    "@earendil-works/pi-ai": "0.85.1"
+  },
+  "devDependencies": {
+    "electron": "44.3.0"
+  }
+}

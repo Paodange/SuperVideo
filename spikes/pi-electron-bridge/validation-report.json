@@ -1,0 +1,555 @@
+{
+  "spike": "Pi Agent + Electron utilityProcess + Python JSONL bridge",
+  "startedAt": "2026-09-14T16:30:25.748Z",
+  "finishedAt": "2026-09-14T16:30:27.677Z",
+  "passed": true,
+  "checks": {
+    "electronUtilityProcess": true,
+    "piAgentLifecycle": true,
+    "pythonJsonlProgress": true,
+    "openAICompatibleRegistration": true,
+    "sessionPersistence": true,
+    "cancellationPropagation": true
+  },
+  "evidence": {
+    "versions": {
+      "electron": "44.3.0",
+      "node": "24.20.0",
+      "chrome": "152.0.7977.78"
+    },
+    "initialRestoredMessageCount": 8,
+    "savedMessageCount": 12,
+    "restartedMessageCount": 12,
+    "successProgressUpdates": 4,
+    "cancelStatus": "error",
+    "customProvider": {
+      "registered": true,
+      "provider": "supervideo-local",
+      "modelId": "supervideo-local-test",
+      "api": "openai-completions",
+      "baseUrl": "http://127.0.0.1:65535/v1",
+      "scope": "registration-only; no real endpoint request in this spike"
+    }
+  },
+  "limitations": [
+    "LLM responses are deterministic faux responses, so no API key or network call is required.",
+    "The OpenAI-compatible provider check validates registration/configuration only, not a real endpoint handshake.",
+    "The Python task is a controlled stand-in for transcription, rendering, and Jianying automation."
+  ],
+  "events": [
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:25.775Z",
+      "type": "worker_spawn",
+      "pid": 23608
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.130Z",
+      "type": "ready",
+      "restoredMessageCount": 8,
+      "customProvider": {
+        "registered": true,
+        "provider": "supervideo-local",
+        "modelId": "supervideo-local-test",
+        "api": "openai-completions",
+        "baseUrl": "http://127.0.0.1:65535/v1",
+        "scope": "registration-only; no real endpoint request in this spike"
+      }
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.131Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "agent_start"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.131Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "turn_start"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.131Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.131Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.133Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.133Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.184Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.184Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.184Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.184Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "tool_execution_start",
+      "toolCallId": "success-call",
+      "toolName": "fake_countdown"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.406Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "tool_execution_update",
+      "toolCallId": "success-call",
+      "toolName": "fake_countdown",
+      "partialResult": {
+        "content": [
+          {
+            "type": "text",
+            "text": "python-step-1"
+          }
+        ],
+        "details": {
+          "progress": 0.25,
+          "source": "python-jsonl"
+        }
+      }
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.556Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "tool_execution_update",
+      "toolCallId": "success-call",
+      "toolName": "fake_countdown",
+      "partialResult": {
+        "content": [
+          {
+            "type": "text",
+            "text": "python-step-2"
+          }
+        ],
+        "details": {
+          "progress": 0.5,
+          "source": "python-jsonl"
+        }
+      }
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.706Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "tool_execution_update",
+      "toolCallId": "success-call",
+      "toolName": "fake_countdown",
+      "partialResult": {
+        "content": [
+          {
+            "type": "text",
+            "text": "python-step-3"
+          }
+        ],
+        "details": {
+          "progress": 0.75,
+          "source": "python-jsonl"
+        }
+      }
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.857Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "tool_execution_update",
+      "toolCallId": "success-call",
+      "toolName": "fake_countdown",
+      "partialResult": {
+        "content": [
+          {
+            "type": "text",
+            "text": "python-step-4"
+          }
+        ],
+        "details": {
+          "progress": 1,
+          "source": "python-jsonl"
+        }
+      }
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.858Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "tool_execution_end",
+      "toolCallId": "success-call",
+      "toolName": "fake_countdown",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"status\":\"completed\",\"steps\":4}"
+          }
+        ],
+        "details": {
+          "status": "completed",
+          "steps": 4,
+          "source": "python-jsonl"
+        }
+      },
+      "isError": false
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.858Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.858Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.858Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "turn_end"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.858Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "turn_start"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.859Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.859Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.930Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.945Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.945Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.945Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.946Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "turn_end"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.946Z",
+      "type": "agent_event",
+      "scenario": "success",
+      "eventType": "agent_end"
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.948Z",
+      "type": "state_saved",
+      "scenario": "success",
+      "messageCount": 12
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.948Z",
+      "type": "scenario_finished",
+      "scenario": "success",
+      "status": "completed",
+      "messageCount": 12
+    },
+    {
+      "worker": "initial",
+      "at": "2026-09-14T16:30:26.949Z",
+      "type": "worker_exit",
+      "code": 0
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:26.966Z",
+      "type": "worker_spawn",
+      "pid": 11752
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.385Z",
+      "type": "ready",
+      "restoredMessageCount": 12,
+      "customProvider": {
+        "registered": true,
+        "provider": "supervideo-local",
+        "modelId": "supervideo-local-test",
+        "api": "openai-completions",
+        "baseUrl": "http://127.0.0.1:65535/v1",
+        "scope": "registration-only; no real endpoint request in this spike"
+      }
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.386Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "agent_start"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.386Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "turn_start"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.386Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.386Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.388Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.388Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.446Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.446Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_update"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.446Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.447Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "tool_execution_start",
+      "toolCallId": "cancel-call",
+      "toolName": "fake_countdown"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.671Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "tool_execution_update",
+      "toolCallId": "cancel-call",
+      "toolName": "fake_countdown",
+      "partialResult": {
+        "content": [
+          {
+            "type": "text",
+            "text": "python-step-1"
+          }
+        ],
+        "details": {
+          "progress": 0.05,
+          "source": "python-jsonl"
+        }
+      }
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.673Z",
+      "type": "python_cancelled",
+      "toolCallId": "cancel-call"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.673Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "tool_execution_end",
+      "toolCallId": "cancel-call",
+      "toolName": "fake_countdown",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Python tool execution was cancelled."
+          }
+        ],
+        "details": {}
+      },
+      "isError": true
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.673Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.674Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.674Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "turn_end"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.674Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "turn_start"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.674Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_start"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.674Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "message_end"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.674Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "turn_end"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.674Z",
+      "type": "agent_event",
+      "scenario": "cancel",
+      "eventType": "agent_end"
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.676Z",
+      "type": "state_saved",
+      "scenario": "cancel",
+      "messageCount": 16
+    },
+    {
+      "worker": "restarted",
+      "at": "2026-09-14T16:30:27.677Z",
+      "type": "scenario_finished",
+      "scenario": "cancel",
+      "status": "error",
+      "errorMessage": "This operation was aborted",
+      "messageCount": 16
+    }
+  ]
+}
