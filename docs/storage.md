@@ -1,0 +1,154 @@
+# A05 SQLite storage
+
+SuperVideo uses one SQLite database per project. The trusted project layer will
+create a project directory and its manifest in A06; A05 only opens the database
+file it is given and applies the bundled schema:
+
+```text
+<project-root>/
+├─ project.supervideo.json   # A06
+└─ data/
+   └─ project.db             # A05 SQLite database
+```
+
+The storage module does not choose a current working directory, use a user
+home directory, create a project, scan media, or expose a database path through
+Agent/Renderer RPC. Original media remains an external, read-only reference.
+
+## Connection and transactions
+
+`supervideo_core.storage.Database` owns one `sqlite3` connection and one
+thread. Every connection verifies these settings before it is made available:
+
+```sql
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA busy_timeout = 5000;
+```
+
+The connection uses explicit autocommit mode and repositories wrap writes in
+`BEGIN IMMEDIATE`. Repositories can be composed inside an outer
+`database.transaction()`; the outermost caller owns commit and rollback. The
+connection is not shared between threads and repositories never return a
+cursor or hold an unbounded cursor open.
+
+`Database.integrity_report()` (also available as `check_integrity()` and
+`diagnostics()`) runs `quick_check`, `integrity_check`, and
+`foreign_key_check`. It returns a structured summary and never repairs or
+deletes data. SQLite failures are mapped to stable `StorageError` codes such
+as `DATABASE_BUSY`, `DATABASE_READ_ONLY`, and `DATABASE_CORRUPT`; public error
+messages do not contain SQL, paths, or raw exception text.
+
+## Migrations
+
+Migration files live in `supervideo_core/storage/sql` and are included as
+Python package data. Names use a fixed four-digit version and a source-level
+name, for example `0001_initial.sql`. The runner normalizes CRLF and LF to LF
+before calculating a SHA-256 checksum. It rejects missing or duplicate
+versions, out-of-order registrations, changed names or checksums, and a
+database version newer than the supported version.
+
+The `schema_migrations` table stores `version`, `name`, `checksum`, and
+`applied_at_ms`. The metadata table, each migration's SQL statements, and its
+record are applied in one `BEGIN IMMEDIATE` transaction. SQL statements are
+executed individually rather than with `sqlite3.executescript()`, whose
+implicit commit behavior would undermine rollback. A failed migration rolls
+back the complete transaction, including the metadata table on a fresh
+database. Reopening a current database is a no-op.
+
+Historical migrations are immutable. A schema change must add a new higher
+numbered migration and update `DATABASE_SCHEMA_VERSION`; it must not edit an
+already-applied SQL file.
+
+## Initial schema
+
+The first migration creates these tables and fixed indexes:
+
+- `projects` stores project identity, normalized absolute project root,
+  target platform, non-secret JSON configuration, timestamps, and a revision.
+  Project roots are unique.
+- `assets` stores external asset metadata only. A project/path pair is unique,
+  `size_bytes` cannot be negative, and `project_id` is a cascading foreign
+  key. A05 does not inspect, fingerprint, copy, move, rename, or delete a
+  media file.
+- `jobs` is the durable base record for A07. It validates the planned status
+  set, progress range, non-negative attempt, JSON input/result, timestamps,
+  and optional project/type/idempotency-key uniqueness. A05 does not implement
+  state transitions, events, retries, checkpoints, or scheduling.
+- `messages` is append-oriented conversation storage. Roles are restricted to
+  `user`, `assistant`, `tool`, and `system`; sequence numbers are positive and
+  unique within a project conversation.
+- `timeline_versions` stores append-only Timeline IR JSON, an independent
+  Timeline `schema_version`, edit intent, and diff summary. Version numbers
+  are positive and unique within a project. A parent must belong to the same
+  project. Parent deletion cascades to its child versions, and the database
+  trigger rejects updates.
+
+All resource IDs are application-generated lowercase UUID strings. Timestamps
+use UTC Unix epoch milliseconds and end in `_at_ms`. JSON is validated as
+finite, bounded JSON-safe data and stored as UTF-8 text using
+`ensure_ascii=False`, sorted keys, and compact separators. The repository API
+does not store Pydantic objects, Python objects, or pickle.
+
+Deleting a project at the database level cascades only database rows. It never
+deletes `project_root`, an external asset, or any other filesystem entry.
+
+## Repository API
+
+The public Python API is deliberately small and typed:
+
+```python
+from supervideo_core.storage import (
+    AssetRepository, Database, JobRepository, MessageRepository,
+    ProjectRepository, TimelineVersionRepository,
+)
+
+database = Database.open(database_path)  # absolute path from trusted A06
+database.migrate()
+projects = ProjectRepository(database)
+project = projects.create(project_record)
+assets = AssetRepository(database).list_for_project(project.id, limit=100)
+messages = MessageRepository(database).list_for_conversation(project.id, "conversation-id")
+```
+
+Project, asset, job, message, and timeline inputs are strict Pydantic records.
+All list operations have a bounded limit and deterministic ordering; child
+queries include the project ID in their SQL conditions. `MessageRepository`
+and `TimelineVersionRepository` append records and provide no update method.
+There is no arbitrary SQL, table-name, `WHERE`-clause, or dictionary-to-UPDATE
+repository entry point.
+
+## Verification
+
+After the Python environment is initialized, run the focused suite and the
+cross-process storage smoke from the repository root:
+
+```powershell
+npm run core:setup
+npm run core:test
+npm run core:storage:smoke
+```
+
+The smoke command creates a temporary project path containing spaces and
+Chinese characters, starts two real Python processes, writes fixed non-secret
+fixtures in the first process, reopens and migrates the same database in the
+second process, checks all five tables and integrity constraints, and removes
+the temporary tree in a `finally` path. It does not create a tracked report.
+
+WAL may create `project.db-wal` and `project.db-shm` while a connection is
+active. Always close every connection before removing or moving a project
+database. The smoke and tests use temporary directories and clean these files
+with the temporary tree.
+
+## Version boundaries and current limits
+
+`DATABASE_SCHEMA_VERSION` versions SQLite migrations. It is independent from
+A04 `CORE_RPC_PROTOCOL_VERSION` and from the Timeline IR `schemaVersion` stored
+in `timeline_versions`. None of these constants may be reused for another
+boundary.
+
+A05 does not include project create/open UI or manifest handling, trusted path
+selection, media analysis, the A07 job state machine and recovery, complete
+Timeline IR validation or active-version switching, A08 credentials, backup
+and restore, or any Renderer IPC/RPC method for database access.
