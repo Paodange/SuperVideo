@@ -1,3 +1,9 @@
+import type {
+  AssetListResult,
+  AssetReferenceBatchResult,
+  ProjectSummary,
+} from "./core-rpc";
+
 /**
  * The protocol between Electron Main and the isolated Agent utility process.
  * Keep this contract independent from the Renderer IPC contract: the Main
@@ -7,13 +13,18 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
   cancelRun: "cancel-run",
   ping: "ping",
   shutdown: "shutdown",
+  projectCreate: "project-create",
+  projectOpen: "project-open",
+  projectInspect: "project-inspect",
+  assetReference: "asset-reference",
+  assetList: "asset-list",
 } as const;
 
 export const AGENT_WORKER_MESSAGE_TYPES = {
@@ -22,10 +33,55 @@ export const AGENT_WORKER_MESSAGE_TYPES = {
   runEvent: "run-event",
   runFinished: "run-finished",
   workerError: "worker-error",
+  projectOperationResult: "project-operation-result",
+  projectOperationError: "project-operation-error",
 } as const;
 
 export type AgentWorkerCommandType = (typeof AGENT_WORKER_COMMAND_TYPES)[keyof typeof AGENT_WORKER_COMMAND_TYPES];
 export type AgentWorkerMessageType = (typeof AGENT_WORKER_MESSAGE_TYPES)[keyof typeof AGENT_WORKER_MESSAGE_TYPES];
+export type AgentProjectOperationType =
+  | "project-create"
+  | "project-open"
+  | "project-inspect"
+  | "asset-reference"
+  | "asset-list";
+export type ProjectOperationErrorCode =
+  | "DIALOG_CANCELLED"
+  | "INVALID_PROJECT_NAME"
+  | "INVALID_PROJECT_ROOT"
+  | "UNSUPPORTED_PROJECT_LOCATION"
+  | "PROJECT_DIRECTORY_NOT_EMPTY"
+  | "PROJECT_ALREADY_EXISTS"
+  | "PROJECT_NOT_FOUND"
+  | "PROJECT_MANIFEST_INVALID"
+  | "PROJECT_SCHEMA_TOO_NEW"
+  | "PROJECT_DATABASE_MISSING"
+  | "PROJECT_ID_MISMATCH"
+  | "PROJECT_PATH_CONFLICT"
+  | "PROJECT_NOT_ACTIVE"
+  | "ASSET_NOT_FOUND"
+  | "UNSUPPORTED_ASSET_TYPE"
+  | "TOO_MANY_ASSETS"
+  | "ASSET_CHANGED"
+  | "ASSET_CHANGED_DURING_REFERENCE"
+  | "FILE_ACCESS_DENIED"
+  | "OPERATION_TIMEOUT"
+  | "CORE_UNAVAILABLE"
+  | "DATABASE_OPEN_FAILED"
+  | "DATABASE_READ_ONLY"
+  | "DATABASE_BUSY"
+  | "DATABASE_CORRUPT"
+  | "MIGRATION_FAILED"
+  | "MIGRATION_CHECKSUM_MISMATCH"
+  | "SCHEMA_TOO_NEW"
+  | "CONSTRAINT_VIOLATION"
+  | "RECORD_NOT_FOUND"
+  | "INVALID_RECORD";
+
+export type ProjectOperationError = Readonly<{
+  code: ProjectOperationErrorCode;
+  message: string;
+}>;
 
 export type AgentRunStatus = "idle" | "running" | "completed" | "cancelled" | "interrupted" | "error";
 
@@ -61,7 +117,18 @@ export type AgentWorkerCommand =
   | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "run-smoke-task"; runId: string; steps: number }>
   | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "cancel-run"; runId: string }>
   | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "ping" }>
-  | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "shutdown" }>;
+  | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "shutdown" }>
+  | AgentProjectOperationCommand;
+export type AgentProjectOperationPayload = Readonly<Record<string, unknown>>;
+export type AgentProjectOperationCommand = Readonly<{
+  protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+  type: AgentProjectOperationType;
+  operationId: string;
+  timestamp: number;
+  projectId?: string;
+  payload: AgentProjectOperationPayload;
+}>;
+export type AgentWorkerCommandWithProjects = AgentWorkerCommand;
 
 export type AgentWorkerMessage =
   | Readonly<{
@@ -94,6 +161,23 @@ export type AgentWorkerMessage =
       type: "worker-error";
       timestamp: number;
       error: AgentPublicError;
+    }>
+  | Readonly<{
+      protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+      type: "project-operation-result";
+      operationId: string;
+      operation: AgentProjectOperationType;
+      timestamp: number;
+      projectId?: string;
+      payload: Readonly<Record<string, unknown>>;
+    }>
+  | Readonly<{
+      protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+      type: "project-operation-error";
+      operationId: string;
+      operation: AgentProjectOperationType;
+      timestamp: number;
+      error: ProjectOperationError;
     }>;
 
 export type AgentWorkerStatusSnapshot = Readonly<{
@@ -136,6 +220,10 @@ export const DESKTOP_IPC_CHANNELS = {
   runAgentSmokeTask: "desktop:v2:run-agent-smoke-task",
   cancelAgentRun: "desktop:v2:cancel-agent-run",
   agentEvent: "desktop:v2:agent-event",
+  createProject: "desktop:v2:create-project",
+  openProject: "desktop:v2:open-project",
+  addAssetReferences: "desktop:v2:add-asset-references",
+  listProjectAssets: "desktop:v2:list-project-assets",
 } as const;
 
 export type DesktopIpcChannel = (typeof DESKTOP_IPC_CHANNELS)[keyof typeof DESKTOP_IPC_CHANNELS];
@@ -154,9 +242,17 @@ export type GetEnvironmentRequest = Record<string, never>;
 export type GetAgentStatusRequest = Record<string, never>;
 export type RunAgentSmokeTaskRequest = Record<string, never>;
 export type CancelAgentRunRequest = Readonly<{ runId: string }>;
+export type CreateProjectRequest = Readonly<{ name: string; targetPlatform: string }>;
+export type OpenProjectRequest = Record<string, never>;
+export type AddAssetReferencesRequest = Readonly<{ projectId: string }>;
+export type ListProjectAssetsRequest = Readonly<{ projectId: string }>;
+export type ProjectDialogResult<T> = Readonly<{ cancelled: true }> | Readonly<{ cancelled: false; value: T }>;
 
-export type DesktopPublicErrorCode = AgentPublicErrorCode;
-export type DesktopPublicError = AgentPublicError;
+export type DesktopPublicErrorCode = AgentPublicErrorCode | ProjectOperationErrorCode;
+export type DesktopPublicError = Readonly<{
+  code: DesktopPublicErrorCode;
+  message: string;
+}>;
 
 export type DesktopIpcResult<T> =
   | Readonly<{ ok: true; value: T }>
@@ -168,6 +264,10 @@ export type DesktopApi = Readonly<{
   runSmokeTask: () => Promise<AgentRunHandle>;
   cancelSmokeRun: (runId: string) => Promise<void>;
   onAgentEvent: (listener: (event: DesktopAgentEvent) => void) => () => void;
+  createProject: (input: CreateProjectRequest) => Promise<ProjectDialogResult<ProjectSummary>>;
+  openProject: () => Promise<ProjectDialogResult<ProjectSummary>>;
+  addAssetReferences: (input: AddAssetReferencesRequest) => Promise<ProjectDialogResult<AssetReferenceBatchResult>>;
+  listProjectAssets: (input: ListProjectAssetsRequest) => Promise<AssetListResult>;
 }>;
 
 const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = {
@@ -183,13 +283,46 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   "worker-not-ready": "The Agent Worker is still starting.",
   "worker-ready-timeout": "The Agent Worker did not become ready in time.",
   "worker-unavailable": "The Agent Worker is currently unavailable.",
+  DIALOG_CANCELLED: "The dialog was cancelled.",
+  INVALID_PROJECT_NAME: "The project name is invalid.",
+  INVALID_PROJECT_ROOT: "The project location is invalid.",
+  UNSUPPORTED_PROJECT_LOCATION: "The project location is not supported.",
+  PROJECT_DIRECTORY_NOT_EMPTY: "The project directory is not empty.",
+  PROJECT_ALREADY_EXISTS: "A SuperVideo project already exists there.",
+  PROJECT_NOT_FOUND: "The project was not found.",
+  PROJECT_MANIFEST_INVALID: "The project manifest is invalid.",
+  PROJECT_SCHEMA_TOO_NEW: "The project schema is newer than supported.",
+  PROJECT_DATABASE_MISSING: "The project database is missing.",
+  PROJECT_ID_MISMATCH: "The project identity does not match.",
+  PROJECT_PATH_CONFLICT: "The project location conflicts with another project.",
+  PROJECT_NOT_ACTIVE: "No project is currently active.",
+  ASSET_NOT_FOUND: "The asset was not found.",
+  UNSUPPORTED_ASSET_TYPE: "The asset type is not supported.",
+  TOO_MANY_ASSETS: "Too many assets were selected.",
+  ASSET_CHANGED: "The asset has changed since it was referenced.",
+  ASSET_CHANGED_DURING_REFERENCE: "The asset changed while it was being referenced.",
+  FILE_ACCESS_DENIED: "The selected file could not be accessed.",
+  OPERATION_TIMEOUT: "The project operation timed out.",
+  CORE_UNAVAILABLE: "The Python Core is unavailable.",
+  DATABASE_OPEN_FAILED: "Database could not be opened.",
+  DATABASE_READ_ONLY: "Database is read-only.",
+  DATABASE_BUSY: "Database is busy.",
+  DATABASE_CORRUPT: "Database is corrupt.",
+  MIGRATION_FAILED: "Database migration failed.",
+  MIGRATION_CHECKSUM_MISMATCH: "Database migration checksum mismatch.",
+  SCHEMA_TOO_NEW: "Database schema is newer than supported.",
+  CONSTRAINT_VIOLATION: "Storage constraint was violated.",
+  RECORD_NOT_FOUND: "Storage record was not found.",
+  INVALID_RECORD: "Storage record is invalid.",
 };
 
 export function createDesktopPublicError(code: DesktopPublicErrorCode): DesktopPublicError {
   return Object.freeze({ code, message: PUBLIC_ERROR_MESSAGES[code] });
 }
 
-export const createAgentPublicError = createDesktopPublicError;
+export function createAgentPublicError(code: AgentPublicErrorCode): AgentPublicError {
+  return createDesktopPublicError(code) as AgentPublicError;
+}
 
 export function isDesktopPublicError(value: unknown): value is DesktopPublicError {
   if (!isPlainRecord(value) || !hasOnlyKeys(value, ["code", "message"])) {
@@ -244,6 +377,13 @@ export function isValidAgentWorkerCommand(value: unknown): value is AgentWorkerC
   if (value.type === "ping" || value.type === "shutdown") {
     return hasOnlyKeys(value, ["protocolVersion", "type"]);
   }
+  if (isAgentProjectOperationType(value.type)) {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "operationId", "timestamp", "projectId", "payload"])
+      && isValidAgentRunId(value.operationId)
+      && isTimestamp(value.timestamp)
+      && (value.projectId === undefined || isUuid(value.projectId))
+      && isProjectOperationPayload(value.type, value.payload);
+  }
   return false;
 }
 
@@ -284,6 +424,22 @@ export function isValidAgentWorkerMessage(value: unknown): value is AgentWorkerM
     return hasOnlyKeys(value, ["protocolVersion", "type", "timestamp", "error"])
       && isTimestamp(value.timestamp)
       && isAgentPublicError(value.error);
+  }
+  if (value.type === "project-operation-result") {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "operationId", "operation", "timestamp", "projectId", "payload"])
+      && isValidAgentRunId(value.operationId)
+      && isAgentProjectOperationType(value.operation)
+      && isTimestamp(value.timestamp)
+      && (value.projectId === undefined || isUuid(value.projectId))
+      && isPlainRecord(value.payload)
+      && isJsonValue(value.payload);
+  }
+  if (value.type === "project-operation-error") {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "operationId", "operation", "timestamp", "error"])
+      && isValidAgentRunId(value.operationId)
+      && isAgentProjectOperationType(value.operation)
+      && isTimestamp(value.timestamp)
+      && isProjectOperationError(value.error);
   }
   return false;
 }
@@ -386,6 +542,100 @@ function isAgentRunEvent(value: unknown): value is AgentRunEvent {
 
 function isAgentPublicError(value: unknown): value is AgentPublicError {
   return isDesktopPublicError(value);
+}
+
+function isAgentProjectOperationType(value: unknown): value is AgentProjectOperationType {
+  return value === "project-create"
+    || value === "project-open"
+    || value === "project-inspect"
+    || value === "asset-reference"
+    || value === "asset-list";
+}
+
+function isProjectOperationError(value: unknown): value is ProjectOperationError {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["code", "message"])
+    && typeof value.code === "string"
+    && PROJECT_OPERATION_ERROR_CODES.has(value.code)
+    && typeof value.message === "string"
+    && value.message.length > 0
+    && value.message.length <= 128;
+}
+
+export function isProjectOperationErrorCode(value: unknown): value is ProjectOperationErrorCode {
+  return typeof value === "string" && PROJECT_OPERATION_ERROR_CODES.has(value);
+}
+
+function isProjectOperationPayload(type: AgentProjectOperationType, value: unknown): boolean {
+  if (!isPlainRecord(value) || !isJsonValue(value)) {
+    return false;
+  }
+  if (type === "project-create") {
+    return hasOnlyKeys(value, ["name", "targetPlatform", "projectRoot"])
+      && isSafeString(value.name, 200)
+      && isSafeString(value.targetPlatform, 64)
+      && isAbsolutePath(value.projectRoot);
+  }
+  if (type === "project-open" || type === "project-inspect") {
+    return hasOnlyKeys(value, ["projectRoot"]) && isAbsolutePath(value.projectRoot);
+  }
+  if (type === "asset-reference") {
+    return hasOnlyKeys(value, ["projectId", "paths"])
+      && isUuid(value.projectId)
+      && Array.isArray(value.paths)
+      && value.paths.length > 0
+      && value.paths.length <= 100
+      && value.paths.every((item) => isAbsolutePath(item));
+  }
+  return hasOnlyKeys(value, ["projectId", "limit"])
+    && isUuid(value.projectId)
+    && isSafeInteger(value.limit, 1, 1_000);
+}
+
+const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
+  "DIALOG_CANCELLED",
+  "INVALID_PROJECT_NAME",
+  "INVALID_PROJECT_ROOT",
+  "UNSUPPORTED_PROJECT_LOCATION",
+  "PROJECT_DIRECTORY_NOT_EMPTY",
+  "PROJECT_ALREADY_EXISTS",
+  "PROJECT_NOT_FOUND",
+  "PROJECT_MANIFEST_INVALID",
+  "PROJECT_SCHEMA_TOO_NEW",
+  "PROJECT_DATABASE_MISSING",
+  "PROJECT_ID_MISMATCH",
+  "PROJECT_PATH_CONFLICT",
+  "PROJECT_NOT_ACTIVE",
+  "ASSET_NOT_FOUND",
+  "UNSUPPORTED_ASSET_TYPE",
+  "TOO_MANY_ASSETS",
+  "ASSET_CHANGED",
+  "ASSET_CHANGED_DURING_REFERENCE",
+  "FILE_ACCESS_DENIED",
+  "OPERATION_TIMEOUT",
+  "CORE_UNAVAILABLE",
+  "DATABASE_OPEN_FAILED",
+  "DATABASE_READ_ONLY",
+  "DATABASE_BUSY",
+  "DATABASE_CORRUPT",
+  "MIGRATION_FAILED",
+  "MIGRATION_CHECKSUM_MISMATCH",
+  "SCHEMA_TOO_NEW",
+  "CONSTRAINT_VIOLATION",
+  "RECORD_NOT_FOUND",
+  "INVALID_RECORD",
+]);
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+}
+
+function isAbsolutePath(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && value.length <= 32_767
+    && !value.includes("\u0000")
+    && (/^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.startsWith("/"));
 }
 
 function isPlainRecord(value: unknown): value is Record<string, any> {

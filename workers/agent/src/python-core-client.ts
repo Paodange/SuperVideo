@@ -17,6 +17,9 @@ import {
   isCoreRpcServerMessage,
   isCoreSmokeCountdownParams,
   isCoreSmokeCountdownResult,
+  isAssetListResult,
+  isAssetReferenceBatchResult,
+  isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
   type CoreProgress,
@@ -24,6 +27,13 @@ import {
   type CoreRpcServerMessage,
   type CoreSmokeCountdownParams,
   type CoreSmokeCountdownResult,
+  type AssetListParams,
+  type AssetListResult,
+  type AssetReferenceBatchResult,
+  type AssetReferenceParams,
+  type ProjectCreateParams,
+  type ProjectOpenParams,
+  type ProjectSummary,
 } from "@supervideo/shared";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
@@ -190,6 +200,36 @@ export class PythonCoreClient {
     if (!isCoreSmokeCountdownResult(result)) {
       throw new CoreRpcError("PROTOCOL_ERROR");
     }
+    return result;
+  }
+
+  async createProject(params: ProjectCreateParams, options: CoreRpcRequestOptions = {}): Promise<ProjectSummary> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.projectCreate, params, options);
+    if (!isProjectSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async openProject(params: ProjectOpenParams, options: CoreRpcRequestOptions = {}): Promise<ProjectSummary> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.projectOpen, params, options);
+    if (!isProjectSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async inspectProject(params: ProjectOpenParams, options: CoreRpcRequestOptions = {}): Promise<ProjectSummary> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.projectInspect, params, options);
+    if (!isProjectSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async referenceAssets(params: AssetReferenceParams, options: CoreRpcRequestOptions = {}): Promise<AssetReferenceBatchResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.assetReference, params, options);
+    if (!isAssetReferenceBatchResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async listAssets(params: AssetListParams, options: CoreRpcRequestOptions = {}): Promise<AssetListResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.assetList, params, options);
+    if (!isAssetListResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

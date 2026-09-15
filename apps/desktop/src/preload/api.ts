@@ -1,6 +1,9 @@
 import {
   createDesktopPublicError,
   DESKTOP_IPC_CHANNELS,
+  isAssetListResult,
+  isAssetReferenceBatchResult,
+  isProjectSummary,
   isDesktopPublicError,
   isAgentWorkerStatusSnapshot,
   isValidAgentRunId,
@@ -15,15 +18,24 @@ import {
   type GetAgentStatusRequest,
   type RunAgentSmokeTaskRequest,
   type CancelAgentRunRequest,
+  type AddAssetReferencesRequest,
+  type CreateProjectRequest,
+  type ListProjectAssetsRequest,
+  type ProjectDialogResult,
 } from "@supervideo/shared";
+import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
 type Invoke = (
   channel:
     | typeof DESKTOP_IPC_CHANNELS.getEnvironment
     | typeof DESKTOP_IPC_CHANNELS.getAgentStatus
     | typeof DESKTOP_IPC_CHANNELS.runAgentSmokeTask
-    | typeof DESKTOP_IPC_CHANNELS.cancelAgentRun,
-  payload: GetEnvironmentRequest | GetAgentStatusRequest | RunAgentSmokeTaskRequest | CancelAgentRunRequest,
+    | typeof DESKTOP_IPC_CHANNELS.cancelAgentRun
+    | typeof DESKTOP_IPC_CHANNELS.createProject
+    | typeof DESKTOP_IPC_CHANNELS.openProject
+    | typeof DESKTOP_IPC_CHANNELS.addAssetReferences
+    | typeof DESKTOP_IPC_CHANNELS.listProjectAssets,
+  payload: GetEnvironmentRequest | GetAgentStatusRequest | RunAgentSmokeTaskRequest | CancelAgentRunRequest | CreateProjectRequest | Record<string, unknown>,
 ) => Promise<unknown>;
 
 type Subscribe = (
@@ -66,6 +78,30 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
         }
       };
     },
+    createProject: (input) => invokeValue(
+      DESKTOP_IPC_CHANNELS.createProject,
+      input,
+      invoke,
+      (value): value is ProjectDialogResult<ProjectSummary> => isProjectDialogResult(value, isProjectSummary),
+    ),
+    openProject: () => invokeValue(
+      DESKTOP_IPC_CHANNELS.openProject,
+      {},
+      invoke,
+      (value): value is ProjectDialogResult<ProjectSummary> => isProjectDialogResult(value, isProjectSummary),
+    ),
+    addAssetReferences: (input) => invokeValue(
+      DESKTOP_IPC_CHANNELS.addAssetReferences,
+      input,
+      invoke,
+      (value): value is ProjectDialogResult<AssetReferenceBatchResult> => isProjectDialogResult(value, isAssetReferenceBatchResult),
+    ),
+    listProjectAssets: (input) => invokeValue(
+      DESKTOP_IPC_CHANNELS.listProjectAssets,
+      input,
+      invoke,
+      isAssetListResult,
+    ),
   };
 
   return Object.freeze(api);
@@ -113,6 +149,13 @@ function isEnvironment(value: unknown): value is DesktopEnvironment {
 
 function isAgentRunHandle(value: unknown): value is AgentRunHandle {
   return value !== null && typeof value === "object" && isValidAgentRunId((value as { runId?: unknown }).runId);
+}
+
+function isProjectDialogResult<T>(value: unknown, isValue: (candidate: unknown) => candidate is T): value is ProjectDialogResult<T> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as { cancelled?: unknown; value?: unknown };
+  if (candidate.cancelled === true) return Object.keys(value).length === 1;
+  return candidate.cancelled === false && Object.keys(value).length === 2 && isValue(candidate.value);
 }
 
 export type { AgentWorkerStatusSnapshot, DesktopAgentEvent };

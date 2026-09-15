@@ -1,0 +1,368 @@
+"""Create/open project orchestration and read-only external asset references."""
+
+from __future__ import annotations
+
+import os
+import stat
+import sqlite3
+from dataclasses import dataclass
+from pathlib import Path
+
+from pydantic import ValidationError
+
+from supervideo_core.storage import (
+    AssetCreate,
+    AssetRepository,
+    DATABASE_SCHEMA_VERSION,
+    Database,
+    MigrationReport,
+    ProjectCreate,
+    ProjectRecord,
+    ProjectRepository,
+    StorageError,
+    new_id,
+    utc_now_ms,
+)
+
+from .errors import ProjectError, from_storage_error
+from .manifest import (
+    PROJECT_MANIFEST_SCHEMA_VERSION,
+    ProjectManifest,
+    atomic_write_manifest,
+    read_manifest,
+)
+from .models import (
+    AssetListRequest,
+    AssetListResult,
+    AssetReferenceBatchResult,
+    AssetReferenceRequest,
+    AssetSummary,
+    ProjectCreateRequest,
+    ProjectOpenRequest,
+    ProjectSummary,
+)
+from .paths import (
+    FINGERPRINT_ALGORITHM,
+    asset_kind_for,
+    canonical_asset_path,
+    database_path_for,
+    ensure_project_directories,
+    normalize_project_root,
+    sampled_fingerprint,
+    stat_signature,
+)
+
+
+@dataclass
+class _ActiveSession:
+    root: Path
+    manifest: ProjectManifest
+    project: ProjectRecord
+    database: Database
+
+
+@dataclass(frozen=True)
+class _ScannedAsset:
+    path: Path
+    kind: str
+    size_bytes: int
+    modified_at_ms: int
+    fingerprint: str
+
+
+class ProjectService:
+    def __init__(self) -> None:
+        self._active: _ActiveSession | None = None
+
+    @property
+    def active_project_id(self) -> str | None:
+        return self._active.project.id if self._active is not None else None
+
+    def close(self) -> None:
+        active = self._active
+        self._active = None
+        if active is not None:
+            active.database.close()
+
+    def create(self, request: ProjectCreateRequest) -> ProjectSummary:
+        try:
+            name = request.name
+            if not name.strip() or any(ord(character) < 32 or ord(character) == 127 for character in name):
+                raise ProjectError("INVALID_PROJECT_NAME")
+            root = normalize_project_root(request.project_root)
+        except ValidationError as error:
+            raise ProjectError("INVALID_PROJECT_NAME", cause=error) from error
+        if (root / "project.supervideo.json").exists():
+            raise ProjectError("PROJECT_ALREADY_EXISTS")
+        try:
+            if next(root.iterdir(), None) is not None:
+                raise ProjectError("PROJECT_DIRECTORY_NOT_EMPTY")
+        except ProjectError:
+            raise
+        except OSError as error:
+            raise ProjectError("FILE_ACCESS_DENIED", cause=error) from error
+
+        created_directories: list[Path] = []
+        database: Database | None = None
+        database_path = database_path_for(root)
+        database_existed = database_path.exists()
+        try:
+            created_directories = ensure_project_directories(root)
+            database = Database.open(database_path)
+            migration_report = database.migrate()
+            project = ProjectRecord(
+                id=new_id(),
+                name=name,
+                project_root=str(root),
+                target_platform=request.target_platform,
+                created_at_ms=utc_now_ms(),
+                updated_at_ms=utc_now_ms(),
+            )
+            ProjectRepository(database).create(project)
+            self._quick_validate(database)
+            manifest = ProjectManifest(
+                schemaVersion=PROJECT_MANIFEST_SCHEMA_VERSION,
+                projectId=project.id,
+                name=project.name,
+                targetPlatform=project.target_platform,
+                database="data/project.db",
+                createdAtMs=project.created_at_ms,
+                updatedAtMs=project.updated_at_ms,
+            )
+            atomic_write_manifest(root, manifest, must_not_exist=True)
+            self.close()
+            self._active = _ActiveSession(root=root, manifest=manifest, project=project, database=database)
+            database = None
+            return self._summary(self._active, migration_report.current_version)
+        except ProjectError:
+            raise
+        except StorageError as error:
+            raise from_storage_error(error) from error
+        except (OSError, ValidationError, ValueError) as error:
+            raise ProjectError("INVALID_PROJECT_ROOT", cause=error) from error
+        finally:
+            if database is not None:
+                database.close()
+                if not database_existed:
+                    for candidate in (database_path, Path(f"{database_path}-wal"), Path(f"{database_path}-shm")):
+                        try:
+                            candidate.unlink(missing_ok=True)
+                        except OSError:
+                            pass
+                self._remove_created_directories(root, created_directories)
+
+    def open(self, request: ProjectOpenRequest) -> ProjectSummary:
+        root = normalize_project_root(request.project_root)
+        manifest = read_manifest(root)
+        database_path = database_path_for(root)
+        try:
+            database_stat = os.lstat(database_path)
+            database_real = Path(os.path.realpath(database_path))
+            if (
+                not stat.S_ISREG(database_stat.st_mode)
+                or database_path.is_symlink()
+                or os.path.commonpath([str(root), str(database_real)]) != str(root)
+            ):
+                raise ProjectError("PROJECT_DATABASE_MISSING")
+        except (OSError, ValueError) as error:
+            raise ProjectError("PROJECT_DATABASE_MISSING", cause=error) from error
+
+        database: Database | None = None
+        try:
+            database = Database.open(database_path)
+            migration_report = database.migrate()
+            self._quick_validate(database)
+            projects = ProjectRepository(database)
+            try:
+                project = projects.get(manifest.project_id)
+            except StorageError as error:
+                if error.code == "RECORD_NOT_FOUND":
+                    raise ProjectError("PROJECT_ID_MISMATCH", cause=error) from error
+                raise
+            if project.name != manifest.name or project.target_platform != manifest.target_platform:
+                raise ProjectError("PROJECT_ID_MISMATCH")
+            normalized_root = str(root)
+            if project.project_root != normalized_root:
+                conflict = projects.get_by_root(normalized_root)
+                if conflict is not None and conflict.id != project.id:
+                    raise ProjectError("PROJECT_PATH_CONFLICT")
+                old_root = project.project_root
+                updated_at_ms = utc_now_ms()
+                try:
+                    project = projects.update_location(project.id, normalized_root, updated_at_ms)
+                except StorageError as error:
+                    if error.code == "CONSTRAINT_VIOLATION":
+                        raise ProjectError("PROJECT_PATH_CONFLICT", cause=error) from error
+                    raise
+                refreshed = manifest.model_copy(update={"updated_at_ms": updated_at_ms})
+                try:
+                    atomic_write_manifest(root, refreshed)
+                except ProjectError:
+                    with database.transaction() as connection:
+                        connection.execute(
+                            "UPDATE projects SET project_root = ?, updated_at_ms = ?, revision = MAX(revision - 1, 0) WHERE id = ?",
+                            (old_root, manifest.updated_at_ms, project.id),
+                        )
+                    raise
+                manifest = refreshed
+            created_directories = ensure_project_directories(root)
+            self.close()
+            self._active = _ActiveSession(root=root, manifest=manifest, project=project, database=database)
+            database = None
+            return self._summary(self._active, migration_report.current_version)
+        except ProjectError:
+            raise
+        except StorageError as error:
+            if error.code == "SCHEMA_TOO_NEW":
+                raise ProjectError("PROJECT_SCHEMA_TOO_NEW", cause=error) from error
+            raise from_storage_error(error) from error
+        except sqlite3.Error as error:
+            raise ProjectError("DATABASE_CORRUPT", cause=error) from error
+        finally:
+            if database is not None:
+                database.close()
+
+    def inspect(self, request: ProjectOpenRequest) -> ProjectSummary:
+        return self.open(request)
+
+    def list_assets(self, request: AssetListRequest) -> AssetListResult:
+        active = self._require_active(request.project_id)
+        try:
+            assets = AssetRepository(active.database).list_for_project(active.project.id, request.limit)
+        except StorageError as error:
+            raise from_storage_error(error) from error
+        return AssetListResult(
+            projectId=active.project.id,
+            items=[self._asset_summary(asset, "existing") for asset in assets],
+        )
+
+    def reference_assets(self, request: AssetReferenceRequest) -> AssetReferenceBatchResult:
+        active = self._require_active(request.project_id)
+        if len(request.paths) > 100:
+            raise ProjectError("TOO_MANY_ASSETS")
+        scanned: list[_ScannedAsset] = []
+        for raw_path in request.paths:
+            path, before = canonical_asset_path(raw_path)
+            kind = asset_kind_for(path)
+            fingerprint = sampled_fingerprint(path, before)
+            try:
+                after = path.stat()
+            except OSError as error:
+                raise ProjectError("FILE_ACCESS_DENIED", cause=error) from error
+            if stat_signature(before) != stat_signature(after):
+                raise ProjectError("ASSET_CHANGED_DURING_REFERENCE")
+            scanned.append(
+                _ScannedAsset(
+                    path=path,
+                    kind=kind,
+                    size_bytes=int(after.st_size),
+                    modified_at_ms=int(after.st_mtime_ns // 1_000_000),
+                    fingerprint=fingerprint,
+                )
+            )
+
+        repository = AssetRepository(active.database)
+        new_records: list[AssetCreate] = []
+        results: list[tuple[str, str, AssetCreate | object]] = []
+        known_new: dict[str, AssetCreate] = {}
+        for item in scanned:
+            key = str(item.path)
+            if key in known_new:
+                results.append((key, "existing", known_new[key]))
+                continue
+            try:
+                existing = repository.get_by_path(active.project.id, key)
+            except StorageError as error:
+                raise from_storage_error(error) from error
+            if existing is not None:
+                if (
+                    existing.size_bytes != item.size_bytes
+                    or existing.modified_at_ms != item.modified_at_ms
+                    or existing.content_fingerprint != item.fingerprint
+                ):
+                    raise ProjectError("ASSET_CHANGED")
+                results.append((key, "existing", existing))
+                continue
+            record = AssetCreate(
+                id=new_id(),
+                project_id=active.project.id,
+                absolute_path=key,
+                kind=item.kind,
+                size_bytes=item.size_bytes,
+                modified_at_ms=item.modified_at_ms,
+                content_fingerprint=item.fingerprint,
+                source_type="external",
+                created_at_ms=utc_now_ms(),
+                updated_at_ms=utc_now_ms(),
+            )
+            known_new[key] = record
+            new_records.append(record)
+            results.append((key, "added", record))
+
+        try:
+            inserted = repository.create_many(new_records) if new_records else []
+        except StorageError as error:
+            raise from_storage_error(error) from error
+        by_path = {record.absolute_path: record for record in inserted}
+        output: list[AssetSummary] = []
+        for key, status, record in results:
+            selected = by_path.get(key, record)
+            output.append(self._asset_summary(selected, status))  # type: ignore[arg-type]
+        return AssetReferenceBatchResult(projectId=active.project.id, items=output)
+
+    def _require_active(self, project_id: str) -> _ActiveSession:
+        active = self._active
+        if active is None or active.project.id != project_id:
+            raise ProjectError("PROJECT_NOT_ACTIVE")
+        return active
+
+    def _summary(self, active: _ActiveSession, database_schema_version: int) -> ProjectSummary:
+        try:
+            count = int(active.database.connection.execute("SELECT COUNT(*) FROM assets WHERE project_id = ?", (active.project.id,)).fetchone()[0])
+        except sqlite3.Error as error:
+            raise ProjectError("DATABASE_CORRUPT", cause=error) from error
+        return ProjectSummary(
+            projectId=active.project.id,
+            name=active.project.name,
+            targetPlatform=active.project.target_platform,
+            projectRoot=str(active.root),
+            manifestSchemaVersion=active.manifest.schema_version,
+            databaseSchemaVersion=database_schema_version,
+            assetCount=count,
+            createdAtMs=active.project.created_at_ms,
+            updatedAtMs=active.project.updated_at_ms,
+        )
+
+    @staticmethod
+    def _asset_summary(asset: object, status: str) -> AssetSummary:
+        return AssetSummary(
+            assetId=asset.id,
+            projectId=asset.project_id,
+            fileName=Path(asset.absolute_path).name,
+            absolutePath=asset.absolute_path,
+            kind=asset.kind,
+            sizeBytes=asset.size_bytes,
+            modifiedAtMs=asset.modified_at_ms,
+            fingerprintAlgorithm=asset.content_fingerprint.split(":", 1)[0],
+            referenceStatus=status,
+        )
+
+    @staticmethod
+    def _quick_validate(database: Database) -> None:
+        try:
+            quick = [str(row[0]) for row in database.connection.execute("PRAGMA quick_check").fetchall()]
+            foreign_keys = database.connection.execute("PRAGMA foreign_key_check").fetchall()
+        except sqlite3.Error as error:
+            raise ProjectError("DATABASE_CORRUPT", cause=error) from error
+        if quick != ["ok"] or foreign_keys:
+            raise ProjectError("DATABASE_CORRUPT")
+
+    @staticmethod
+    def _remove_created_directories(root: Path, created: list[Path]) -> None:
+        for directory in reversed(created):
+            try:
+                if os.path.commonpath([str(root), str(directory)]) != str(root):
+                    continue
+                directory.rmdir()
+            except (OSError, ValueError):
+                continue

@@ -2,7 +2,8 @@ import {
   createDesktopPublicError,
   DESKTOP_IPC_CHANNELS,
   isDesktopIpcChannel,
-  isAgentPublicErrorCode,
+  isDesktopPublicError,
+  isProjectOperationErrorCode,
   isValidAgentRunId,
   type AgentRunHandle,
   type AgentWorkerMessage,
@@ -14,6 +15,13 @@ import {
   type GetAgentStatusRequest,
   type RunAgentSmokeTaskRequest,
   type CancelAgentRunRequest,
+  type AddAssetReferencesRequest,
+  type CreateProjectRequest,
+  type ListProjectAssetsRequest,
+  type ProjectDialogResult,
+  type ProjectSummary,
+  type AssetReferenceBatchResult,
+  type AssetListResult,
 } from "@supervideo/shared";
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { isTrustedRendererUrl, sanitizeUrlForDiagnostics, type RendererTrustPolicy } from "./policies";
@@ -25,6 +33,10 @@ export type DesktopIpcDependencies = Readonly<{
   getAgentStatus: () => AgentWorkerStatusSnapshot;
   runSmokeTask: () => AgentRunHandle;
   cancelSmokeRun: (runId: string) => void;
+  createProject: (event: IpcMainInvokeEvent, input: CreateProjectRequest) => Promise<ProjectDialogResult<ProjectSummary>>;
+  openProject: (event: IpcMainInvokeEvent) => Promise<ProjectDialogResult<ProjectSummary>>;
+  addAssetReferences: (event: IpcMainInvokeEvent, input: AddAssetReferencesRequest) => Promise<ProjectDialogResult<AssetReferenceBatchResult>>;
+  listProjectAssets: (event: IpcMainInvokeEvent, input: ListProjectAssetsRequest) => Promise<AssetListResult>;
   rendererTrustPolicy: RendererTrustPolicy;
   log: SecurityLog;
 }>;
@@ -57,6 +69,10 @@ export function registerDesktopIpcHandlers(
         return { runId: payload.runId } satisfies AgentRunHandle;
       },
     ),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.createProject, isValidCreateProjectPayload, dependencies, (payload, event) => dependencies.createProject(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.openProject, isValidEmptyPayload, dependencies, (_payload, event) => dependencies.openProject(event)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.addAssetReferences, isValidProjectIdPayload, dependencies, (payload, event) => dependencies.addAssetReferences(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listProjectAssets, isValidProjectIdPayload, dependencies, (payload, event) => dependencies.listProjectAssets(event, payload)),
   ];
 
   let disposed = false;
@@ -83,7 +99,7 @@ function registerInvokeHandler<TPayload, TValue>(
   channel: string,
   validatePayload: (value: unknown) => value is TPayload,
   dependencies: DesktopIpcDependencies,
-  action: (payload: TPayload) => TValue,
+  action: (payload: TPayload, event: IpcMainInvokeEvent) => TValue | Promise<TValue>,
 ): () => void {
   ipc.removeHandler(channel);
   ipc.handle(channel, async (event: IpcMainInvokeEvent, payload: unknown) => {
@@ -103,7 +119,7 @@ function registerInvokeHandler<TPayload, TValue>(
     }
 
     try {
-      return Object.freeze({ ok: true, value: action(payload) }) as DesktopIpcResult<TValue>;
+      return Object.freeze({ ok: true, value: await action(payload, event) }) as DesktopIpcResult<TValue>;
     } catch (error) {
       const code = publicErrorCode(error);
       dependencies.log("ipc-failed", { channel, reason: code });
@@ -123,6 +139,21 @@ export function isValidCancelAgentRunPayload(value: unknown): value is CancelAge
     Object.keys(value).length === 1 &&
     isValidAgentRunId((value as { runId?: unknown }).runId)
   );
+}
+
+export function isValidCreateProjectPayload(value: unknown): value is CreateProjectRequest {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["name", "targetPlatform"])) return false;
+  const name = value.name;
+  const target = value.targetPlatform;
+  return typeof name === "string" && name.length > 0 && name.length <= 200 && !hasControlCharacters(name)
+    && typeof target === "string" && target.length > 0 && target.length <= 64 && !hasControlCharacters(target);
+}
+
+export function isValidProjectIdPayload(value: unknown): value is AddAssetReferencesRequest | ListProjectAssetsRequest {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["projectId"])
+    && typeof value.projectId === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.projectId);
 }
 
 export function toDesktopAgentEvent(message: AgentWorkerMessage): DesktopAgentEvent | undefined {
@@ -156,8 +187,28 @@ export function createDesktopAgentStatusEvent(status: AgentWorkerStatusSnapshot,
 }
 
 function publicErrorCode(error: unknown): Parameters<typeof createDesktopPublicError>[0] {
-  if (error && typeof error === "object" && isAgentPublicErrorCode((error as { code?: unknown }).code)) {
-    return (error as { code: Parameters<typeof createDesktopPublicError>[0] }).code;
+  if (error && typeof error === "object" && isDesktopPublicError(error)) {
+    return error.code;
+  }
+  if (error && typeof error === "object" && "publicError" in error && isDesktopPublicError(error.publicError)) {
+    return error.publicError.code;
+  }
+  if (error && typeof error === "object" && "operationError" in error) {
+    const code = (error.operationError as { code?: unknown }).code;
+    if (isProjectOperationErrorCode(code)) return code;
   }
   return "internal-error";
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const expected = new Set(keys);
+  return Object.keys(value).every((key) => expected.has(key)) && keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function hasControlCharacters(value: string): boolean {
+  return /[\u0000-\u001f\u007f]/.test(value);
 }

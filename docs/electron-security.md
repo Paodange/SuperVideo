@@ -22,6 +22,25 @@ A02 只建立 Electron 的进程和内容安全边界，不接入 Agent、Python
 
 拒绝事件写入最小结构化诊断，只记录事件、稳定原因和脱敏 origin/URL 摘要，不记录 query、fragment、堆栈或内部路径。窗口默认隐藏，`ready-to-show` 后显示；加载失败进入 Main 的失败状态并记录可诊断事件。
 
+## A06 dialog/path grant
+
+A06 adds only semantic preload methods for project create/open and asset
+reference. Their Renderer payloads contain project metadata or an already
+validated `projectId`; they never contain a directory or file path. Main binds
+the native `showOpenDialog` owner to the invoking `BrowserWindow`, accepts one
+existing directory for project operations, and accepts explicit regular files
+for asset references. Main rejects volume roots and unsupported UNC project
+locations, then sends the dialog result only to the matching fixed Worker
+command. Cancel is a normal `{ cancelled: true }` result and does not start
+Worker/Core work.
+
+The Renderer can display paths returned in a successful summary because the
+user has already granted them. Security diagnostics continue to record only
+stable reasons, counts, IDs, and sanitized origin data; they do not record
+selected project paths or asset names. No generic picker, file read/write,
+`dialog`, `ipcRenderer`, `fs`, `path`, MessagePort, or arbitrary RPC bridge is
+exposed to preload.
+
 ## 当前限制
 
 A02/A03 不实现代码签名、安装包沙箱或对已取得 Windows 管理员权限的本机攻击者的防护。生产打包流程、自动更新和 Python/SQLite 业务 IPC 将在后续工作包中继续收紧；新增能力必须扩展共享 contract 和显式 allowlist，不能暴露通用 `invoke/send`。

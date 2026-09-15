@@ -1,8 +1,9 @@
 # A05 SQLite storage
 
-SuperVideo uses one SQLite database per project. The trusted project layer will
-create a project directory and its manifest in A06; A05 only opens the database
-file it is given and applies the bundled schema:
+SuperVideo uses one SQLite database per project. The trusted project layer
+creates a project directory and its manifest in A06; the storage module opens
+only the fixed database path supplied by that layer and applies the bundled
+schema:
 
 ```text
 <project-root>/
@@ -93,6 +94,17 @@ does not store Pydantic objects, Python objects, or pickle.
 
 Deleting a project at the database level cascades only database rows. It never
 deletes `project_root`, an external asset, or any other filesystem entry.
+
+## A06 controlled project updates
+
+A06 extends the repository surface only with `ProjectRepository.get_by_root`,
+`ProjectRepository.update_location`, `AssetRepository.get_by_path`, and
+`AssetRepository.create_many`. These methods keep project ID/path scope in the
+fixed SQL and provide no arbitrary update, delete, SQL, or filesystem API.
+When a moved project is opened, the Core service verifies manifest ID/name/
+platform, checks the unique project root, and updates root, updated time and
+revision. It never changes an asset's external absolute path. A06 keeps
+`DATABASE_SCHEMA_VERSION = 1` and does not modify `0001_initial.sql`.
 
 ## Repository API
 

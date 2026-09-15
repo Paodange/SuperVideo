@@ -5,12 +5,21 @@ import {
   AGENT_WORKER_PROTOCOL_VERSION,
   AGENT_WORKER_VERSION,
   createAgentPublicError,
+  CORE_RPC_ERROR_MESSAGES,
+  CORE_RPC_METHODS,
+  isAssetListResult,
+  isAssetReferenceBatchResult,
+  isCoreRpcErrorCode,
+  isProjectSummary,
   isValidAgentWorkerCommand,
   isValidAgentWorkerMessage,
   isAgentWorkerMessageWithinLimit,
   type AgentWorkerCommand,
+  type AgentProjectOperationType,
+  type ProjectOperationErrorCode,
   type AgentWorkerMessage,
 } from "@supervideo/shared";
+import { CoreRpcError, PythonCoreClient } from "./python-core-client.js";
 import { createSmokeAgentRunner } from "./smoke-agent.js";
 
 type ParentPortLike = {
@@ -28,6 +37,8 @@ const parent: ParentPortLike = parentPort;
 
 let shuttingDown = false;
 let shutdownPromise: Promise<void> | undefined;
+let projectOperationBusy = false;
+const coreClient = new PythonCoreClient({ rootDir: process.cwd() });
 
 function send(message: AgentWorkerMessage): void {
   if (!isValidAgentWorkerMessage(message) || !isAgentWorkerMessageWithinLimit(message)) {
@@ -67,9 +78,103 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "shutdown":
       await shutdown();
       return;
+    case "project-create":
+    case "project-open":
+    case "project-inspect":
+    case "asset-reference":
+    case "asset-list":
+      await handleProjectOperation(command.type, command.operationId, command.payload);
+      return;
     default:
       return;
   }
+}
+
+async function handleProjectOperation(
+  operation: AgentProjectOperationType,
+  operationId: string,
+  payload: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  if (projectOperationBusy || runner.isBusy()) {
+    sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
+    return;
+  }
+  projectOperationBusy = true;
+  try {
+    await coreClient.start();
+    const result = await coreClient.request<unknown>(coreMethod(operation), payload, { timeoutMs: 120_000 });
+    const valid = operation === "project-create" || operation === "project-open" || operation === "project-inspect"
+      ? isProjectSummary(result)
+      : operation === "asset-reference"
+        ? isAssetReferenceBatchResult(result)
+        : isAssetListResult(result);
+    if (!valid) {
+      sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
+      return;
+    }
+    const projectId = result && typeof result === "object" && "projectId" in result && typeof result.projectId === "string"
+      ? result.projectId
+      : undefined;
+    parent.postMessage({
+      protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
+      type: "project-operation-result",
+      operationId,
+      operation,
+      timestamp: Date.now(),
+      ...(projectId ? { projectId } : {}),
+      payload: result as Readonly<Record<string, unknown>>,
+    });
+  } catch (error) {
+    const code = error instanceof CoreRpcError && isProjectOperationErrorCode(error.code) ? error.code : "CORE_UNAVAILABLE";
+    sendProjectError(operationId, operation, code);
+  } finally {
+    projectOperationBusy = false;
+  }
+}
+
+function coreMethod(operation: AgentProjectOperationType): string {
+  if (operation === "project-create") return CORE_RPC_METHODS.projectCreate;
+  if (operation === "project-open") return CORE_RPC_METHODS.projectOpen;
+  if (operation === "project-inspect") return CORE_RPC_METHODS.projectInspect;
+  if (operation === "asset-reference") return CORE_RPC_METHODS.assetReference;
+  return CORE_RPC_METHODS.assetList;
+}
+
+function sendProjectError(operationId: string, operation: AgentProjectOperationType, code: ProjectOperationErrorCode): void {
+  send({
+    protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
+    type: "project-operation-error",
+    operationId,
+    operation,
+    timestamp: Date.now(),
+    error: { code, message: (CORE_RPC_ERROR_MESSAGES as Readonly<Record<string, string>>)[code] ?? "Project operation failed." },
+  });
+}
+
+function isProjectOperationErrorCode(value: string): value is ProjectOperationErrorCode {
+  return value in CORE_RPC_ERROR_MESSAGES && value.startsWith("PROJECT_")
+    || value === "DIALOG_CANCELLED"
+    || value === "INVALID_PROJECT_NAME"
+    || value === "INVALID_PROJECT_ROOT"
+    || value === "UNSUPPORTED_PROJECT_LOCATION"
+    || value === "PROJECT_DIRECTORY_NOT_EMPTY"
+    || value === "UNSUPPORTED_ASSET_TYPE"
+    || value === "TOO_MANY_ASSETS"
+    || value === "ASSET_CHANGED"
+    || value === "ASSET_CHANGED_DURING_REFERENCE"
+    || value === "FILE_ACCESS_DENIED"
+    || value === "OPERATION_TIMEOUT"
+    || value === "CORE_UNAVAILABLE"
+    || value === "DATABASE_OPEN_FAILED"
+    || value === "DATABASE_READ_ONLY"
+    || value === "DATABASE_BUSY"
+    || value === "DATABASE_CORRUPT"
+    || value === "MIGRATION_FAILED"
+    || value === "MIGRATION_CHECKSUM_MISMATCH"
+    || value === "SCHEMA_TOO_NEW"
+    || value === "CONSTRAINT_VIOLATION"
+    || value === "RECORD_NOT_FOUND"
+    || value === "INVALID_RECORD";
 }
 
 async function shutdown(): Promise<void> {
@@ -77,7 +182,7 @@ async function shutdown(): Promise<void> {
     return shutdownPromise;
   }
   shuttingDown = true;
-  shutdownPromise = runner.waitForIdle().then(() => {
+  shutdownPromise = Promise.allSettled([runner.waitForIdle(), coreClient.shutdown()]).then(() => {
     process.exit(0);
   });
   return shutdownPromise;

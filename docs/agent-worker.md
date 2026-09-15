@@ -18,7 +18,8 @@ Renderer -> preload allowlist -> Electron Main controller -> utilityProcess -> P
 `packages/shared/src/agent-protocol.ts` owns the versioned Worker wire contract
 (`protocolVersion: 1`). Main-to-Worker commands are `run-smoke-task`,
 `cancel-run`, `ping`, and `shutdown`. Worker-to-Main messages are `ready`,
-`pong`, `run-event`, `run-finished`, and `worker-error`.
+`pong`, `run-event`, `run-finished`, `worker-error`, `project-operation-result`,
+and `project-operation-error`.
 
 Every message is checked at runtime for its version, type, required fields,
 run-id format, JSON-safe values, and the 64 KiB message limit. Product events
@@ -45,6 +46,21 @@ Worker to exit gracefully, and kills it only after the shutdown timeout.
 If a Worker exits during a run, Main emits an `interrupted` terminal event.
 There is no cross-restart task persistence or recovery in A03; that belongs to
 the Python/SQLite task system in later work packages.
+
+A06 adds fixed Main-to-Worker project commands: `project-create`,
+`project-open`, `project-inspect`, `asset-reference`, and `asset-list`.
+They carry an operation ID and strict, bounded payload. They are controller
+commands, not Pi tools. The controller permits at most one project operation or
+A03 smoke run at a time, applies a bounded operation timeout, rejects duplicate
+or stale generation responses, and resolves all pending project operations with
+a stable error on Worker exit.
+
+The Worker lazily starts one `PythonCoreClient` for the current session. A
+successful project open/create leaves that Core session active for subsequent
+asset calls. Normal Worker shutdown closes Core before exit; Python receives
+stdin EOF and the client has a bounded kill fallback, so a restart does not
+leave an orphan Core process. A new Worker has no active project until the user
+opens one again.
 
 ## Cancellation
 

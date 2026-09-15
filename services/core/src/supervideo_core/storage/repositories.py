@@ -155,6 +155,50 @@ class ProjectRepository:
             raise StorageError("RECORD_NOT_FOUND")
         return _project_from_row(row)
 
+    def get_by_root(self, project_root: str) -> ProjectRecord | None:
+        try:
+            normalized_root = ProjectRecord(project_root=project_root, name="root lookup").project_root
+        except (TypeError, ValueError, ValidationError) as error:
+            raise StorageError("INVALID_RECORD", cause=error) from error
+        try:
+            row = self.database.connection.execute(
+                """
+                SELECT id, name, project_root, target_platform, config_json,
+                       created_at_ms, updated_at_ms, revision
+                FROM projects WHERE project_root = ?
+                """,
+                (normalized_root,),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _project_from_row(row)
+
+    def update_location(self, project_id: str, project_root: str, updated_at_ms: int) -> ProjectRecord:
+        record_id = _record_id(project_id)
+        try:
+            normalized_root = ProjectRecord(project_root=project_root, name="root update").project_root
+        except (TypeError, ValueError, ValidationError) as error:
+            raise StorageError("INVALID_RECORD", cause=error) from error
+        if not isinstance(updated_at_ms, int) or isinstance(updated_at_ms, bool) or updated_at_ms < 0:
+            raise StorageError("INVALID_RECORD")
+        try:
+            with self.database.transaction() as connection:
+                connection.execute(
+                    """
+                    UPDATE projects
+                    SET project_root = ?, updated_at_ms = ?, revision = revision + 1
+                    WHERE id = ?
+                    """,
+                    (normalized_root, updated_at_ms, record_id),
+                )
+                if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StorageError("RECORD_NOT_FOUND")
+        except StorageError:
+            raise
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return self.get(record_id)
+
     def list(self, limit: int = STORAGE_DEFAULT_LIST_LIMIT) -> list[ProjectRecord]:
         bounded_limit = _limit(limit)
         try:
@@ -207,6 +251,68 @@ class AssetRepository:
         except sqlite3.Error as error:
             raise _write_error(error) from error
         return value
+
+    def create_many(self, assets: Sequence[AssetCreate]) -> list[AssetRecord]:
+        values = [_require_model(asset, AssetRecord) for asset in assets]
+        try:
+            with self.database.transaction() as connection:
+                for value in values:
+                    connection.execute(
+                        """
+                        INSERT INTO assets(
+                            id, project_id, absolute_path, kind, size_bytes,
+                            modified_at_ms, content_fingerprint, source_type,
+                            license_json, metadata_json, created_at_ms, updated_at_ms
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            value.id,
+                            value.project_id,
+                            value.absolute_path,
+                            value.kind,
+                            value.size_bytes,
+                            value.modified_at_ms,
+                            value.content_fingerprint,
+                            value.source_type,
+                            _stored_json(value.license_json),
+                            _stored_json(value.metadata_json),
+                            value.created_at_ms,
+                            value.updated_at_ms,
+                        ),
+                    )
+        except StorageError:
+            raise
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return values
+
+    def get_by_path(self, project_id: str, absolute_path: str) -> AssetRecord | None:
+        scope = _project_id(project_id)
+        try:
+            normalized_path = AssetRecord(
+                project_id=scope,
+                absolute_path=absolute_path,
+                kind="video",
+                size_bytes=0,
+                modified_at_ms=0,
+                content_fingerprint="lookup",
+                source_type="external",
+            ).absolute_path
+        except (TypeError, ValueError, ValidationError) as error:
+            raise StorageError("INVALID_RECORD", cause=error) from error
+        try:
+            row = self.database.connection.execute(
+                """
+                SELECT id, project_id, absolute_path, kind, size_bytes,
+                       modified_at_ms, content_fingerprint, source_type,
+                       license_json, metadata_json, created_at_ms, updated_at_ms
+                FROM assets WHERE project_id = ? AND absolute_path = ?
+                """,
+                (scope, normalized_path),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _asset_from_row(row)
 
     def get(self, asset_id: str, project_id: str | None = None) -> AssetRecord:
         record_id = _record_id(asset_id)
