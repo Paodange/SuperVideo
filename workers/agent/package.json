@@ -2,10 +2,16 @@
   "name": "@supervideo/agent-worker",
   "version": "0.1.0",
   "private": true,
-  "main": "dist/health.js",
+  "type": "module",
+  "main": "dist/agent-worker-bootstrap.cjs",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "health": "node dist/health.js"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.85.1",
+    "@earendil-works/pi-ai": "0.85.1",
+    "@supervideo/shared": "0.1.0"
   }
 }

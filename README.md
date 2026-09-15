@@ -1,6 +1,8 @@
 # SuperVideo
 
-SuperVideo is a local-first desktop video creation agent. A01 establishes the formal monorepo and the smallest runnable development environment; it does not implement video generation yet.
+SuperVideo is a local-first desktop video creation agent. A03 adds a bounded
+Pi Agent Worker integration while keeping the media core and real model
+providers out of scope.
 
 ## Environment
 
@@ -28,20 +30,29 @@ py -3.12 -m venv .venv
 ```powershell
 npm run dev
 npm run build
+npm run agent:smoke
 npm run typecheck
 npm run health
 npm test
 ```
 
-`npm run dev` builds the shared contract plus Electron Main and preload entries, starts the Vite renderer server on `http://127.0.0.1:5173`, and opens the minimal Electron window. The window displays `SuperVideo`, desktop status, the development environment, target platform, and Electron version. Renderer changes use Vite reload; Main and preload changes require restarting the command. The desktop shell accepts only the local loopback dev-server URL; packaged/production content is always loaded from the local renderer bundle.
+`npm run dev` builds the shared contract, Agent Worker, and Electron entries, starts the Vite renderer server on `http://127.0.0.1:5173`, starts one utility-process Agent Worker, and opens the engineering window. The A03 panel displays Worker status, run IDs, streaming faux text, tool progress, and completed/cancelled/error states. Renderer changes use Vite reload; Main, preload, and Worker changes require restarting the command. The desktop shell accepts only the local loopback dev-server URL; packaged/production content is always loaded from the local renderer bundle.
 
-`npm run health` runs the checks in order: desktop build entries, Agent Worker executable health module, and Python Core executable health module. Each service returns a stable JSON status and any failure exits non-zero.
+`npm run agent:smoke` uses the current build output and automatically launches
+Electron without a `BrowserWindow`. It verifies a real utility process,
+ordered Pi faux-agent events, cancellation, and graceful shutdown. It requires
+`npm run build` first.
+
+`npm run health` runs the checks in order: shared contract, Agent Worker
+executable/build entries, desktop build entries, and Python Core executable
+health module. Each service returns a stable JSON status and any failure exits
+non-zero.
 
 ## Repository layout
 
 ```text
 apps/desktop/       Electron Main, preload, React renderer, and Vite build config
-workers/agent/      Independent TypeScript Agent Worker placeholder and health entry
+workers/agent/      Independent TypeScript Pi Agent Worker and health entry
 services/core/      Python supervideo_core package using src layout
 packages/shared/    Versioned home for small cross-boundary types
 scripts/            Cross-platform Node orchestration for root commands
@@ -50,7 +61,7 @@ spikes/             Architecture validation evidence, kept separate from the app
 tests/              Minimal workspace automation tests
 ```
 
-The desktop workspace deliberately keeps `src/main`, `src/preload`, and `src/renderer` separate. Vite is used only for the React renderer's development server and bundle; TypeScript compiles Main and preload explicitly so the process boundaries remain visible. The Agent Worker is not imported by Electron in A01, and the Python Core is not started as an RPC service yet.
+The desktop workspace deliberately keeps `src/main`, `src/preload`, and `src/renderer` separate. Vite is used only for the React renderer's development server and bundle; TypeScript compiles Main, preload, and Worker entries explicitly so the process boundaries remain visible. The Worker build is copied into `apps/desktop/dist/worker` with its ESM package boundary, so Main never resolves TypeScript source or the spike directory. See [docs/agent-worker.md](docs/agent-worker.md) for the protocol and restart policy.
 
 ## Desktop security boundary
 
@@ -58,4 +69,4 @@ A02 keeps `contextIsolation`, sandboxing, `nodeIntegration: false`, `webSecurity
 
 ## Known limitations
 
-A01/A02 do not include Pi, formal JSON-RPC, SQLite, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, packaging, or real provider credentials. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.
+A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. It does not include formal Python JSON-RPC, SQLite, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, packaging, or real provider credentials. Worker restart state and conversations are not persisted across application restarts. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.

@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
+    "agent:smoke": "node scripts/agent-smoke.mjs",
     "typecheck": "node scripts/typecheck.mjs",
     "health": "node scripts/health.mjs",
     "test": "node scripts/test.mjs"

@@ -42,14 +42,16 @@ function runPythonHealth() {
   }
 }
 
-console.log("[health] desktop");
+console.log("[health] shared");
 run(["run", "build", "--workspace", "@supervideo/shared"], "shared build");
-run(["run", "build", "--workspace", "@supervideo/desktop"], "desktop build");
-run(["run", "health", "--workspace", "@supervideo/desktop"], "desktop health");
 
 console.log("[health] agent-worker");
 run(["run", "build", "--workspace", "@supervideo/agent-worker"], "agent build");
 run(["run", "health", "--workspace", "@supervideo/agent-worker"], "agent health");
+
+console.log("[health] desktop");
+run(["run", "build", "--workspace", "@supervideo/desktop"], "desktop build");
+run(["run", "health", "--workspace", "@supervideo/desktop"], "desktop health");
 
 console.log("[health] python-core");
 runPythonHealth();
