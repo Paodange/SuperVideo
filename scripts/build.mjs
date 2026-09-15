@@ -1,0 +1,26 @@
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = fileURLToPath(new URL("..", import.meta.url));
+const npmCommand = process.execPath;
+const npmCli = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+
+function run(args, label) {
+  const result = spawnSync(npmCommand, [npmCli, ...args], {
+    cwd: root,
+    stdio: "inherit",
+    shell: false,
+  });
+
+  if (result.error) {
+    throw new Error(`${label} could not start: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}
+
+run(["run", "build", "--workspace", "@supervideo/shared"], "shared build");
+run(["run", "build", "--workspace", "@supervideo/agent-worker"], "agent build");
+run(["run", "build", "--workspace", "@supervideo/desktop"], "desktop build");
