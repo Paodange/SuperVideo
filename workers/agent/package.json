@@ -1,0 +1,11 @@
+{
+  "name": "@supervideo/agent-worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/health.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "health": "node dist/health.js"
+  }
+}

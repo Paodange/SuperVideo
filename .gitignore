@@ -1,3 +1,42 @@
+# JavaScript dependencies and build output
 node_modules/
+**/node_modules/
+dist/
+**/dist/
+.vite/
+**/.vite/
+coverage/
+**/coverage/
+*.tsbuildinfo
+
+# Python environments, bytecode, and test caches
+.venv/
+venv/
+env/
+**/.venv/
+**/venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+
+# Logs, temporary files, and local configuration
+*.log
+logs/
+**/logs/
+tmp/
+**/tmp/
+temp/
+**/temp/
+.env
+.env.*
+!.env.example
+
+# Keep npm lockfiles committed for reproducible installs.
+!package-lock.json
+!**/package-lock.json
+
+# Spike runtime files (the report itself is tracked evidence).
 spikes/pi-electron-bridge/validation-session.json
 spikes/pi-electron-bridge/debug-session.json
