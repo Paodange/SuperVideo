@@ -11,6 +11,8 @@ from typing import Any, BinaryIO
 
 from pydantic import ValidationError
 
+from supervideo_core.project.errors import ProjectError
+
 from .errors import RpcServiceError, error_response
 from .models import (
     CORE_RPC_MAX_LINE_BYTES,
@@ -126,6 +128,8 @@ class RpcServer:
             result = await self.registry.invoke(request.method, request.params, self.emit_progress, asyncio.Event())
         except RpcServiceError as error:
             await self.send_error(request.id, error.error_code)
+        except ProjectError as error:
+            await self.send_error(request.id, error.code)
         except Exception:
             traceback.print_exc(file=sys.stderr)
             await self.send_error(request.id, "INTERNAL_ERROR")
@@ -196,6 +200,7 @@ class RpcServer:
 
     async def close(self) -> None:
         if self.closing and self.active_task is None:
+            self.registry.close()
             return
         self.closing = True
         task = self.active_task
@@ -208,6 +213,7 @@ class RpcServer:
         self.active_request_id = None
         self.active_cancel = None
         self.active_task = None
+        self.registry.close()
 
     @staticmethod
     def safe_request_id(value: Any) -> str | None:

@@ -20,7 +20,7 @@ function readyMessage() {
     type: "ready",
     timestamp: now(),
     workerVersion: "0.1.0",
-    capabilities: ["smoke-task", "cancel"],
+    capabilities: ["smoke-task", "cancel", "project"],
   };
 }
 
@@ -243,6 +243,52 @@ test("controller shutdown is intentional and never schedules a restart", async (
   await sleep(20);
   assert.equal(children.length, 1);
   assert.equal(controller.getStatus().status, "stopped");
+});
+
+test("controller routes project operations, times out pending work, and rejects stale generations", async () => {
+  const children = [];
+  const controller = controllerModule.createAgentWorkerController({
+    workerPath: "worker.cjs",
+    createProcess: (_workerPath, generation) => {
+      const child = new FakeUtilityProcess(generation);
+      children.push(child);
+      return child;
+    },
+    restartBackoffMs: [0],
+    setTimeout: (callback, delayMs) => setTimeout(callback, delayMs === 30_000 ? 5 : delayMs),
+  });
+  const starting = controller.start();
+  children[0].emit("message", readyMessage());
+  await starting;
+  const operation = controller.runProjectOperation("project-open", { projectRoot: "C:\\project" });
+  const command = children[0].commands.at(-1);
+  assert.equal(command.type, "project-open");
+  children[0].emit("message", {
+    protocolVersion: 1,
+    type: "project-operation-result",
+    operationId: command.operationId,
+    operation: "project-open",
+    timestamp: now(),
+    payload: { projectId: "11111111-1111-4111-8111-111111111111" },
+  });
+  assert.deepEqual(await operation, { projectId: "11111111-1111-4111-8111-111111111111" });
+
+  const timedOut = controller.runProjectOperation("project-open", { projectRoot: "C:\\project" });
+  await assert.rejects(timedOut, (error) => error.operationError?.code === "OPERATION_TIMEOUT");
+  const crashed = controller.runProjectOperation("project-open", { projectRoot: "C:\\project" });
+  children[0].emit("exit", 7);
+  await assert.rejects(crashed, (error) => error.code === "worker-exited");
+  await waitFor(() => children.length === 2);
+  children[0].emit("message", {
+    protocolVersion: 1,
+    type: "project-operation-result",
+    operationId: "op-old",
+    operation: "project-open",
+    timestamp: now(),
+    payload: { projectId: "11111111-1111-4111-8111-111111111111" },
+  });
+  children[1].emit("message", readyMessage());
+  await controller.shutdown();
 });
 
 test("preload exposes only fixed Agent capabilities and removes subscriptions", async () => {

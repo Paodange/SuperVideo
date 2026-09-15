@@ -16,6 +16,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
     "agent:smoke": "node scripts/agent-smoke.mjs",
+    "project:smoke": "node scripts/project-smoke.mjs",
     "core:setup": "node scripts/core-setup.mjs",
     "core:test": "node scripts/core-test.mjs",
     "core:rpc:smoke": "node scripts/core-rpc-smoke.mjs",

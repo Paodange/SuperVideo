@@ -31,6 +31,7 @@ when the environment has not yet been created.
 npm run dev
 npm run build
 npm run agent:smoke
+npm run project:smoke
 npm run core:rpc:smoke
 npm run core:storage:smoke
 npm run core:test
@@ -64,6 +65,12 @@ touch project files or external media. See [docs/storage.md](docs/storage.md)
 for the storage boundary, migration workflow, repository API, and diagnostic
 checks.
 
+`npm run project:smoke` runs the real Electron Main → Agent Worker → Python
+Core project workflow in a test-only mode. It creates a temporary project and
+fixed external `.mp4` fixture, verifies create/reference/reopen persistence and
+proves the original file is not copied or changed. It accepts no user path and
+removes only its own temporary tree. See [docs/projects.md](docs/projects.md).
+
 ## Repository layout
 
 ```text
@@ -83,8 +90,8 @@ The desktop workspace deliberately keeps `src/main`, `src/preload`, and `src/ren
 
 ## Desktop security boundary
 
-A02 keeps `contextIsolation`, sandboxing, `nodeIntegration: false`, `webSecurity`, and the minimal preload bridge enabled. Renderer navigation, new windows, downloads, and session permissions are denied unless explicitly trusted. The only current IPC capability is the versioned, read-only environment status operation from `@supervideo/shared`; it validates the sender frame and an empty payload, and never returns Main internals. See [docs/electron-security.md](docs/electron-security.md) for the trust model, CSP differences, and current limitations.
+A02 keeps `contextIsolation`, sandboxing, `nodeIntegration: false`, `webSecurity`, and the minimal preload bridge enabled. Renderer navigation, new windows, downloads, and session permissions are denied unless explicitly trusted. A06 adds only fixed project/asset capabilities: Main obtains paths from a native dialog, while Renderer requests contain project metadata or an existing project ID, never a disk path. See [docs/electron-security.md](docs/electron-security.md) for the trust model, dialog grant boundary, CSP differences, and current limitations.
 
 ## Known limitations
 
-A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains the health and deterministic countdown RPC methods; A05 adds an internal per-project SQLite storage foundation, but it does not include project creation UI, trusted path selection, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, formal Pi tool registration, the A07 task state machine or recovery, backup/restore, or real provider credentials. Worker restart state and RPC requests are not persisted across application restarts; A05's repository records persist when its project database is reopened. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.
+A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains the health/countdown and A06 project/asset RPC methods; A05 adds the internal per-project SQLite foundation and A06 adds trusted project creation/open plus read-only external video references. A06 still excludes natural-language paths, recursive scanning, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, formal Pi tool registration, the A07 task state machine or recovery, backup/restore, and real provider credentials. Worker restart state and RPC requests are not persisted across application restarts; select **Open project** again to restore an A06 project. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.

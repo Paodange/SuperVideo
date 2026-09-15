@@ -32,7 +32,7 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
 方法和参数均为结构化 JSON。JSON 数字必须有限，未知字段和已知方法的类型转换
 均拒绝，例如字符串 `"3"` 不会转换成整数。
 
-当前白名单只有：
+当前白名单包括：
 
 - `core.health`：参数必须是空对象，用于启动握手。
 - `core.smoke.countdown`：严格校验 `steps`（3–8）和 `delayMs`（1–1000），
@@ -40,6 +40,14 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
   文件、不联网、不启动其他进程。
 - `core.cancel`：通知参数只有目标 `requestId`，只取消匹配的活动倒计时。
 - `core.progress`：Python Core 发出的进度通知，不是可调用方法。
+- `project.create`、`project.open`、`project.inspect`：严格项目参数和
+  manifest/SQLite 一致性检查。
+- `asset.reference`、`asset.list`：只在当前已验证 project session 中登记或
+  查询有界的外部素材摘要。
+
+A06 的 project/asset 方法仍使用 Core RPC protocol v1；它们不是任意路径或
+SQL 转发。Worker 只能通过固定 controller command 调用这些方法。每次
+Worker 重启都要重新 `project.open`，Core 不保存跨进程 session。
 
 Python registry 是显式字典，未知方法永远返回 `METHOD_NOT_FOUND`；禁止任意方法
 转发、动态 import、Shell、网络、FFmpeg、SQLite 或剪映调用。新增方法必须在

@@ -5,11 +5,14 @@ import {
   isValidAgentRunId,
   isValidAgentWorkerMessage,
   type AgentPublicErrorCode,
+  type AgentProjectOperationPayload,
+  type AgentProjectOperationType,
   type AgentRunHandle,
   type AgentRunStatus,
   type AgentWorkerCommand,
   type AgentWorkerMessage,
   type AgentWorkerStatusSnapshot,
+  type ProjectOperationError,
 } from "@supervideo/shared";
 
 export type UtilityProcessLike = {
@@ -49,6 +52,13 @@ export class AgentWorkerControllerError extends Error {
   }
 }
 
+export class ProjectOperationControllerError extends Error {
+  constructor(readonly operationError: ProjectOperationError) {
+    super(operationError.message);
+    this.name = "ProjectOperationControllerError";
+  }
+}
+
 type ActiveProcess = {
   child: UtilityProcessLike;
   generation: number;
@@ -69,11 +79,21 @@ type ActiveRun = {
   sequence: number;
 };
 
+type PendingProjectOperation = {
+  operationId: string;
+  operation: AgentProjectOperationType;
+  generation: number;
+  timer: ReturnType<typeof globalThis.setTimeout>;
+  resolve: (payload: Readonly<Record<string, unknown>>) => void;
+  reject: (error: Error) => void;
+};
+
 const DEFAULT_STARTUP_TIMEOUT_MS = 5_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 1_500;
 const DEFAULT_MAX_RESTARTS = 3;
 const DEFAULT_RESTART_WINDOW_MS = 30_000;
 const DEFAULT_RESTART_BACKOFF_MS = [100, 250, 750] as const;
+const DEFAULT_PROJECT_OPERATION_TIMEOUT_MS = 30_000;
 
 export class AgentWorkerController {
   private readonly now: () => number;
@@ -91,6 +111,7 @@ export class AgentWorkerController {
   private readonly onStatusChange?: (status: AgentWorkerStatusSnapshot) => void;
   private activeProcess?: ActiveProcess;
   private activeRun?: ActiveRun;
+  private readonly pendingProjectOperations = new Map<string, PendingProjectOperation>();
   private startupWaiter?: { resolve: () => void; reject: (error: AgentWorkerControllerError) => void };
   private restartTimer?: ReturnType<typeof globalThis.setTimeout>;
   private shutdownPromise?: Promise<void>;
@@ -176,7 +197,7 @@ export class AgentWorkerController {
     if (!isValidAgentRunId(runId)) {
       throw new AgentWorkerControllerError("invalid-run-id");
     }
-    if (this.activeRun) {
+    if (this.activeRun || this.pendingProjectOperations.size > 0) {
       throw new AgentWorkerControllerError("busy");
     }
     const process = this.activeProcess;
@@ -201,6 +222,54 @@ export class AgentWorkerController {
       this.setStatus("ready");
       throw new AgentWorkerControllerError("internal-error");
     }
+  }
+
+  runProjectOperation(
+    operation: AgentProjectOperationType,
+    payload: AgentProjectOperationPayload,
+    projectId?: string,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    if (this.activeRun || this.pendingProjectOperations.size > 0) {
+      return Promise.reject(new AgentWorkerControllerError("busy"));
+    }
+    const process = this.activeProcess;
+    if (!process?.ready || this.status === "unavailable" || this.shutdownRequested) {
+      return Promise.reject(new AgentWorkerControllerError(this.status === "unavailable" ? "worker-unavailable" : "worker-not-ready"));
+    }
+    const operationId = `op-${this.now()}-${++this.runCounter}`;
+    this.setStatus("running");
+    return new Promise<Readonly<Record<string, unknown>>>((resolve, reject) => {
+      const timer = this.setTimer(() => {
+        const pending = this.pendingProjectOperations.get(operationId);
+        if (!pending) return;
+        this.pendingProjectOperations.delete(operationId);
+        reject(new ProjectOperationControllerError({ code: "OPERATION_TIMEOUT", message: "The project operation timed out." }));
+        this.setStatus(this.shutdownRequested ? "stopped" : "ready");
+      }, DEFAULT_PROJECT_OPERATION_TIMEOUT_MS);
+      this.pendingProjectOperations.set(operationId, {
+        operationId,
+        operation,
+        generation: process.generation,
+        timer,
+        resolve,
+        reject,
+      });
+      try {
+        process.child.postMessage({
+          protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
+          type: operation,
+          operationId,
+          timestamp: this.now(),
+          ...(projectId ? { projectId } : {}),
+          payload,
+        });
+      } catch {
+        this.pendingProjectOperations.delete(operationId);
+        this.clearTimer(timer);
+        this.setStatus("ready");
+        reject(new AgentWorkerControllerError("internal-error"));
+      }
+    });
   }
 
   cancelRun(runId: string): void {
@@ -232,6 +301,7 @@ export class AgentWorkerController {
     }
     const process = this.activeProcess;
     if (!process) {
+      this.rejectProjectOperations(new AgentWorkerControllerError("worker-unavailable"));
       this.rejectStartup("worker-unavailable");
       this.setStatus("stopped");
       return;
@@ -241,6 +311,7 @@ export class AgentWorkerController {
       this.shutdownResolve = resolve;
     });
     this.setStatus("stopped");
+    this.rejectProjectOperations(new AgentWorkerControllerError("worker-unavailable"));
     try {
       process.child.postMessage({ protocolVersion: AGENT_WORKER_PROTOCOL_VERSION, type: "shutdown" });
     } catch {
@@ -342,6 +413,23 @@ export class AgentWorkerController {
       this.lastErrorCode = message.error.code;
       this.onMessage?.(message);
       this.notifyStatus();
+      return;
+    }
+    if (message.type === "project-operation-result" || message.type === "project-operation-error") {
+      const pending = this.pendingProjectOperations.get(message.operationId);
+      if (!pending || pending.generation !== process.generation || pending.operation !== message.operation) {
+        this.log("agent-worker-message-rejected", { generation: process.generation, reason: "stale-project-operation" });
+        return;
+      }
+      this.pendingProjectOperations.delete(message.operationId);
+      this.clearTimer(pending.timer);
+      this.setStatus(this.shutdownRequested ? "stopped" : "ready");
+      if (message.type === "project-operation-error") {
+        pending.reject(new ProjectOperationControllerError(message.error));
+      } else {
+        pending.resolve(message.payload);
+      }
+      return;
     }
   }
 
@@ -408,6 +496,7 @@ export class AgentWorkerController {
     if (this.activeRun) {
       this.emitInterruptedRun(process);
     }
+    this.rejectProjectOperations(new AgentWorkerControllerError("worker-exited"));
     if (this.startupWaiter && !process.ready) {
       this.rejectStartup(process.ready ? "worker-exited" : this.lastErrorCode === "worker-ready-timeout" ? "worker-ready-timeout" : "worker-exited");
     }
@@ -480,6 +569,7 @@ export class AgentWorkerController {
     this.clearProcessTimers(process);
     this.detachProcess(process);
     this.activeProcess = undefined;
+    this.rejectProjectOperations(new AgentWorkerControllerError("worker-exited"));
     this.status = "stopped";
     this.notifyStatus();
     const resolve = this.shutdownResolve;
@@ -522,6 +612,14 @@ export class AgentWorkerController {
 
   private notifyStatus(): void {
     this.onStatusChange?.(this.getStatus());
+  }
+
+  private rejectProjectOperations(error: Error): void {
+    for (const pending of this.pendingProjectOperations.values()) {
+      this.clearTimer(pending.timer);
+      pending.reject(error);
+    }
+    this.pendingProjectOperations.clear();
   }
 }
 

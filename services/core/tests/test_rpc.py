@@ -167,6 +167,49 @@ class RpcServerTests(unittest.TestCase):
         self.assertEqual(duplicate["error"]["data"]["errorCode"], "DUPLICATE_REQUEST_ID")
         self.assertEqual([item["params"]["sequence"] for item in messages if item.get("method") == "core.progress"], [1, 2, 3])
 
+    def test_project_and_asset_methods_use_a_scoped_session(self) -> None:
+        import shutil
+        import tempfile
+
+        temp_root = Path(tempfile.mkdtemp(prefix="supervideo rpc project "))
+        project_root = temp_root / "项目 with spaces"
+        project_root.mkdir()
+        asset_path = temp_root / "voice.mp4"
+        asset_path.write_bytes(b"fixed rpc fixture")
+        try:
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "project-create",
+                    "method": "project.create",
+                    "params": {"name": "RPC project", "targetPlatform": "douyin", "projectRoot": str(project_root)},
+                }
+            )
+            created = self.read_line()["result"]
+            self.assertEqual(created["databaseSchemaVersion"], 1)
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "asset-reference",
+                    "method": "asset.reference",
+                    "params": {"projectId": created["projectId"], "paths": [str(asset_path)]},
+                }
+            )
+            referenced = self.read_line()["result"]
+            self.assertEqual(referenced["items"][0]["referenceStatus"], "added")
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "asset-list",
+                    "method": "asset.list",
+                    "params": {"projectId": created["projectId"], "limit": 10},
+                }
+            )
+            listed = self.read_line()["result"]
+            self.assertEqual(len(listed["items"]), 1)
+        finally:
+            shutil.rmtree(temp_root, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

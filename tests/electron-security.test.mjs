@@ -171,7 +171,7 @@ test("Agent IPC uses explicit channels, payload schemas, and stable public error
     cancelSmokeRun: (runId) => calls.push(`cancel:${runId}`),
     log: () => {},
   });
-  assert.equal(fakeIpcMain.handlers.size, 4);
+  assert.equal(fakeIpcMain.handlers.size, 8);
   const statusHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.getAgentStatus);
   const runHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.runAgentSmokeTask);
   const cancelHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.cancelAgentRun);
@@ -246,7 +246,10 @@ test("preload exposes one frozen typed capability and no arbitrary channel", asy
   });
 
   assert.equal(Object.isFrozen(api), true);
-  assert.deepEqual(Object.keys(api), ["getEnvironment", "getAgentStatus", "runSmokeTask", "cancelSmokeRun", "onAgentEvent"]);
+  assert.deepEqual(Object.keys(api), [
+    "getEnvironment", "getAgentStatus", "runSmokeTask", "cancelSmokeRun", "onAgentEvent",
+    "createProject", "openProject", "addAssetReferences", "listProjectAssets",
+  ]);
   assert.equal("invoke" in api, false);
   assert.equal("send" in api, false);
   assert.equal("postMessage" in api, false);

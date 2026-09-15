@@ -8,6 +8,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from supervideo_core import __version__
+from supervideo_core.project.models import (
+    AssetListRequest,
+    AssetReferenceRequest,
+    ProjectCreateRequest,
+    ProjectInspectRequest,
+    ProjectOpenRequest,
+)
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -165,6 +172,16 @@ def validate_request(value: Any) -> RpcRequest:
         SmokeCountdownParams.model_validate(request.params)
     elif request.method == "core.cancel":
         raise ValueError("cancel must be a notification")
+    elif request.method == "project.create":
+        ProjectCreateRequest.model_validate(request.params)
+    elif request.method == "project.open":
+        ProjectOpenRequest.model_validate(request.params)
+    elif request.method == "project.inspect":
+        ProjectInspectRequest.model_validate(request.params)
+    elif request.method == "asset.reference":
+        AssetReferenceRequest.model_validate(request.params)
+    elif request.method == "asset.list":
+        AssetListRequest.model_validate(request.params)
     return request
 
 
@@ -202,6 +219,15 @@ def health_result() -> dict[str, object]:
         status="ok",
         protocolVersion=CORE_RPC_PROTOCOL_VERSION,
         coreVersion=__version__,
-        capabilities=["core.health", "core.smoke.countdown", "core.cancel"],
+        capabilities=[
+            "core.health",
+            "core.smoke.countdown",
+            "core.cancel",
+            "project.create",
+            "project.open",
+            "project.inspect",
+            "asset.reference",
+            "asset.list",
+        ],
     )
     return health.model_dump(by_alias=True)

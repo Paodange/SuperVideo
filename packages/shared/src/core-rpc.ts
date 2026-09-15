@@ -19,10 +19,22 @@ export const CORE_RPC_METHODS = {
   smokeCountdown: "core.smoke.countdown",
   progress: "core.progress",
   cancel: "core.cancel",
+  projectCreate: "project.create",
+  projectOpen: "project.open",
+  projectInspect: "project.inspect",
+  assetReference: "asset.reference",
+  assetList: "asset.list",
 } as const;
 
 export type CoreRpcMethod = (typeof CORE_RPC_METHODS)[keyof typeof CORE_RPC_METHODS];
-export type CoreRpcCallableMethod = typeof CORE_RPC_METHODS.health | typeof CORE_RPC_METHODS.smokeCountdown;
+export type CoreRpcCallableMethod =
+  | typeof CORE_RPC_METHODS.health
+  | typeof CORE_RPC_METHODS.smokeCountdown
+  | typeof CORE_RPC_METHODS.projectCreate
+  | typeof CORE_RPC_METHODS.projectOpen
+  | typeof CORE_RPC_METHODS.projectInspect
+  | typeof CORE_RPC_METHODS.assetReference
+  | typeof CORE_RPC_METHODS.assetList;
 
 export const CORE_RPC_ERROR_CODES = {
   parseError: "PARSE_ERROR",
@@ -39,6 +51,37 @@ export const CORE_RPC_ERROR_CODES = {
   transportClosed: "TRANSPORT_CLOSED",
   pythonNotFound: "PYTHON_NOT_FOUND",
   protocolError: "PROTOCOL_ERROR",
+  dialogCancelled: "DIALOG_CANCELLED",
+  invalidProjectName: "INVALID_PROJECT_NAME",
+  invalidProjectRoot: "INVALID_PROJECT_ROOT",
+  unsupportedProjectLocation: "UNSUPPORTED_PROJECT_LOCATION",
+  projectDirectoryNotEmpty: "PROJECT_DIRECTORY_NOT_EMPTY",
+  projectAlreadyExists: "PROJECT_ALREADY_EXISTS",
+  projectNotFound: "PROJECT_NOT_FOUND",
+  projectManifestInvalid: "PROJECT_MANIFEST_INVALID",
+  projectSchemaTooNew: "PROJECT_SCHEMA_TOO_NEW",
+  projectDatabaseMissing: "PROJECT_DATABASE_MISSING",
+  projectIdMismatch: "PROJECT_ID_MISMATCH",
+  projectPathConflict: "PROJECT_PATH_CONFLICT",
+  projectNotActive: "PROJECT_NOT_ACTIVE",
+  assetNotFound: "ASSET_NOT_FOUND",
+  unsupportedAssetType: "UNSUPPORTED_ASSET_TYPE",
+  tooManyAssets: "TOO_MANY_ASSETS",
+  assetChanged: "ASSET_CHANGED",
+  assetChangedDuringReference: "ASSET_CHANGED_DURING_REFERENCE",
+  fileAccessDenied: "FILE_ACCESS_DENIED",
+  operationTimeout: "OPERATION_TIMEOUT",
+  coreUnavailable: "CORE_UNAVAILABLE",
+  databaseOpenFailed: "DATABASE_OPEN_FAILED",
+  databaseReadOnly: "DATABASE_READ_ONLY",
+  databaseBusy: "DATABASE_BUSY",
+  databaseCorrupt: "DATABASE_CORRUPT",
+  migrationFailed: "MIGRATION_FAILED",
+  migrationChecksumMismatch: "MIGRATION_CHECKSUM_MISMATCH",
+  schemaTooNew: "SCHEMA_TOO_NEW",
+  constraintViolation: "CONSTRAINT_VIOLATION",
+  recordNotFound: "RECORD_NOT_FOUND",
+  invalidRecord: "INVALID_RECORD",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -58,6 +101,37 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   REQUEST_TIMEOUT: -32007,
   PYTHON_NOT_FOUND: -32008,
   PROTOCOL_ERROR: -32009,
+  DIALOG_CANCELLED: -32100,
+  INVALID_PROJECT_NAME: -32101,
+  INVALID_PROJECT_ROOT: -32102,
+  UNSUPPORTED_PROJECT_LOCATION: -32103,
+  PROJECT_DIRECTORY_NOT_EMPTY: -32104,
+  PROJECT_ALREADY_EXISTS: -32105,
+  PROJECT_NOT_FOUND: -32106,
+  PROJECT_MANIFEST_INVALID: -32107,
+  PROJECT_SCHEMA_TOO_NEW: -32108,
+  PROJECT_DATABASE_MISSING: -32109,
+  PROJECT_ID_MISMATCH: -32110,
+  PROJECT_PATH_CONFLICT: -32111,
+  PROJECT_NOT_ACTIVE: -32112,
+  ASSET_NOT_FOUND: -32113,
+  UNSUPPORTED_ASSET_TYPE: -32114,
+  TOO_MANY_ASSETS: -32115,
+  ASSET_CHANGED: -32116,
+  ASSET_CHANGED_DURING_REFERENCE: -32117,
+  FILE_ACCESS_DENIED: -32118,
+  OPERATION_TIMEOUT: -32119,
+  CORE_UNAVAILABLE: -32120,
+  DATABASE_OPEN_FAILED: -32121,
+  DATABASE_READ_ONLY: -32122,
+  DATABASE_BUSY: -32123,
+  DATABASE_CORRUPT: -32124,
+  MIGRATION_FAILED: -32125,
+  MIGRATION_CHECKSUM_MISMATCH: -32126,
+  SCHEMA_TOO_NEW: -32127,
+  CONSTRAINT_VIOLATION: -32128,
+  RECORD_NOT_FOUND: -32129,
+  INVALID_RECORD: -32130,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -75,6 +149,37 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   TRANSPORT_CLOSED: "Core transport closed.",
   PYTHON_NOT_FOUND: "Python Core could not be started.",
   PROTOCOL_ERROR: "Core protocol error.",
+  DIALOG_CANCELLED: "The dialog was cancelled.",
+  INVALID_PROJECT_NAME: "The project name is invalid.",
+  INVALID_PROJECT_ROOT: "The project location is invalid.",
+  UNSUPPORTED_PROJECT_LOCATION: "The project location is not supported.",
+  PROJECT_DIRECTORY_NOT_EMPTY: "The project directory is not empty.",
+  PROJECT_ALREADY_EXISTS: "A SuperVideo project already exists there.",
+  PROJECT_NOT_FOUND: "The project was not found.",
+  PROJECT_MANIFEST_INVALID: "The project manifest is invalid.",
+  PROJECT_SCHEMA_TOO_NEW: "The project schema is newer than supported.",
+  PROJECT_DATABASE_MISSING: "The project database is missing.",
+  PROJECT_ID_MISMATCH: "The project identity does not match.",
+  PROJECT_PATH_CONFLICT: "The project location conflicts with another project.",
+  PROJECT_NOT_ACTIVE: "No project is currently active.",
+  ASSET_NOT_FOUND: "The asset was not found.",
+  UNSUPPORTED_ASSET_TYPE: "The asset type is not supported.",
+  TOO_MANY_ASSETS: "Too many assets were selected.",
+  ASSET_CHANGED: "The asset has changed since it was referenced.",
+  ASSET_CHANGED_DURING_REFERENCE: "The asset changed while it was being referenced.",
+  FILE_ACCESS_DENIED: "The selected file could not be accessed.",
+  OPERATION_TIMEOUT: "The project operation timed out.",
+  CORE_UNAVAILABLE: "The Python Core is unavailable.",
+  DATABASE_OPEN_FAILED: "Database could not be opened.",
+  DATABASE_READ_ONLY: "Database is read-only.",
+  DATABASE_BUSY: "Database is busy.",
+  DATABASE_CORRUPT: "Database is corrupt.",
+  MIGRATION_FAILED: "Database migration failed.",
+  MIGRATION_CHECKSUM_MISMATCH: "Database migration checksum mismatch.",
+  SCHEMA_TOO_NEW: "Database schema is newer than supported.",
+  CONSTRAINT_VIOLATION: "Storage constraint was violated.",
+  RECORD_NOT_FOUND: "Storage record was not found.",
+  INVALID_RECORD: "Storage record is invalid.",
 };
 
 export type CoreRpcId = string;
@@ -89,6 +194,34 @@ export type CoreHealth = Readonly<{
 
 export type CoreSmokeCountdownParams = Readonly<{ steps: number; delayMs: number }>;
 export type CoreSmokeCountdownResult = Readonly<{ status: "completed"; steps: number }>;
+export type ProjectCreateParams = Readonly<{ name: string; targetPlatform: string; projectRoot: string }>;
+export type ProjectOpenParams = Readonly<{ projectRoot: string }>;
+export type ProjectSummary = Readonly<{
+  projectId: string;
+  name: string;
+  targetPlatform: string;
+  projectRoot: string;
+  manifestSchemaVersion: number;
+  databaseSchemaVersion: number;
+  assetCount: number;
+  createdAtMs: number;
+  updatedAtMs: number;
+}>;
+export type AssetReferenceParams = Readonly<{ projectId: string; paths: readonly string[] }>;
+export type AssetListParams = Readonly<{ projectId: string; limit: number }>;
+export type AssetSummary = Readonly<{
+  assetId: string;
+  projectId: string;
+  fileName: string;
+  absolutePath: string;
+  kind: string;
+  sizeBytes: number;
+  modifiedAtMs: number;
+  fingerprintAlgorithm: string;
+  referenceStatus: "added" | "existing";
+}>;
+export type AssetReferenceBatchResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
+export type AssetListResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
 export type CoreProgress = Readonly<{
   requestId: CoreRpcId;
   sequence: number;
@@ -200,6 +333,18 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.cancel) {
     return false;
   }
+  if (value.method === CORE_RPC_METHODS.projectCreate) {
+    return isProjectCreateParams(value.params);
+  }
+  if (value.method === CORE_RPC_METHODS.projectOpen || value.method === CORE_RPC_METHODS.projectInspect) {
+    return isProjectOpenParams(value.params);
+  }
+  if (value.method === CORE_RPC_METHODS.assetReference) {
+    return isAssetReferenceParams(value.params);
+  }
+  if (value.method === CORE_RPC_METHODS.assetList) {
+    return isAssetListParams(value.params);
+  }
   return true;
 }
 
@@ -281,6 +426,47 @@ export function isCoreSmokeCountdownResult(value: unknown): value is CoreSmokeCo
   return value.status === "completed" && isSafeInteger(value.steps, 3, 8);
 }
 
+export function isProjectSummary(value: unknown): value is ProjectSummary {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["projectId", "name", "targetPlatform", "projectRoot", "manifestSchemaVersion", "databaseSchemaVersion", "assetCount", "createdAtMs", "updatedAtMs"])
+    && isUuid(value.projectId)
+    && isSafeString(value.name, 200)
+    && isSafeString(value.targetPlatform, 64)
+    && isAbsolutePath(value.projectRoot)
+    && isSafeInteger(value.manifestSchemaVersion, 1, Number.MAX_SAFE_INTEGER)
+    && isSafeInteger(value.databaseSchemaVersion, 1, Number.MAX_SAFE_INTEGER)
+    && isSafeInteger(value.assetCount, 0, 1_000_000)
+    && isTimestamp(value.createdAtMs)
+    && isTimestamp(value.updatedAtMs);
+}
+
+export function isAssetSummary(value: unknown): value is AssetSummary {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["assetId", "projectId", "fileName", "absolutePath", "kind", "sizeBytes", "modifiedAtMs", "fingerprintAlgorithm", "referenceStatus"])
+    && isUuid(value.assetId)
+    && isUuid(value.projectId)
+    && isSafeString(value.fileName, 255)
+    && isAbsolutePath(value.absolutePath)
+    && isSafeString(value.kind, 64)
+    && isSafeInteger(value.sizeBytes, 0, Number.MAX_SAFE_INTEGER)
+    && isTimestamp(value.modifiedAtMs)
+    && isSafeString(value.fingerprintAlgorithm, 64)
+    && (value.referenceStatus === "added" || value.referenceStatus === "existing");
+}
+
+export function isAssetReferenceBatchResult(value: unknown): value is AssetReferenceBatchResult {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["projectId", "items"])
+    && isUuid(value.projectId)
+    && Array.isArray(value.items)
+    && value.items.length <= 100
+    && value.items.every(isAssetSummary);
+}
+
+export function isAssetListResult(value: unknown): value is AssetListResult {
+  return isAssetReferenceBatchResult(value);
+}
+
 export function isCoreProgress(value: unknown): value is CoreProgress {
   if (!isPlainRecord(value) || !isCoreJsonValue(value) || !hasOnlyKeys(value, ["requestId", "sequence", "progress", "message"])) {
     return false;
@@ -341,4 +527,56 @@ function isEmptyRecord(value: unknown): value is Record<string, never> {
 
 function isSafeInteger(value: unknown, minimum: number, maximum: number): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= minimum && value <= maximum;
+}
+
+function isTimestamp(value: unknown): value is number {
+  return isSafeInteger(value, 0, Number.MAX_SAFE_INTEGER);
+}
+
+function isProjectCreateParams(value: unknown): value is ProjectCreateParams {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["name", "targetPlatform", "projectRoot"])
+    && isSafeString(value.name, 200)
+    && !/[\u0000-\u001f\u007f]/.test(value.name)
+    && isSafeString(value.targetPlatform, 64)
+    && !/[\u0000-\u001f\u007f]/.test(value.targetPlatform)
+    && isAbsolutePath(value.projectRoot);
+}
+
+function isProjectOpenParams(value: unknown): value is ProjectOpenParams {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["projectRoot"]) && isAbsolutePath(value.projectRoot);
+}
+
+function isAssetReferenceParams(value: unknown): value is AssetReferenceParams {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["projectId", "paths"])
+    && isUuid(value.projectId)
+    && Array.isArray(value.paths)
+    && value.paths.length > 0
+    && value.paths.length <= 100
+    && value.paths.every((item) => isAbsolutePath(item));
+}
+
+function isAssetListParams(value: unknown): value is AssetListParams {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["projectId", "limit"])
+    && isUuid(value.projectId)
+    && isSafeInteger(value.limit, 1, 1_000);
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+}
+
+function isAbsolutePath(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && value.length <= 32_767
+    && !value.includes("\u0000")
+    && (/^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.startsWith("/"));
+}
+
+function isSafeString(value: unknown, maximumLength: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maximumLength;
 }

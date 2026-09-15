@@ -23,6 +23,33 @@
     }
   },
   {
+    "name": "valid-project-create-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-project-create-1",
+      "method": "project.create",
+      "params": {
+        "name": "招聘项目",
+        "targetPlatform": "douyin",
+        "projectRoot": "C:\\Users\\tester\\项目"
+      }
+    }
+  },
+  {
+    "name": "valid-asset-reference-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-asset-reference-1",
+      "method": "asset.reference",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "paths": ["C:\\素材\\口播.mp4"]
+      }
+    }
+  },
+  {
     "name": "valid-future-method-request",
     "valid": true,
     "message": {
@@ -135,6 +162,20 @@
         "steps": 4,
         "delayMs": 25,
         "extra": false
+      }
+    }
+  },
+  {
+    "name": "invalid-project-relative-root",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-project-create-2",
+      "method": "project.create",
+      "params": {
+        "name": "invalid",
+        "targetPlatform": "douyin",
+        "projectRoot": "relative\\project"
       }
     }
   },
