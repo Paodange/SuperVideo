@@ -8,8 +8,9 @@ const root = path.resolve(desktop, "..", "..");
 const mainEntry = path.join(desktop, "dist", "main", "main.js");
 const preloadEntry = path.join(desktop, "dist", "preload", "preload.js");
 const rendererEntry = path.join(desktop, "dist", "renderer", "index.html");
+const agentWorkerEntry = path.join(desktop, "dist", "worker", "agent-worker-bootstrap.cjs");
 
-for (const entry of [mainEntry, preloadEntry, rendererEntry]) {
+for (const entry of [mainEntry, preloadEntry, rendererEntry, agentWorkerEntry]) {
   if (!existsSync(entry)) {
     console.error(`Missing desktop build entry: ${path.relative(root, entry)}`);
     process.exit(1);

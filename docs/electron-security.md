@@ -5,9 +5,9 @@ A02 只建立 Electron 的进程和内容安全边界，不接入 Agent、Python
 ## 信任边界
 
 - Renderer 是不可信的 React 页面。它没有 Node.js、文件系统、原始 `ipcRenderer`、任意 channel、外链窗口或权限能力。
-- preload 是唯一的窄桥，只暴露冻结的 `window.supervideo.getEnvironment()`。channel、payload 和返回结构来自 `@supervideo/shared` 的版本化 contract。
+- preload 是唯一的窄桥，只暴露冻结的、按业务命名的 `window.supervideo` 能力：环境状态、Agent Worker 状态、smoke run、取消和产品化事件订阅。channel、payload 和返回结构来自 `@supervideo/shared` 的版本化 contract。
 - sandboxed preload 在构建时由 esbuild 内联 shared 的运行时常量，运行时只保留 Electron 内建模块依赖，避免 sandbox preload 通过 `require` 加载 workspace 包。
-- Main 是受信边界，负责 BrowserWindow 配置、来源校验、session 防护和 IPC handler。所有 IPC 都校验 frame URL、空 payload 和已知 channel。
+- Main 是受信边界，负责 BrowserWindow 配置、来源校验、session 防护、IPC handler 和 Agent Worker owner。所有 IPC 都校验 frame URL、payload 和已知 channel；Worker 事件到达 Renderer 前还会经过产品事件映射和 preload 校验。
 - Main 内部错误只转换为稳定的 `forbidden-sender`、`invalid-payload` 或 `internal-error` 公开错误，不把堆栈、绝对路径、环境变量或 Electron 对象传给 Renderer。
 
 ## 内容来源与 CSP
@@ -24,4 +24,4 @@ A02 只建立 Electron 的进程和内容安全边界，不接入 Agent、Python
 
 ## 当前限制
 
-A02 不实现代码签名、安装包沙箱或对已取得 Windows 管理员权限的本机攻击者的防护。生产打包流程、自动更新和真正的业务 IPC 将在后续工作包中继续收紧；新增能力必须扩展共享 contract 和显式 allowlist，不能暴露通用 `invoke/send`。
+A02/A03 不实现代码签名、安装包沙箱或对已取得 Windows 管理员权限的本机攻击者的防护。生产打包流程、自动更新和 Python/SQLite 业务 IPC 将在后续工作包中继续收紧；新增能力必须扩展共享 contract 和显式 allowlist，不能暴露通用 `invoke/send`。

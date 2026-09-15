@@ -24,6 +24,11 @@ function run(command, args, label) {
 run(npmCommand, [npmCli, "run", "build"], "workspace build");
 run(
   process.execPath,
-  ["--test", path.join(root, "tests", "health.test.mjs"), path.join(root, "tests", "electron-security.test.mjs")],
+  [
+    "--test",
+    path.join(root, "tests", "health.test.mjs"),
+    path.join(root, "tests", "electron-security.test.mjs"),
+    path.join(root, "tests", "agent-worker.test.mjs"),
+  ],
   "automated tests",
 );

@@ -147,6 +147,42 @@ test("trusted sender reaches the versioned IPC allowlist and untrusted sender do
   dispose();
 });
 
+test("Agent IPC uses explicit channels, payload schemas, and stable public errors", async () => {
+  const fakeIpcMain = createFakeIpcMain();
+  const runtime = config.createRuntimeConfig({ isPackaged: false, argv: [`--dev-server=${devServerUrl}`], rendererPath });
+  const calls = [];
+  const dispose = ipc.registerDesktopIpcHandlers(fakeIpcMain, {
+    rendererTrustPolicy: runtime,
+    getEnvironment: () => ({ mode: "development", platform: "win32", electron: "44.3.0" }),
+    getAgentStatus: () => ({
+      status: "ready",
+      generation: 1,
+      activeRunId: null,
+      runStatus: "idle",
+      restartCount: 0,
+      lastErrorCode: null,
+      workerVersion: "0.1.0",
+      capabilities: ["smoke-task", "cancel"],
+    }),
+    runSmokeTask: () => {
+      calls.push("run");
+      return { runId: "ipc-run" };
+    },
+    cancelSmokeRun: (runId) => calls.push(`cancel:${runId}`),
+    log: () => {},
+  });
+  assert.equal(fakeIpcMain.handlers.size, 4);
+  const statusHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.getAgentStatus);
+  const runHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.runAgentSmokeTask);
+  const cancelHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.cancelAgentRun);
+  assert.equal((await statusHandler(trustedEvent(), {})).ok, true);
+  assert.deepEqual(await runHandler(trustedEvent(), {}), { ok: true, value: { runId: "ipc-run" } });
+  assert.deepEqual(await cancelHandler(trustedEvent(), { runId: "ipc-run" }), { ok: true, value: { runId: "ipc-run" } });
+  assert.deepEqual(calls, ["run", "cancel:ipc-run"]);
+  assert.equal((await cancelHandler(trustedEvent(), { runId: "bad run id" })).error.code, "invalid-payload");
+  dispose();
+});
+
 test("invalid payloads are rejected before the business handler", async () => {
   const fakeIpcMain = createFakeIpcMain();
   const runtime = config.createRuntimeConfig({ isPackaged: false, argv: [`--dev-server=${devServerUrl}`], rendererPath });
@@ -210,9 +246,10 @@ test("preload exposes one frozen typed capability and no arbitrary channel", asy
   });
 
   assert.equal(Object.isFrozen(api), true);
-  assert.deepEqual(Object.keys(api), ["getEnvironment"]);
+  assert.deepEqual(Object.keys(api), ["getEnvironment", "getAgentStatus", "runSmokeTask", "cancelSmokeRun", "onAgentEvent"]);
   assert.equal("invoke" in api, false);
   assert.equal("send" in api, false);
+  assert.equal("postMessage" in api, false);
   assert.deepEqual(await api.getEnvironment(), { mode: "development", platform: "win32", electron: "44.3.0" });
   assert.deepEqual(calls, [{ channel: shared.DESKTOP_IPC_CHANNELS.getEnvironment, payload: {} }]);
 });
@@ -225,5 +262,6 @@ test("sandboxed preload is bundled and does not load the workspace package at ru
 
 test("unknown IPC channel is outside the allowlist", () => {
   assert.equal(ipc.isKnownDesktopIpcChannel(shared.DESKTOP_IPC_CHANNELS.getEnvironment), true);
+  assert.equal(ipc.isKnownDesktopIpcChannel(shared.DESKTOP_IPC_CHANNELS.agentEvent), true);
   assert.equal(ipc.isKnownDesktopIpcChannel("desktop:v1:unknown"), false);
 });
