@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,8 +23,18 @@ function run(args, label) {
 }
 
 function runPythonHealth() {
-  const pythonCommand = process.env.SUPERVIDEO_PYTHON ?? (process.platform === "win32" ? "py.exe" : "python3");
-  const pythonArgs = process.platform === "win32" ? ["-3", "-m", "supervideo_core.health"] : ["-m", "supervideo_core.health"];
+  const isWindows = process.platform === "win32";
+  const venvPython = path.join(root, ".venv", isWindows ? "Scripts" : "bin", isWindows ? "python.exe" : "python");
+  const hasVenv = existsSync(venvPython);
+  const configuredPython = process.env.SUPERVIDEO_PYTHON;
+  const pythonCommand = hasVenv ? venvPython : configuredPython ?? (isWindows ? "py.exe" : "python3");
+  const pythonArgs = hasVenv
+    ? ["-m", "supervideo_core.health"]
+    : configuredPython
+      ? ["-m", "supervideo_core.health"]
+      : isWindows
+        ? ["-3", "-m", "supervideo_core.health"]
+        : ["-m", "supervideo_core.health"];
   const coreSource = path.join(root, "services", "core", "src");
   const existingPythonPath = process.env.PYTHONPATH;
   const pythonPath = existingPythonPath ? `${coreSource}${path.delimiter}${existingPythonPath}` : coreSource;

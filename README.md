@@ -1,14 +1,14 @@
 # SuperVideo
 
-SuperVideo is a local-first desktop video creation agent. A03 adds a bounded
-Pi Agent Worker integration while keeping the media core and real model
-providers out of scope.
+SuperVideo is a local-first desktop video creation agent. A04 adds a bounded,
+versioned JSON-RPC boundary from the Pi Agent Worker to a local Python Core;
+the media core and real model providers remain out of scope.
 
 ## Environment
 
 - Windows is the first-stage target and all root commands work from PowerShell.
 - Node.js 20–24 and npm 10 or newer are required. The Electron runtime is installed locally by npm.
-- Python 3.12 or newer is required for the Core health check. A01 uses only the Python standard library at runtime.
+- Python 3.12 or newer is required for the Python Core. The verified development runtime is Python 3.14.4.
 
 ## First install
 
@@ -16,14 +16,14 @@ From the repository root:
 
 ```powershell
 npm install
+npm run core:setup
 ```
 
-The Python package uses `src` layout. The root health command supplies the source path automatically. To install the package into a local virtual environment for development, use:
-
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --editable .\services\core
-```
+`npm run core:setup` creates the repository-local `.venv`, installs the locked
+Pydantic 2.x dependencies, and installs the `services/core` package in editable
+mode. It does not modify the system Python. Commands prefer
+`.venv\Scripts\python.exe` on Windows and provide a clear development fallback
+when the environment has not yet been created.
 
 ## Common commands
 
@@ -31,6 +31,8 @@ py -3.12 -m venv .venv
 npm run dev
 npm run build
 npm run agent:smoke
+npm run core:rpc:smoke
+npm run core:test
 npm run typecheck
 npm run health
 npm test
@@ -48,6 +50,11 @@ executable/build entries, desktop build entries, and Python Core executable
 health module. Each service returns a stable JSON status and any failure exits
 non-zero.
 
+`npm run core:rpc:smoke` starts the formal `python -m supervideo_core.rpc`
+subprocess, verifies health, streaming progress, and the timeout cancellation
+path, then shuts it down. `npm run core:test` runs the Pydantic and Python JSONL
+server tests.
+
 ## Repository layout
 
 ```text
@@ -55,13 +62,14 @@ apps/desktop/       Electron Main, preload, React renderer, and Vite build confi
 workers/agent/      Independent TypeScript Pi Agent Worker and health entry
 services/core/      Python supervideo_core package using src layout
 packages/shared/    Versioned home for small cross-boundary types
+contracts/          Checked-in cross-language Core RPC golden fixtures
 scripts/            Cross-platform Node orchestration for root commands
 docs/               Product architecture and development workflow
 spikes/             Architecture validation evidence, kept separate from the app
 tests/              Minimal workspace automation tests
 ```
 
-The desktop workspace deliberately keeps `src/main`, `src/preload`, and `src/renderer` separate. Vite is used only for the React renderer's development server and bundle; TypeScript compiles Main, preload, and Worker entries explicitly so the process boundaries remain visible. The Worker build is copied into `apps/desktop/dist/worker` with its ESM package boundary, so Main never resolves TypeScript source or the spike directory. See [docs/agent-worker.md](docs/agent-worker.md) for the protocol and restart policy.
+The desktop workspace deliberately keeps `src/main`, `src/preload`, and `src/renderer` separate. Vite is used only for the React renderer's development server and bundle; TypeScript compiles Main, preload, and Worker entries explicitly so the process boundaries remain visible. The Worker build is copied into `apps/desktop/dist/worker` with its ESM package boundary, so Main never resolves TypeScript source or the spike directory. `workers/agent/src/python-core-client.ts` owns the reusable Python process boundary; see [docs/agent-worker.md](docs/agent-worker.md) and [docs/python-rpc.md](docs/python-rpc.md).
 
 ## Desktop security boundary
 
@@ -69,4 +77,4 @@ A02 keeps `contextIsolation`, sandboxing, `nodeIntegration: false`, `webSecurity
 
 ## Known limitations
 
-A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. It does not include formal Python JSON-RPC, SQLite, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, packaging, or real provider credentials. Worker restart state and conversations are not persisted across application restarts. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.
+A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains only the health and deterministic countdown RPC methods; it does not include SQLite, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, formal Pi tool registration, task recovery, packaging, or real provider credentials. Worker restart state, Core requests, and conversations are not persisted across application restarts. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.

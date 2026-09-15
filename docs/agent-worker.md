@@ -69,6 +69,8 @@ run, then performs graceful shutdown. `npm run dev` starts the same Worker and
 shows the A03 engineering panel in the Renderer.
 
 The faux provider is deterministic and keyless for engineering verification;
-it is not a real LLM integration. A04 will add the formal Python JSON-RPC
-boundary. Persistent conversations, long tasks, SQLite, real providers, and
-media tools are intentionally out of scope.
+it is not a real LLM integration. A04 adds the reusable
+`PythonCoreClient`/Python JSON-RPC boundary described in
+[docs/python-rpc.md](python-rpc.md). Persistent conversations, long-task
+recovery, SQLite, real providers, and media tools remain intentionally out of
+scope.
