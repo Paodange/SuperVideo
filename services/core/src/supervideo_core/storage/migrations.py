@@ -108,6 +108,10 @@ def discover_migrations() -> list[Migration]:
         raise
     except (OSError, UnicodeError, TypeError) as error:
         raise StorageError("MIGRATION_FAILED", cause=error) from error
+    # importlib.resources does not promise directory iteration order.  Sort by
+    # the parsed migration version before applying the structural validation so
+    # an equivalent package layout upgrades deterministically on every host.
+    migrations.sort(key=lambda migration: migration.version)
     return validate_migrations(migrations)
 
 

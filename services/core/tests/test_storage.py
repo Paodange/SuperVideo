@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
@@ -30,6 +31,7 @@ from supervideo_core.storage import (
     discover_migrations,
     migration_checksum,
 )
+from supervideo_core.storage import migrations as migrations_module
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -169,6 +171,61 @@ class MigrationTests(StorageTestCase):
                 self.database,
                 [Migration(1, "0001_one", "SELECT 1;"), Migration(1, "0001_duplicate", "SELECT 2;")],
             )
+
+    def test_discover_migrations_sorts_directory_enumeration_by_version(self) -> None:
+        entries = [
+            _FakeMigrationEntry("0002_second.sql", "CREATE TABLE second (id INTEGER);"),
+            _FakeMigrationEntry("0001_first.sql", "CREATE TABLE first (id INTEGER);")
+        ]
+        with patch.object(migrations_module.resources, "files", return_value=_FakeMigrationDirectory(entries)):
+            discovered = migrations_module.discover_migrations()
+        self.assertEqual([migration.version for migration in discovered], [1, 2])
+        self.assertEqual([migration.name for migration in discovered], ["0001_first", "0002_second"])
+
+    def test_migration_upgrade_is_stable_when_directory_order_changes(self) -> None:
+        entries = [
+            _FakeMigrationEntry("0002_second.sql", "CREATE TABLE second (id INTEGER);"),
+            _FakeMigrationEntry("0001_first.sql", "CREATE TABLE first (id INTEGER);")
+        ]
+        database_path = self.temp_root / "ordered" / "project.db"
+        database_path.parent.mkdir()
+        database = Database.open(database_path)
+        with patch.object(migrations_module.resources, "files", return_value=_FakeMigrationDirectory(entries)):
+            try:
+                report = MigrationRunner(database, migrations_module.discover_migrations()).migrate()
+                self.assertEqual(report.applied_versions, (1, 2))
+                self.assertEqual(
+                    database.connection.execute(
+                        "SELECT version FROM schema_migrations ORDER BY version"
+                    ).fetchall(),
+                    [(1,), (2,)],
+                )
+            finally:
+                database.close()
+
+
+class _FakeMigrationEntry:
+    def __init__(self, name: str, text: str) -> None:
+        self.name = name
+        self.text = text
+
+    def is_file(self) -> bool:
+        return True
+
+    def read_text(self, *, encoding: str) -> str:
+        assert encoding == "utf-8"
+        return self.text
+
+
+class _FakeMigrationDirectory:
+    def __init__(self, entries: list[_FakeMigrationEntry]) -> None:
+        self.entries = entries
+
+    def joinpath(self, _name: str) -> "_FakeMigrationDirectory":
+        return self
+
+    def iterdir(self):
+        return iter(self.entries)
 
 
 class RepositoryTests(StorageTestCase):
