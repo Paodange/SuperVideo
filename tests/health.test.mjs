@@ -27,8 +27,18 @@ test("agent worker exposes a stable executable health entry", () => {
 
 test("python core exposes a stable module health entry", () => {
   const coreSource = path.join(root, "services", "core", "src");
-  const pythonCommand = process.env.SUPERVIDEO_PYTHON ?? (process.platform === "win32" ? "py.exe" : "python3");
-  const pythonArgs = process.platform === "win32" ? ["-3", "-m", "supervideo_core.health"] : ["-m", "supervideo_core.health"];
+  const isWindows = process.platform === "win32";
+  const venvPython = path.join(root, ".venv", isWindows ? "Scripts" : "bin", isWindows ? "python.exe" : "python");
+  const hasVenv = existsSync(venvPython);
+  const configuredPython = process.env.SUPERVIDEO_PYTHON;
+  const pythonCommand = hasVenv ? venvPython : configuredPython ?? (isWindows ? "py.exe" : "python3");
+  const pythonArgs = hasVenv
+    ? ["-m", "supervideo_core.health"]
+    : configuredPython
+      ? ["-m", "supervideo_core.health"]
+      : isWindows
+        ? ["-3", "-m", "supervideo_core.health"]
+        : ["-m", "supervideo_core.health"];
   const pythonPath = process.env.PYTHONPATH ? `${coreSource}${path.delimiter}${process.env.PYTHONPATH}` : coreSource;
   const health = parseHealth(pythonCommand, pythonArgs, { ...process.env, PYTHONPATH: pythonPath });
   assert.deepEqual(health, { service: "python-core", status: "ok" });

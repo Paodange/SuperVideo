@@ -1,0 +1,227 @@
+import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const shared = await import(pathToFileURL(path.join(root, "packages", "shared", "dist", "index.js")).href);
+const clientModule = await import(pathToFileURL(path.join(root, "workers", "agent", "dist", "python-core-client.js")).href);
+const { CoreRpcError, PythonCoreClient } = clientModule;
+
+function response(id, result) {
+  return { jsonrpc: "2.0", id, result };
+}
+
+function emitChunks(stream, value, splitAt = []) {
+  const bytes = Buffer.from(value, "utf8");
+  const cuts = [0, ...splitAt.filter((cut) => cut > 0 && cut < bytes.length), bytes.length].sort((a, b) => a - b);
+  for (let index = 1; index < cuts.length; index += 1) {
+    stream.emit("data", bytes.subarray(cuts[index - 1], cuts[index]));
+  }
+}
+
+class FakeChild extends EventEmitter {
+  constructor(onWrite) {
+    super();
+    this.stdout = new EventEmitter();
+    this.stderr = new EventEmitter();
+    this.killed = false;
+    this.stdin = new EventEmitter();
+    this.stdin.write = (chunk) => {
+      onWrite(JSON.parse(String(chunk)));
+      return true;
+    };
+    this.stdin.end = () => {
+      this.emit("exit", 0, null);
+    };
+  }
+
+  kill() {
+    this.killed = true;
+    this.emit("exit", null, "SIGTERM");
+    return true;
+  }
+}
+
+function fakeLaunch(onRequest) {
+  let child;
+  child = new FakeChild((request) => onRequest(child, request));
+  return {
+    child,
+    spawnProcess(command, args, options) {
+      assert.equal(options.shell, false);
+      assert.equal(options.windowsHide, true);
+      assert.equal(args.at(-2), "-m");
+      assert.equal(args.at(-1), "supervideo_core.rpc");
+      return child;
+    },
+  };
+}
+
+test("golden fixtures are checked by the TypeScript runtime validator", () => {
+  const fixtures = JSON.parse(readFileSync(path.join(root, "contracts", "core-rpc-fixtures.json"), "utf8"));
+  for (const fixture of fixtures) {
+    assert.equal(shared.isCoreRpcMessage(fixture.message), fixture.valid, fixture.name);
+  }
+});
+
+test("client frames CRLF/chunked messages and ignores stale progress or responses", async () => {
+  const progress = [];
+  const fake = fakeLaunch((child, request) => {
+    if (request.method === "core.health") {
+      emitChunks(
+        child.stdout,
+        `${JSON.stringify(response(request.id, {
+          service: "python-core",
+          status: "ok",
+          protocolVersion: 1,
+          coreVersion: "0.1.0",
+          capabilities: ["core.health", "core.smoke.countdown", "core.cancel"],
+        }))}\r\n`,
+        [1, 4, 9],
+      );
+      return;
+    }
+    if (request.method === "core.smoke.countdown") {
+      const events = [
+        { jsonrpc: "2.0", method: "core.progress", params: { requestId: request.id, sequence: 1, progress: 0.25, message: "one" } },
+        { jsonrpc: "2.0", method: "core.progress", params: { requestId: request.id, sequence: 2, progress: 0.5, message: "two" } },
+        { jsonrpc: "2.0", method: "core.progress", params: { requestId: request.id, sequence: 2, progress: 0.5, message: "duplicate" } },
+        { jsonrpc: "2.0", method: "core.progress", params: { requestId: "unknown-id", sequence: 99, progress: 1, message: "unknown" } },
+        response(request.id, { status: "completed", steps: 4 }),
+      ];
+      emitChunks(child.stdout, `${events.map((event) => JSON.stringify(event)).join("\r\n")}\r\n`, [7, 23, 81]);
+      // A late response must not be routed to a later request.
+      child.stdout.emit("data", Buffer.from(`${JSON.stringify(response(request.id, { status: "completed", steps: 4 }))}\n`));
+    }
+  });
+  const client = new PythonCoreClient({ rootDir: root, spawnProcess: fake.spawnProcess });
+  await client.start();
+  const result = await client.runSmokeCountdown({ steps: 4, delayMs: 10 }, { onProgress: (event) => progress.push(event) });
+  assert.deepEqual(result, { status: "completed", steps: 4 });
+  assert.deepEqual(progress.map((event) => event.sequence), [1, 2]);
+  await client.shutdown();
+  await client.shutdown();
+  assert.equal(client.getStatus(), "stopped");
+});
+
+test("timeout and AbortSignal cancel only the target request and clean pending work", async () => {
+  const held = new Map();
+  const fake = fakeLaunch((child, request) => {
+    if (request.method === "core.health") {
+      emitChunks(child.stdout, `${JSON.stringify(response(request.id, {
+        service: "python-core", status: "ok", protocolVersion: 1, coreVersion: "0.1.0", capabilities: [],
+      }))}\n`);
+    } else if (request.method === "core.smoke.countdown") {
+      held.set(request.id, child);
+    } else if (request.method === "core.cancel") {
+      // The original request is deliberately allowed to become a late result.
+      const originalId = request.params.requestId;
+      const original = [...held.keys()].find((id) => id === originalId);
+      if (original) {
+        child.stdout.emit("data", Buffer.from(`${JSON.stringify(response(original, { status: "completed", steps: 3 }))}\n`));
+      }
+    }
+  });
+  const client = new PythonCoreClient({ rootDir: root, spawnProcess: fake.spawnProcess, requestTimeoutMs: 50 });
+  await client.start();
+  const controller = new AbortController();
+  const aborted = client.runSmokeCountdown({ steps: 3, delayMs: 10 }, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(aborted, (error) => error instanceof CoreRpcError && error.code === "REQUEST_CANCELLED");
+  await assert.rejects(
+    client.runSmokeCountdown({ steps: 3, delayMs: 10 }, { timeoutMs: 15 }),
+    (error) => error instanceof CoreRpcError && error.code === "REQUEST_TIMEOUT",
+  );
+  assert.equal(client.getStatus(), "ready");
+  await client.shutdown();
+});
+
+test("sudden process exit rejects every pending request with a stable error", async () => {
+  let child;
+  const fake = fakeLaunch((createdChild, request) => {
+    child = createdChild;
+    if (request.method === "core.health") {
+      emitChunks(createdChild.stdout, `${JSON.stringify(response(request.id, {
+        service: "python-core", status: "ok", protocolVersion: 1, coreVersion: "0.1.0", capabilities: [],
+      }))}\n`);
+    }
+  });
+  const client = new PythonCoreClient({ rootDir: root, spawnProcess: fake.spawnProcess });
+  await client.start();
+  const first = client.request("core.future.one", {});
+  const second = client.request("core.future.two", {});
+  child.emit("exit", 1, null);
+  await assert.rejects(first, (error) => error instanceof CoreRpcError && error.code === "TRANSPORT_CLOSED");
+  await assert.rejects(second, (error) => error instanceof CoreRpcError && error.code === "TRANSPORT_CLOSED");
+  assert.equal(client.getStatus(), "failed");
+  await client.shutdown();
+});
+
+test("malformed server output fails the transport without completing another request", async () => {
+  let child;
+  const fake = fakeLaunch((createdChild, request) => {
+    child = createdChild;
+    if (request.method === "core.health") {
+      emitChunks(createdChild.stdout, `${JSON.stringify(response(request.id, {
+        service: "python-core", status: "ok", protocolVersion: 1, coreVersion: "0.1.0", capabilities: [],
+      }))}\n`);
+    } else if (request.method === "core.future.pending") {
+      createdChild.stdout.emit("data", Buffer.from('{"jsonrpc":"2.0","id":"other","result":}\n'));
+    }
+  });
+  const client = new PythonCoreClient({ rootDir: root, spawnProcess: fake.spawnProcess });
+  await client.start();
+  const pending = client.request("core.future.pending", {});
+  await assert.rejects(pending, (error) => error instanceof CoreRpcError && error.code === "PROTOCOL_ERROR");
+  assert.equal(client.getStatus(), "failed");
+  assert.equal(child.killed, true);
+  await client.shutdown();
+});
+
+test("client enforces the shared 256 KiB line limit", async () => {
+  const fake = fakeLaunch((child, request) => {
+    if (request.method === "core.health") {
+      emitChunks(child.stdout, `${JSON.stringify(response(request.id, {
+        service: "python-core", status: "ok", protocolVersion: 1, coreVersion: "0.1.0", capabilities: [],
+      }))}\n`);
+    }
+  });
+  const client = new PythonCoreClient({ rootDir: root, spawnProcess: fake.spawnProcess });
+  await client.start();
+  await assert.rejects(
+    client.request("core.future.large", { payload: "x".repeat(256 * 1024) }),
+    (error) => error instanceof CoreRpcError && error.code === "MESSAGE_TOO_LARGE",
+  );
+  assert.equal(client.getStatus(), "ready");
+  await client.shutdown();
+});
+
+test("real TypeScript to Python Core integration covers health, validation, progress, timeout and shutdown", async () => {
+  const progress = [];
+  const client = new PythonCoreClient({ rootDir: root, onProgress: (event) => progress.push(event) });
+  try {
+    const health = await client.start();
+    assert.equal(health.service, "python-core");
+    await assert.rejects(
+      client.request("core.health", { unexpected: true }),
+      (error) => error instanceof CoreRpcError && error.code === "INVALID_PARAMS",
+    );
+    await assert.rejects(
+      client.request("core.unknown", {}),
+      (error) => error instanceof CoreRpcError && error.code === "METHOD_NOT_FOUND",
+    );
+    const result = await client.runSmokeCountdown({ steps: 3, delayMs: 15 });
+    assert.deepEqual(result, { status: "completed", steps: 3 });
+    assert.ok(progress.length >= 2);
+    await assert.rejects(
+      client.runSmokeCountdown({ steps: 3, delayMs: 100 }, { timeoutMs: 25 }),
+      (error) => error instanceof CoreRpcError && error.code === "REQUEST_TIMEOUT",
+    );
+  } finally {
+    await client.shutdown();
+  }
+  assert.equal(client.getStatus(), "stopped");
+});

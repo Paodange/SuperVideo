@@ -29,6 +29,7 @@ run(
     path.join(root, "tests", "health.test.mjs"),
     path.join(root, "tests", "electron-security.test.mjs"),
     path.join(root, "tests", "agent-worker.test.mjs"),
+    path.join(root, "tests", "python-rpc.test.mjs"),
   ],
   "automated tests",
 );

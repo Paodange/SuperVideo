@@ -7,7 +7,9 @@ name = "supervideo_core"
 version = "0.1.0"
 description = "Local-first Python core boundary for SuperVideo"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.10,<3",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

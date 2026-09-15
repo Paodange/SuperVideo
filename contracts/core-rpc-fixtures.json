@@ -1,0 +1,212 @@
+[
+  {
+    "name": "valid-health-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-health-1",
+      "method": "core.health",
+      "params": {}
+    }
+  },
+  {
+    "name": "valid-countdown-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-countdown-1",
+      "method": "core.smoke.countdown",
+      "params": {
+        "steps": 4,
+        "delayMs": 25
+      }
+    }
+  },
+  {
+    "name": "valid-future-method-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-future-1",
+      "method": "core.future.v1",
+      "params": {}
+    }
+  },
+  {
+    "name": "valid-health-response",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-health-1",
+      "result": {
+        "service": "python-core",
+        "status": "ok",
+        "protocolVersion": 1,
+        "coreVersion": "0.1.0",
+        "capabilities": ["core.health", "core.smoke.countdown", "core.cancel"]
+      }
+    }
+  },
+  {
+    "name": "valid-countdown-response",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-countdown-1",
+      "result": {
+        "status": "completed",
+        "steps": 4
+      }
+    }
+  },
+  {
+    "name": "valid-error-response",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-unknown-1",
+      "error": {
+        "code": -32601,
+        "message": "Method not found.",
+        "data": {
+          "errorCode": "METHOD_NOT_FOUND"
+        }
+      }
+    }
+  },
+  {
+    "name": "valid-progress-notification",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "method": "core.progress",
+      "params": {
+        "requestId": "rpc-countdown-1",
+        "sequence": 1,
+        "progress": 0.25,
+        "message": "step-1"
+      }
+    }
+  },
+  {
+    "name": "valid-cancel-notification",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "method": "core.cancel",
+      "params": {
+        "requestId": "rpc-countdown-1"
+      }
+    }
+  },
+  {
+    "name": "invalid-health-extra-param",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-health-2",
+      "method": "core.health",
+      "params": {
+        "unexpected": true
+      }
+    }
+  },
+  {
+    "name": "invalid-countdown-string-number",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-countdown-2",
+      "method": "core.smoke.countdown",
+      "params": {
+        "steps": "4",
+        "delayMs": 25
+      }
+    }
+  },
+  {
+    "name": "invalid-countdown-extra-param",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-countdown-3",
+      "method": "core.smoke.countdown",
+      "params": {
+        "steps": 4,
+        "delayMs": 25,
+        "extra": false
+      }
+    }
+  },
+  {
+    "name": "invalid-jsonrpc-version",
+    "valid": false,
+    "message": {
+      "jsonrpc": "1.0",
+      "id": "rpc-version-1",
+      "method": "core.health",
+      "params": {}
+    }
+  },
+  {
+    "name": "invalid-numeric-id",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "core.health",
+      "params": {}
+    }
+  },
+  {
+    "name": "invalid-batch",
+    "valid": false,
+    "message": [
+      {
+        "jsonrpc": "2.0",
+        "id": "rpc-batch-1",
+        "method": "core.health",
+        "params": {}
+      }
+    ]
+  },
+  {
+    "name": "invalid-progress-sequence",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "method": "core.progress",
+      "params": {
+        "requestId": "rpc-countdown-1",
+        "sequence": 0,
+        "progress": 0.25,
+        "message": "step-0"
+      }
+    }
+  },
+  {
+    "name": "invalid-error-message",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-error-1",
+      "error": {
+        "code": -32601,
+        "message": "leaked internal detail",
+        "data": {
+          "errorCode": "METHOD_NOT_FOUND"
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid-response-extra-field",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-response-1",
+      "result": {},
+      "unexpected": true
+    }
+  }
+]

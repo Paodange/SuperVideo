@@ -4,3 +4,4 @@ export type HealthStatus = {
 };
 
 export * from "./agent-protocol";
+export * from "./core-rpc";

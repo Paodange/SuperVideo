@@ -1,0 +1,229 @@
+"""Async JSON Lines server for the local Python Core subprocess."""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import sys
+import traceback
+from typing import Any, BinaryIO
+
+from pydantic import ValidationError
+
+from .errors import RpcServiceError, error_response
+from .models import (
+    CORE_RPC_MAX_LINE_BYTES,
+    JSON_RPC_VERSION,
+    RpcCancelNotification,
+    RpcRequest,
+    REQUEST_ID_PATTERN,
+    validate_request,
+)
+from .registry import RpcRegistry
+
+
+def read_bounded_line(stream: BinaryIO, maximum: int) -> tuple[bytes, bool] | None:
+    """Read one line while retaining at most maximum+1 bytes in memory."""
+
+    first = stream.readline(maximum + 1)
+    if first == b"":
+        return None
+    captured = bytearray(first[: maximum + 1])
+    total = len(first)
+    while not first.endswith(b"\n"):
+        first = stream.readline(8_192)
+        if first == b"":
+            break
+        total += len(first)
+        if len(captured) <= maximum:
+            captured.extend(first[: maximum + 1 - len(captured)])
+    value = bytes(captured)
+    if value.endswith(b"\n"):
+        value = value[:-1]
+    if value.endswith(b"\r"):
+        value = value[:-1]
+    return value, total > maximum
+
+
+class RpcServer:
+    def __init__(self, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) -> None:
+        self.stdin = stdin or sys.stdin.buffer
+        self.stdout = stdout or sys.stdout.buffer
+        self.registry = RpcRegistry()
+        self.writer_lock = asyncio.Lock()
+        self.active_request_id: str | None = None
+        self.active_cancel: asyncio.Event | None = None
+        self.active_task: asyncio.Task[None] | None = None
+        self.closing = False
+
+    async def serve(self) -> None:
+        while not self.closing:
+            line = await asyncio.to_thread(read_bounded_line, self.stdin, CORE_RPC_MAX_LINE_BYTES)
+            if line is None:
+                break
+            await self.handle_line(*line)
+        await self.close()
+
+    async def handle_line(self, raw_line: bytes, too_large: bool = False) -> None:
+        if too_large:
+            await self.send_error(None, "MESSAGE_TOO_LARGE")
+            return
+        if not raw_line.strip():
+            await self.send_error(None, "INVALID_REQUEST")
+            return
+        try:
+            text = raw_line.decode("utf-8")
+            value = json.loads(text, parse_constant=self._reject_non_finite)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError):
+            await self.send_error(None, "PARSE_ERROR")
+            return
+        if isinstance(value, list) or not isinstance(value, dict):
+            await self.send_error(None, "INVALID_REQUEST")
+            return
+        if value.get("jsonrpc") != JSON_RPC_VERSION:
+            await self.send_error(self.safe_request_id(value), "PROTOCOL_MISMATCH")
+            return
+        if value.get("method") == "core.cancel" and "id" not in value:
+            try:
+                notification = RpcCancelNotification.model_validate(value)
+            except ValidationError:
+                await self.send_error(None, "INVALID_PARAMS")
+                return
+            self.cancel(notification.params.request_id)
+            return
+        if "id" not in value or "method" not in value:
+            await self.send_error(self.safe_request_id(value), "INVALID_REQUEST")
+            return
+        try:
+            request = RpcRequest.model_validate(value)
+        except ValidationError:
+            await self.send_error(self.safe_request_id(value), "INVALID_REQUEST")
+            return
+        try:
+            validate_request(value)
+        except ValidationError:
+            await self.send_error(request.id, "INVALID_PARAMS")
+            return
+        except ValueError:
+            await self.send_error(request.id, "INVALID_REQUEST")
+            return
+        await self.dispatch(request)
+
+    async def dispatch(self, request: RpcRequest) -> None:
+        if request.method == "core.smoke.countdown":
+            if self.active_request_id == request.id:
+                await self.send_error(request.id, "DUPLICATE_REQUEST_ID")
+                return
+            if self.active_request_id is not None:
+                await self.send_error(request.id, "BUSY")
+                return
+            self.active_request_id = request.id
+            self.active_cancel = asyncio.Event()
+            self.active_task = asyncio.create_task(self.execute_countdown(request))
+            return
+        try:
+            result = await self.registry.invoke(request.method, request.params, self.emit_progress, asyncio.Event())
+        except RpcServiceError as error:
+            await self.send_error(request.id, error.error_code)
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            await self.send_error(request.id, "INTERNAL_ERROR")
+        else:
+            await self.send_result(request.id, result)
+
+    async def execute_countdown(self, request: RpcRequest) -> None:
+        cancelled = self.active_cancel or asyncio.Event()
+        try:
+            result = await self.registry.invoke(request.method, request.params, self.emit_progress, cancelled)
+        except RpcServiceError as error:
+            if not self.closing:
+                await self.send_error(request.id, error.error_code)
+        except asyncio.CancelledError:
+            if not self.closing:
+                await self.send_error(request.id, "REQUEST_CANCELLED")
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            if not self.closing:
+                await self.send_error(request.id, "INTERNAL_ERROR")
+        else:
+            if not self.closing:
+                await self.send_result(request.id, result)
+        finally:
+            if self.active_request_id == request.id:
+                self.active_request_id = None
+                self.active_cancel = None
+                self.active_task = None
+
+    def cancel(self, request_id: str) -> bool:
+        if self.active_request_id != request_id or self.active_cancel is None:
+            return False
+        self.active_cancel.set()
+        return True
+
+    async def emit_progress(self, sequence: int, progress: float, message: str) -> None:
+        if self.active_request_id is None:
+            return
+        await self.send_message(
+            {
+                "jsonrpc": JSON_RPC_VERSION,
+                "method": "core.progress",
+                "params": {
+                    "requestId": self.active_request_id,
+                    "sequence": sequence,
+                    "progress": progress,
+                    "message": message,
+                },
+            }
+        )
+
+    async def send_result(self, request_id: str, result: object) -> None:
+        await self.send_message({"jsonrpc": JSON_RPC_VERSION, "id": request_id, "result": result})
+
+    async def send_error(self, request_id: str | None, error_code: str) -> None:
+        await self.send_message(error_response(request_id, error_code))
+
+    async def send_message(self, message: dict[str, object]) -> None:
+        encoded = json.dumps(message, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        if len(encoded) > CORE_RPC_MAX_LINE_BYTES:
+            return
+        async with self.writer_lock:
+            try:
+                self.stdout.write(encoded + b"\n")
+                self.stdout.flush()
+            except (BrokenPipeError, OSError):
+                self.closing = True
+
+    async def close(self) -> None:
+        if self.closing and self.active_task is None:
+            return
+        self.closing = True
+        task = self.active_task
+        if task is not None and not task.done():
+            if self.active_cancel is not None:
+                self.active_cancel.set()
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=1.0)
+        self.active_request_id = None
+        self.active_cancel = None
+        self.active_task = None
+
+    @staticmethod
+    def safe_request_id(value: Any) -> str | None:
+        candidate = value.get("id") if isinstance(value, dict) else None
+        if isinstance(candidate, str) and len(candidate) <= 64 and REQUEST_ID_PATTERN.fullmatch(candidate) is not None:
+            return candidate
+        return None
+
+    @staticmethod
+    def _reject_non_finite(_value: str) -> object:
+        raise ValueError("non-finite JSON number")
+
+
+def main() -> None:
+    asyncio.run(RpcServer().serve())
+
+
+if __name__ == "__main__":
+    main()
