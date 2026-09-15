@@ -22,4 +22,8 @@ function run(command, args, label) {
 }
 
 run(npmCommand, [npmCli, "run", "build"], "workspace build");
-run(process.execPath, ["--test", path.join(root, "tests", "health.test.mjs")], "automated tests");
+run(
+  process.execPath,
+  ["--test", path.join(root, "tests", "health.test.mjs"), path.join(root, "tests", "electron-security.test.mjs")],
+  "automated tests",
+);

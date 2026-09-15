@@ -21,6 +21,9 @@ function run(args, label) {
   }
 }
 
+// The desktop Main/preload consume the workspace package at its declared
+// package entry. Build it first so a fresh clone never depends on stale dist.
+run(["run", "build", "--workspace", "@supervideo/shared"], "shared build");
 run(["run", "typecheck", "--workspace", "@supervideo/shared"], "shared typecheck");
 run(["run", "typecheck", "--workspace", "@supervideo/agent-worker"], "agent typecheck");
 run(["run", "typecheck", "--workspace", "@supervideo/desktop"], "desktop typecheck");

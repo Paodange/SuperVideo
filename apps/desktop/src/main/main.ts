@@ -1,52 +1,108 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, session } from "electron";
 import path from "node:path";
+import type { DesktopEnvironment } from "@supervideo/shared";
+import {
+  createBrowserWindowOptions,
+  createContentSecurityPolicy,
+  createRuntimeConfig,
+  getPreloadPath,
+  type RuntimeConfig,
+} from "./security/config";
+import { createSecurityLogger } from "./security/diagnostics";
+import { registerDesktopIpcHandlers } from "./security/ipc";
+import { denyWindowOpen, isTrustedRendererUrl, sanitizeUrlForDiagnostics } from "./security/policies";
+import { registerSessionSecurity } from "./security/session";
 
-const devServerArgumentPrefix = "--dev-server=";
+const log = createSecurityLogger();
 
-function getDevServerUrl(): string | undefined {
-  const argument = process.argv.find((value) => value.startsWith(devServerArgumentPrefix));
-  return argument?.slice(devServerArgumentPrefix.length);
+function getRendererPath(): string {
+  // __dirname is the compiled Main directory. Renderer input is not involved in
+  // resolving either the local document or the preload script.
+  return path.join(__dirname, "..", "renderer", "index.html");
 }
 
-function registerDesktopStatusHandler(): void {
-  ipcMain.handle("desktop:get-environment", () => ({
-    mode: app.isPackaged ? "production" : "development",
+function getDesktopEnvironment(runtime: RuntimeConfig): DesktopEnvironment {
+  return {
+    mode: runtime.mode,
     platform: process.platform,
     electron: process.versions.electron ?? "unknown",
-  }));
+  };
 }
 
-function createWindow(): void {
-  const window = new BrowserWindow({
-    width: 960,
-    height: 680,
-    minWidth: 720,
-    minHeight: 520,
-    title: "SuperVideo",
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      preload: path.join(__dirname, "..", "preload", "preload.js"),
-    },
+function createWindow(runtime: RuntimeConfig): BrowserWindow {
+  const window = new BrowserWindow(createBrowserWindowOptions(getPreloadPath(__dirname), runtime.mode === "production"));
+  let loadState: "loading" | "ready" | "failed" = "loading";
+
+  const rejectUntrustedNavigation = (event: Electron.Event, url: string, kind: string): void => {
+    if (!isTrustedRendererUrl(url, runtime)) {
+      event.preventDefault();
+      log("navigation-rejected", { kind, url: sanitizeUrlForDiagnostics(url) });
+    }
+  };
+
+  // These listeners are installed before loadURL/loadFile so untrusted page
+  // content never gets a chance to navigate or open a privileged child window.
+  window.webContents.on("will-navigate", (event, url) => rejectUntrustedNavigation(event, url, "navigate"));
+  window.webContents.on("will-redirect", (event, url) => rejectUntrustedNavigation(event, url, "redirect"));
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    log("window-open-rejected", { url: sanitizeUrlForDiagnostics(url) });
+    return denyWindowOpen();
   });
 
-  const devServerUrl = getDevServerUrl();
-  if (devServerUrl) {
-    void window.loadURL(devServerUrl);
-    return;
-  }
+  window.webContents.on("did-fail-load", (_event, errorCode, _errorDescription, validatedURL, isMainFrame) => {
+    if (isMainFrame) {
+      loadState = "failed";
+      log("renderer-load-failed", {
+        code: errorCode,
+        url: sanitizeUrlForDiagnostics(validatedURL),
+      });
+    }
+  });
 
-  void window.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
+  window.once("ready-to-show", () => {
+    loadState = "ready";
+    window.show();
+  });
+
+  const load = runtime.devServerUrl ? window.loadURL(runtime.devServerUrl) : window.loadFile(runtime.rendererPath);
+  void load.catch(() => {
+    if (loadState !== "failed") {
+      loadState = "failed";
+      log("renderer-load-failed", { code: "load-rejected", url: "[local-renderer]" });
+    }
+  });
+
+  return window;
 }
 
 app.whenReady().then(() => {
-  registerDesktopStatusHandler();
-  createWindow();
+  const runtime = createRuntimeConfig({
+    isPackaged: app.isPackaged,
+    argv: process.argv,
+    rendererPath: getRendererPath(),
+  });
+
+  if (runtime.rejectedDevServerArgument) {
+    log("dev-server-rejected", { reason: "not-a-local-http-origin" });
+  }
+
+  // The session boundary and IPC allowlist are installed before the first
+  // renderer document is loaded. Every later window reuses the same policy.
+  registerSessionSecurity(session.defaultSession, {
+    contentSecurityPolicy: createContentSecurityPolicy(runtime),
+    log,
+  });
+  registerDesktopIpcHandlers(ipcMain, {
+    rendererTrustPolicy: runtime,
+    getEnvironment: () => getDesktopEnvironment(runtime),
+    log,
+  });
+
+  createWindow(runtime);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow(runtime);
     }
   });
 });
