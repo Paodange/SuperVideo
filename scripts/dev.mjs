@@ -92,6 +92,7 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
+runSync(npmCommand, [npmCli, "run", "build", "--workspace", "@supervideo/shared"], "shared build");
 runSync(npmCommand, [npmCli, "run", "build", "--workspace", "@supervideo/desktop"], "desktop build");
 
 const vite = start(npmCommand, [npmCli, "exec", "--", "vite", "--host", "127.0.0.1", "--port", "5173"], desktop, "Vite");

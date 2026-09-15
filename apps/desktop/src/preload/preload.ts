@@ -1,11 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { createDesktopApi } from "./api";
 
-type DesktopEnvironment = {
-  mode: "development" | "production";
-  platform: string;
-  electron: string;
-};
+const api = createDesktopApi((channel, payload) => ipcRenderer.invoke(channel, payload));
 
-contextBridge.exposeInMainWorld("supervideo", {
-  getEnvironment: (): Promise<DesktopEnvironment> => ipcRenderer.invoke("desktop:get-environment"),
-});
+contextBridge.exposeInMainWorld("supervideo", api);

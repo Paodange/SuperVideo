@@ -1,11 +1,9 @@
-type DesktopEnvironment = {
-  mode: "development" | "production";
-  platform: string;
-  electron: string;
-};
+import type { DesktopApi } from "@supervideo/shared";
 
-interface Window {
-  supervideo: {
-    getEnvironment: () => Promise<DesktopEnvironment>;
-  };
+declare global {
+  interface Window {
+    supervideo?: DesktopApi;
+  }
 }
+
+export {};

@@ -43,6 +43,7 @@ function runPythonHealth() {
 }
 
 console.log("[health] desktop");
+run(["run", "build", "--workspace", "@supervideo/shared"], "shared build");
 run(["run", "build", "--workspace", "@supervideo/desktop"], "desktop build");
 run(["run", "health", "--workspace", "@supervideo/desktop"], "desktop health");
 

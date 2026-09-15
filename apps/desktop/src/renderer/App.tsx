@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
+import type { DesktopEnvironment } from "@supervideo/shared";
 
-type EnvironmentState = {
-  mode: string;
-  platform: string;
-  electron: string;
-};
+type EnvironmentState = DesktopEnvironment;
 
 export function App() {
   const [environment, setEnvironment] = useState<EnvironmentState | null>(null);
