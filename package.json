@@ -19,6 +19,7 @@
     "core:setup": "node scripts/core-setup.mjs",
     "core:test": "node scripts/core-test.mjs",
     "core:rpc:smoke": "node scripts/core-rpc-smoke.mjs",
+    "core:storage:smoke": "node scripts/core-storage-smoke.mjs",
     "typecheck": "node scripts/typecheck.mjs",
     "health": "node scripts/health.mjs",
     "test": "node scripts/test.mjs"

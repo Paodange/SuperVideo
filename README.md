@@ -32,6 +32,7 @@ npm run dev
 npm run build
 npm run agent:smoke
 npm run core:rpc:smoke
+npm run core:storage:smoke
 npm run core:test
 npm run typecheck
 npm run health
@@ -55,12 +56,21 @@ subprocess, verifies health, streaming progress, and the timeout cancellation
 path, then shuts it down. `npm run core:test` runs the Pydantic and Python JSONL
 server tests.
 
+`npm run core:storage:smoke` creates a temporary project directory containing
+spaces and Chinese characters, runs the SQLite migration and fixed repository
+fixture in one real Python process, reopens it in a second process, verifies
+integrity and persistence, then removes the temporary directory. It does not
+touch project files or external media. See [docs/storage.md](docs/storage.md)
+for the storage boundary, migration workflow, repository API, and diagnostic
+checks.
+
 ## Repository layout
 
 ```text
 apps/desktop/       Electron Main, preload, React renderer, and Vite build config
 workers/agent/      Independent TypeScript Pi Agent Worker and health entry
 services/core/      Python supervideo_core package using src layout
+                    (storage/ contains SQLite connection, migrations, SQL, and repositories)
 packages/shared/    Versioned home for small cross-boundary types
 contracts/          Checked-in cross-language Core RPC golden fixtures
 scripts/            Cross-platform Node orchestration for root commands
@@ -77,4 +87,4 @@ A02 keeps `contextIsolation`, sandboxing, `nodeIntegration: false`, `webSecurity
 
 ## Known limitations
 
-A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains only the health and deterministic countdown RPC methods; it does not include SQLite, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, formal Pi tool registration, task recovery, packaging, or real provider credentials. Worker restart state, Core requests, and conversations are not persisted across application restarts. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.
+A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains the health and deterministic countdown RPC methods; A05 adds an internal per-project SQLite storage foundation, but it does not include project creation UI, trusted path selection, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, formal Pi tool registration, the A07 task state machine or recovery, backup/restore, or real provider credentials. Worker restart state and RPC requests are not persisted across application restarts; A05's repository records persist when its project database is reopened. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.
