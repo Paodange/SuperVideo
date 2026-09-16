@@ -107,6 +107,44 @@ test("client frames CRLF/chunked messages and ignores stale progress or response
   assert.equal(client.getStatus(), "stopped");
 });
 
+test("client exposes a scoped job-event subscription with sequence deduplication", async () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const jobId = "22222222-2222-4222-8222-222222222222";
+  const summary = {
+    jobId, projectId, jobType: "smoke.countdown", status: "queued", progress: 0,
+    stage: "queued", attempt: 0, revision: 1, lastEventSequence: 1,
+    createdAtMs: 1700000000000, updatedAtMs: 1700000000000,
+    startedAtMs: null, finishedAtMs: null, errorCode: null,
+  };
+  const event = (sequence) => ({
+    jsonrpc: "2.0", method: "core.job.event",
+    params: {
+      projectId, jobId, sequence, eventType: "progress", status: "running",
+      progress: 0.25, stage: "step-1", attempt: 1, timestamp: 1700000000000 + sequence, payload: {},
+    },
+  });
+  const fake = fakeLaunch((child, request) => {
+    if (request.method === "core.health") {
+      emitChunks(child.stdout, JSON.stringify(response(request.id, {
+        service: "python-core", status: "ok", protocolVersion: 1, coreVersion: "0.1.0", capabilities: ["job.smoke.start"],
+      })) + "\n");
+    } else if (request.method === "job.smoke.start") {
+      emitChunks(child.stdout, JSON.stringify(event(2)) + "\n" + JSON.stringify(event(1)) + "\n" + JSON.stringify(event(2)) + "\n" + JSON.stringify(response(request.id, summary)) + "\n");
+    }
+  });
+  const client = new PythonCoreClient({ rootDir: root, spawnProcess: fake.spawnProcess });
+  const received = [];
+  await client.start();
+  const unsubscribe = client.onJobEvent((value) => received.push(value));
+  await client.startSmokeJob({ projectId, idempotencyKey: "job-key", steps: 8, delayMs: 150, failAttempts: 0 });
+  assert.deepEqual(received.map((value) => value.sequence), [2]);
+  unsubscribe();
+  fake.child.stdout.emit("data", Buffer.from(JSON.stringify(event(3)) + "\n"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(received.map((value) => value.sequence), [2]);
+  await client.shutdown();
+});
+
 test("timeout and AbortSignal cancel only the target request and clean pending work", async () => {
   const held = new Map();
   const fake = fakeLaunch((child, request) => {

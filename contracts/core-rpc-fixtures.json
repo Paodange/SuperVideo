@@ -50,6 +50,22 @@
     }
   },
   {
+    "name": "valid-job-smoke-start-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-job-start-1",
+      "method": "job.smoke.start",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "idempotencyKey": "fixture-job-1",
+        "steps": 8,
+        "delayMs": 150,
+        "failAttempts": 0
+      }
+    }
+  },
+  {
     "name": "valid-future-method-request",
     "valid": true,
     "message": {
@@ -127,6 +143,26 @@
     }
   },
   {
+    "name": "valid-job-event-notification",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "method": "core.job.event",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "jobId": "22222222-2222-4222-8222-222222222222",
+        "sequence": 1,
+        "eventType": "created",
+        "status": "queued",
+        "progress": 0,
+        "stage": "queued",
+        "attempt": 0,
+        "timestamp": 1700000000000,
+        "payload": {"jobType": "smoke.countdown"}
+      }
+    }
+  },
+  {
     "name": "invalid-health-extra-param",
     "valid": false,
     "message": {
@@ -162,6 +198,42 @@
         "steps": 4,
         "delayMs": 25,
         "extra": false
+      }
+    }
+  },
+  {
+    "name": "invalid-job-smoke-start-project-id",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-job-start-2",
+      "method": "job.smoke.start",
+      "params": {
+        "projectId": "not-a-uuid",
+        "idempotencyKey": "fixture-job-2",
+        "steps": 8,
+        "delayMs": 150,
+        "failAttempts": 0
+      }
+    }
+  },
+  {
+    "name": "invalid-job-event-status",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "method": "core.job.event",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "jobId": "22222222-2222-4222-8222-222222222222",
+        "sequence": 1,
+        "eventType": "created",
+        "status": "unknown",
+        "progress": 0,
+        "stage": "queued",
+        "attempt": 0,
+        "timestamp": 1700000000000,
+        "payload": {}
       }
     }
   },

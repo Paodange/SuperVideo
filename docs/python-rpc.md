@@ -53,6 +53,19 @@ Python registry 是显式字典，未知方法永远返回 `METHOD_NOT_FOUND`；
 转发、动态 import、Shell、网络、FFmpeg、SQLite 或剪映调用。新增方法必须在
 Python registry、共享 TS 运行时校验和 golden fixtures 中逐项登记，并同步版本/文档。
 
+## A07 持久化 job
+
+当前显式 job 方法为 `job.smoke.start`、`job.get`、`job.list`、
+`job.events.list`、`job.cancel` 和 `job.retry`；服务端通知为
+`core.job.event`。start 只创建 SQLite job 并快速返回，后台执行由 Core
+JobManager 负责，不占用一个等待到完成的 RPC request。状态、progress、
+checkpoint 和 event 先在同一事务提交，再 best-effort 通知 client；通知
+缺失时由 `job.events.list({ afterSequence })` 从 SQLite 补齐。
+
+`core.cancel` 仍只取消 A04 的 RPC request，不能代替持久化的 `job.cancel`。
+job 的 payload、输入、checkpoint 和稳定错误均有界；Worker 只转发固定的
+job command/event，不暴露通用 RPC notification。
+
 ## 消息与错误模型
 
 请求形态如下：
@@ -91,8 +104,9 @@ Python registry、共享 TS 运行时校验和 golden fixtures 中逐项登记�
    `AbortSignal` 使用同一路径并得到 `REQUEST_CANCELLED`。
 6. Python 第一阶段最多同时执行一个长倒计时；第二个得到 `BUSY`，重复活动 ID
    得到 `DUPLICATE_REQUEST_ID`。取消未知或已完成 ID 不影响活动请求。
-7. Python EOF 会取消活动模拟任务并在有限时间内退出。客户端进程异常退出、stdin
-   写入失败或协议损坏时，所有 pending 请求都会稳定失败并清理 timer/listener。
+7. Python EOF 会通知 JobManager 在安全点保存 checkpoint，并把可恢复的 running
+   job 转为 retrying；客户端进程异常退出、stdin 写入失败或协议损坏时，所有
+   pending 请求都会稳定失败并清理 timer/listener。
 8. `shutdown()` 幂等：关闭 stdin，等待有限时间，必要时 kill 子进程；不会留下
    Python Core 进程。请求状态不跨 Worker 重启保存。
 
@@ -136,10 +150,10 @@ tracked 报告文件。
 
 ## 后续扩展与当前限制
 
-A05 可以在此边界之上增加 SQLite 仓储方法；A07 可以把请求/进度/取消映射到持久化
-job 状态机和 checkpoint。公共契约发生不兼容变化时必须升级协议版本，并提供
-迁移/兼容说明。
+A07 已在此边界之上增加固定 job methods 和 `core.job.event`，继续使用 Core RPC
+protocol v1，因为只增加了向后兼容的方法/通知。公共契约发生不兼容变化时必须
+升级协议版本，并提供兼容说明；实时通知丢失时必须使用 `job.events.list` 补漏。
 
-A04 不包含 SQLite、媒体分析、FFmpeg、Whisper、Remotion、真实模型/TTS、网络下载、
-正式 Pi tool 注册、任务恢复、应用重启恢复或打包 Python。原始 spike 保持独立，
+A04/A07 不包含媒体分析、FFmpeg、Whisper、Remotion、真实模型/TTS、网络下载、
+正式 Pi tool 注册、真实媒体 executor、跨机器恢复、后台服务或打包 Python。原始 spike 保持独立，
 正式模块不依赖 spike 路径或其运行时文件。

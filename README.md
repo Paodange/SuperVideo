@@ -32,6 +32,7 @@ npm run dev
 npm run build
 npm run agent:smoke
 npm run project:smoke
+npm run jobs:smoke
 npm run core:rpc:smoke
 npm run core:storage:smoke
 npm run core:test
@@ -71,6 +72,12 @@ fixed external `.mp4` fixture, verifies create/reference/reopen persistence and
 proves the original file is not copied or changed. It accepts no user path and
 removes only its own temporary tree. See [docs/projects.md](docs/projects.md).
 
+`npm run jobs:smoke` runs the real Electron Main → utility Worker → Python Core
+→ SQLite persistent-job workflow in a temporary project. It verifies fast job
+start, durable progress/checkpoints, shutdown/reopen recovery, cancellation,
+failure/retry, event sequence reconstruction, and cleanup without opening a
+dialog or touching real media. See [docs/jobs.md](docs/jobs.md).
+
 ## Repository layout
 
 ```text
@@ -94,4 +101,4 @@ A02 keeps `contextIsolation`, sandboxing, `nodeIntegration: false`, `webSecurity
 
 ## Known limitations
 
-A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains the health/countdown and A06 project/asset RPC methods; A05 adds the internal per-project SQLite foundation and A06 adds trusted project creation/open plus read-only external video references. A06 still excludes natural-language paths, recursive scanning, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, formal Pi tool registration, the A07 task state machine or recovery, backup/restore, and real provider credentials. Worker restart state and RPC requests are not persisted across application restarts; select **Open project** again to restore an A06 project. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.
+A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains the health/countdown and A06 project/asset RPC methods; A05 adds the internal per-project SQLite foundation, A06 adds trusted project creation/open plus read-only external video references, and A07 adds one deterministic persistent smoke executor with cancel/retry/reopen recovery. The product still excludes natural-language paths, recursive scanning, media analysis, FFmpeg, Whisper, Remotion, 剪映 integration, formal Pi tool registration, backup/restore, real provider credentials, real media executors, cross-machine recovery, and background services. A03 smoke runs and raw RPC requests are not persisted; select **Open project** again to restore the project and rebuild A07 jobs from SQLite. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.

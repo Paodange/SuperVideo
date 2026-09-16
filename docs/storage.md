@@ -73,10 +73,13 @@ The first migration creates these tables and fixed indexes:
   `size_bytes` cannot be negative, and `project_id` is a cascading foreign
   key. A05 does not inspect, fingerprint, copy, move, rename, or delete a
   media file.
-- `jobs` is the durable base record for A07. It validates the planned status
-  set, progress range, non-negative attempt, JSON input/result, timestamps,
-  and optional project/type/idempotency-key uniqueness. A05 does not implement
-  state transitions, events, retries, checkpoints, or scheduling.
+- `jobs` is the durable record used by A07. A05 supplies the base row and A07's
+  `0002_persistent_jobs.sql` adds checkpoint/version, compare-and-swap revision,
+  event sequence, cancellation and recovery fields. A07 adds the controlled
+  state transitions, retries, events, checkpoints and scheduling.
+- `job_events` is append-only audit history. Each event is scoped to its project
+  and job, has a unique per-job sequence, bounded JSON payload and indexes for
+  project-time and job-sequence queries.
 - `messages` is append-oriented conversation storage. Roles are restricted to
   `user`, `assistant`, `tool`, and `system`; sequence numbers are positive and
   unique within a project conversation.
@@ -103,8 +106,10 @@ A06 extends the repository surface only with `ProjectRepository.get_by_root`,
 fixed SQL and provide no arbitrary update, delete, SQL, or filesystem API.
 When a moved project is opened, the Core service verifies manifest ID/name/
 platform, checks the unique project root, and updates root, updated time and
-revision. It never changes an asset's external absolute path. A06 keeps
-`DATABASE_SCHEMA_VERSION = 1` and does not modify `0001_initial.sql`.
+revision. It never changes an asset's external absolute path. A06's original
+schema was version 1. A07 keeps `0001_initial.sql` immutable and adds version 2
+in `0002_persistent_jobs.sql`; existing v1 project databases are upgraded
+transactionally on the next open.
 
 ## Repository API
 
@@ -155,12 +160,13 @@ with the temporary tree.
 
 ## Version boundaries and current limits
 
-`DATABASE_SCHEMA_VERSION` versions SQLite migrations. It is independent from
+`DATABASE_SCHEMA_VERSION` is currently 2 and versions SQLite migrations. It is independent from
 A04 `CORE_RPC_PROTOCOL_VERSION` and from the Timeline IR `schemaVersion` stored
 in `timeline_versions`. None of these constants may be reused for another
 boundary.
 
 A05 does not include project create/open UI or manifest handling, trusted path
-selection, media analysis, the A07 job state machine and recovery, complete
-Timeline IR validation or active-version switching, A08 credentials, backup
-and restore, or any Renderer IPC/RPC method for database access.
+selection, media analysis, complete Timeline IR validation or active-version
+switching, A08 credentials, backup and restore, or any Renderer IPC/RPC method
+for database access. A07's job manager remains a controlled Core service above
+this storage layer.

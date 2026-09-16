@@ -28,6 +28,27 @@ function eventMessage(runId, sequence, event) {
   return { protocolVersion: 1, type: "run-event", runId, sequence, timestamp: now(), event };
 }
 
+function jobEvent(projectId, jobId, sequence = 1, status = "queued") {
+  return {
+    protocolVersion: 1,
+    type: "job-event",
+    projectId,
+    jobId,
+    event: {
+      projectId,
+      jobId,
+      sequence,
+      eventType: "created",
+      status,
+      progress: 0,
+      stage: "queued",
+      attempt: 0,
+      timestamp: now(),
+      payload: {},
+    },
+  };
+}
+
 class FakeUtilityProcess extends EventEmitter {
   constructor(generation, options = {}) {
     super();
@@ -79,6 +100,7 @@ test("Agent Worker protocol accepts valid messages and rejects malformed wire da
     eventMessage("run-1", 5, { kind: "tool-finished", toolCallId: "tool-1", toolName: "smoke_countdown", ok: true }),
     { protocolVersion: 1, type: "run-finished", runId: "run-1", sequence: 6, timestamp: now(), status: "completed" },
     { protocolVersion: 1, type: "worker-error", timestamp: now(), error: shared.createAgentPublicError("internal-error") },
+    jobEvent("11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"),
   ];
   for (const message of valid) {
     assert.equal(shared.isValidAgentWireMessage(message), true, JSON.stringify(message));
@@ -103,6 +125,22 @@ test("Agent Worker protocol accepts valid messages and rejects malformed wire da
   assert.equal(shared.isAgentWorkerMessageWithinLimit({ protocolVersion: 1, type: "run-event", runId: "run-1", sequence: 1, timestamp: now(), event: { kind: "assistant-text-delta", delta: "x".repeat(70_000) } }), false);
   assert.equal(shared.isValidAgentWorkerCommand({ protocolVersion: 1, type: "run-smoke-task", runId: "run-1", steps: 4, extra: undefined }), false);
   assert.equal(shared.isValidAgentWorkerCommand({ protocolVersion: 1, type: "ping", value: 1n }), false);
+});
+
+test("job operation payloads and durable events are strictly bounded", () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const jobId = "22222222-2222-4222-8222-222222222222";
+  assert.equal(shared.isValidAgentWorkerCommand({
+    protocolVersion: 1, type: "job-smoke-start", operationId: "op-1", timestamp: now(), projectId,
+    payload: { idempotencyKey: "same-key", steps: 8, delayMs: 150, failAttempts: 0 },
+  }), true);
+  assert.equal(shared.isValidAgentWorkerCommand({
+    protocolVersion: 1, type: "job-events-list", operationId: "op-2", timestamp: now(), projectId,
+    payload: { jobId, afterSequence: 0, cursor: null, limit: 100 },
+  }), true);
+  assert.equal(shared.isValidAgentWorkerMessage(jobEvent(projectId, jobId)), true);
+  assert.equal(shared.isValidAgentWorkerMessage({ ...jobEvent(projectId, jobId), event: { ...jobEvent(projectId, jobId).event, projectId: jobId } }), false);
+  assert.equal(shared.isAgentWorkerMessageWithinLimit({ ...jobEvent(projectId, jobId), event: { ...jobEvent(projectId, jobId).event, payload: { text: "x".repeat(70_000) } } }), false);
 });
 
 test("Pi faux smoke agent emits a complete ordered product event stream", async () => {
@@ -288,6 +326,45 @@ test("controller routes project operations, times out pending work, and rejects 
     payload: { projectId: "11111111-1111-4111-8111-111111111111" },
   });
   children[1].emit("message", readyMessage());
+  await controller.shutdown();
+});
+
+test("controller routes fixed job operations and deduplicates job events", async () => {
+  const children = [];
+  const forwarded = [];
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const jobId = "22222222-2222-4222-8222-222222222222";
+  const summary = {
+    jobId, projectId, jobType: "smoke.countdown", status: "queued", progress: 0,
+    stage: "queued", attempt: 0, revision: 1, lastEventSequence: 1,
+    createdAtMs: 1700000000000, updatedAtMs: 1700000000000,
+    startedAtMs: null, finishedAtMs: null, errorCode: null,
+  };
+  const controller = controllerModule.createAgentWorkerController({
+    workerPath: "worker.cjs",
+    createProcess: (_workerPath, generation) => {
+      const child = new FakeUtilityProcess(generation);
+      children.push(child);
+      return child;
+    },
+    restartBackoffMs: [0],
+    onMessage: (message) => forwarded.push(message),
+  });
+  const starting = controller.start();
+  children[0].emit("message", readyMessage());
+  await starting;
+  const operation = controller.runJobOperation("job-get", projectId, { jobId });
+  const command = children[0].commands.at(-1);
+  assert.equal(command.type, "job-get");
+  children[0].emit("message", {
+    protocolVersion: 1, type: "job-operation-result", operationId: command.operationId,
+    operation: "job-get", timestamp: now(), projectId, payload: summary,
+  });
+  assert.deepEqual(await operation, summary);
+  children[0].emit("message", jobEvent(projectId, jobId, 2, "running"));
+  children[0].emit("message", jobEvent(projectId, jobId, 2, "running"));
+  children[0].emit("message", jobEvent(projectId, jobId, 1, "queued"));
+  assert.equal(forwarded.filter((message) => message.type === "job-event").length, 1);
   await controller.shutdown();
 });
 
