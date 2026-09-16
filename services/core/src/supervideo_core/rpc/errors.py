@@ -56,6 +56,18 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "CONSTRAINT_VIOLATION": RpcErrorDefinition(-32128, "Storage constraint was violated."),
     "RECORD_NOT_FOUND": RpcErrorDefinition(-32129, "Storage record was not found."),
     "INVALID_RECORD": RpcErrorDefinition(-32130, "Storage record is invalid."),
+    "JOB_NOT_FOUND": RpcErrorDefinition(-32200, "The job was not found."),
+    "JOB_STATE_CONFLICT": RpcErrorDefinition(-32201, "The job state changed concurrently."),
+    "JOB_NOT_CANCELLABLE": RpcErrorDefinition(-32202, "The job cannot be cancelled."),
+    "JOB_NOT_RETRYABLE": RpcErrorDefinition(-32203, "The job cannot be retried."),
+    "JOB_RETRY_LIMIT": RpcErrorDefinition(-32204, "The job retry limit was reached."),
+    "JOB_QUEUE_FULL": RpcErrorDefinition(-32205, "The job queue is full."),
+    "JOB_EXECUTOR_UNAVAILABLE": RpcErrorDefinition(-32206, "The job executor is unavailable."),
+    "JOB_CHECKPOINT_INVALID": RpcErrorDefinition(-32207, "The job checkpoint is invalid."),
+    "JOB_EVENT_GAP": RpcErrorDefinition(-32208, "The job event sequence has a gap."),
+    "IDEMPOTENCY_CONFLICT": RpcErrorDefinition(-32209, "The idempotency key conflicts with another job."),
+    "JOB_SHUTTING_DOWN": RpcErrorDefinition(-32210, "The job service is shutting down."),
+    "JOB_EXECUTION_FAILED": RpcErrorDefinition(-32211, "The simulated job failed."),
 }
 
 

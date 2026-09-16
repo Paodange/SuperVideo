@@ -1,8 +1,17 @@
 import type {
   AssetListResult,
   AssetReferenceBatchResult,
+  JobEvent,
+  JobEventPage,
+  JobEventsListParams,
+  JobListParams,
+  JobPage,
+  JobReferenceParams,
+  JobSmokeStartParams,
+  JobSummary,
   ProjectSummary,
 } from "./core-rpc";
+import { isJobEvent, isJobEventPage, isJobPage, isJobSummary } from "./core-rpc";
 
 /**
  * The protocol between Electron Main and the isolated Agent utility process.
@@ -13,7 +22,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "jobs"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -25,6 +34,12 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   projectInspect: "project-inspect",
   assetReference: "asset-reference",
   assetList: "asset-list",
+  jobSmokeStart: "job-smoke-start",
+  jobGet: "job-get",
+  jobList: "job-list",
+  jobEventsList: "job-events-list",
+  jobCancel: "job-cancel",
+  jobRetry: "job-retry",
 } as const;
 
 export const AGENT_WORKER_MESSAGE_TYPES = {
@@ -35,6 +50,9 @@ export const AGENT_WORKER_MESSAGE_TYPES = {
   workerError: "worker-error",
   projectOperationResult: "project-operation-result",
   projectOperationError: "project-operation-error",
+  jobOperationResult: "job-operation-result",
+  jobOperationError: "job-operation-error",
+  jobEvent: "job-event",
 } as const;
 
 export type AgentWorkerCommandType = (typeof AGENT_WORKER_COMMAND_TYPES)[keyof typeof AGENT_WORKER_COMMAND_TYPES];
@@ -45,6 +63,8 @@ export type AgentProjectOperationType =
   | "project-inspect"
   | "asset-reference"
   | "asset-list";
+export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
+export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
   | "DIALOG_CANCELLED"
   | "INVALID_PROJECT_NAME"
@@ -82,6 +102,11 @@ export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
   message: string;
 }>;
+export type JobOperationErrorCode = ProjectOperationErrorCode
+  | "JOB_NOT_FOUND" | "JOB_STATE_CONFLICT" | "JOB_NOT_CANCELLABLE" | "JOB_NOT_RETRYABLE"
+  | "JOB_RETRY_LIMIT" | "JOB_QUEUE_FULL" | "JOB_EXECUTOR_UNAVAILABLE" | "JOB_CHECKPOINT_INVALID"
+  | "JOB_EVENT_GAP" | "IDEMPOTENCY_CONFLICT" | "JOB_SHUTTING_DOWN" | "JOB_EXECUTION_FAILED";
+export type JobOperationError = Readonly<{ code: JobOperationErrorCode; message: string }>;
 
 export type AgentRunStatus = "idle" | "running" | "completed" | "cancelled" | "interrupted" | "error";
 
@@ -118,7 +143,8 @@ export type AgentWorkerCommand =
   | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "cancel-run"; runId: string }>
   | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "ping" }>
   | Readonly<{ protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION; type: "shutdown" }>
-  | AgentProjectOperationCommand;
+  | AgentProjectOperationCommand
+  | AgentJobOperationCommand;
 export type AgentProjectOperationPayload = Readonly<Record<string, unknown>>;
 export type AgentProjectOperationCommand = Readonly<{
   protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
@@ -127,6 +153,14 @@ export type AgentProjectOperationCommand = Readonly<{
   timestamp: number;
   projectId?: string;
   payload: AgentProjectOperationPayload;
+}>;
+export type AgentJobOperationCommand = Readonly<{
+  protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+  type: AgentJobOperationType;
+  operationId: string;
+  timestamp: number;
+  projectId: string;
+  payload: Readonly<Record<string, unknown>>;
 }>;
 export type AgentWorkerCommandWithProjects = AgentWorkerCommand;
 
@@ -173,6 +207,30 @@ export type AgentWorkerMessage =
     }>
   | Readonly<{
       protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+      type: "job-operation-result";
+      operationId: string;
+      operation: AgentJobOperationType;
+      timestamp: number;
+      projectId: string;
+      payload: Readonly<Record<string, unknown>>;
+    }>
+  | Readonly<{
+      protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+      type: "job-operation-error";
+      operationId: string;
+      operation: AgentJobOperationType;
+      timestamp: number;
+      error: JobOperationError;
+    }>
+  | Readonly<{
+      protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+      type: "job-event";
+      projectId: string;
+      jobId: string;
+      event: JobEvent;
+    }>
+  | Readonly<{
+      protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
       type: "project-operation-error";
       operationId: string;
       operation: AgentProjectOperationType;
@@ -210,7 +268,8 @@ export type DesktopAgentEvent =
       status: Exclude<AgentRunStatus, "idle" | "running">;
       error?: AgentPublicError;
     }>
-  | Readonly<{ kind: "worker-error"; timestamp: number; error: AgentPublicError }>;
+  | Readonly<{ kind: "worker-error"; timestamp: number; error: AgentPublicError }>
+  | Readonly<{ kind: "job-event"; timestamp: number; projectId: string; jobId: string; event: JobEvent }>;
 
 export const DESKTOP_IPC_CONTRACT_VERSION = 2 as const;
 
@@ -224,6 +283,12 @@ export const DESKTOP_IPC_CHANNELS = {
   openProject: "desktop:v2:open-project",
   addAssetReferences: "desktop:v2:add-asset-references",
   listProjectAssets: "desktop:v2:list-project-assets",
+  startSmokeJob: "desktop:v2:start-smoke-job",
+  getJob: "desktop:v2:get-job",
+  listJobs: "desktop:v2:list-jobs",
+  listJobEvents: "desktop:v2:list-job-events",
+  cancelJob: "desktop:v2:cancel-job",
+  retryJob: "desktop:v2:retry-job",
 } as const;
 
 export type DesktopIpcChannel = (typeof DESKTOP_IPC_CHANNELS)[keyof typeof DESKTOP_IPC_CHANNELS];
@@ -246,9 +311,15 @@ export type CreateProjectRequest = Readonly<{ name: string; targetPlatform: stri
 export type OpenProjectRequest = Record<string, never>;
 export type AddAssetReferencesRequest = Readonly<{ projectId: string }>;
 export type ListProjectAssetsRequest = Readonly<{ projectId: string }>;
+export type StartSmokeJobRequest = JobSmokeStartParams;
+export type GetJobRequest = JobReferenceParams;
+export type ListJobsRequest = JobListParams;
+export type ListJobEventsRequest = JobEventsListParams;
+export type CancelJobRequest = JobReferenceParams;
+export type RetryJobRequest = JobReferenceParams;
 export type ProjectDialogResult<T> = Readonly<{ cancelled: true }> | Readonly<{ cancelled: false; value: T }>;
 
-export type DesktopPublicErrorCode = AgentPublicErrorCode | ProjectOperationErrorCode;
+export type DesktopPublicErrorCode = AgentPublicErrorCode | JobOperationErrorCode;
 export type DesktopPublicError = Readonly<{
   code: DesktopPublicErrorCode;
   message: string;
@@ -268,6 +339,13 @@ export type DesktopApi = Readonly<{
   openProject: () => Promise<ProjectDialogResult<ProjectSummary>>;
   addAssetReferences: (input: AddAssetReferencesRequest) => Promise<ProjectDialogResult<AssetReferenceBatchResult>>;
   listProjectAssets: (input: ListProjectAssetsRequest) => Promise<AssetListResult>;
+  startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
+  getJob: (input: JobReferenceParams) => Promise<JobSummary>;
+  listJobs: (input: JobListParams) => Promise<JobPage>;
+  listJobEvents: (input: JobEventsListParams) => Promise<JobEventPage>;
+  cancelJob: (input: JobReferenceParams) => Promise<JobSummary>;
+  retryJob: (input: JobReferenceParams) => Promise<JobSummary>;
+  onJobEvent: (listener: (event: JobEvent) => void) => () => void;
 }>;
 
 const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = {
@@ -314,6 +392,18 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   CONSTRAINT_VIOLATION: "Storage constraint was violated.",
   RECORD_NOT_FOUND: "Storage record was not found.",
   INVALID_RECORD: "Storage record is invalid.",
+  JOB_NOT_FOUND: "The job was not found.",
+  JOB_STATE_CONFLICT: "The job state changed concurrently.",
+  JOB_NOT_CANCELLABLE: "The job cannot be cancelled.",
+  JOB_NOT_RETRYABLE: "The job cannot be retried.",
+  JOB_RETRY_LIMIT: "The job retry limit was reached.",
+  JOB_QUEUE_FULL: "The job queue is full.",
+  JOB_EXECUTOR_UNAVAILABLE: "The job executor is unavailable.",
+  JOB_CHECKPOINT_INVALID: "The job checkpoint is invalid.",
+  JOB_EVENT_GAP: "The job event sequence has a gap.",
+  IDEMPOTENCY_CONFLICT: "The idempotency key conflicts with another job.",
+  JOB_SHUTTING_DOWN: "The job service is shutting down.",
+  JOB_EXECUTION_FAILED: "The simulated job failed.",
 };
 
 export function createDesktopPublicError(code: DesktopPublicErrorCode): DesktopPublicError {
@@ -384,6 +474,13 @@ export function isValidAgentWorkerCommand(value: unknown): value is AgentWorkerC
       && (value.projectId === undefined || isUuid(value.projectId))
       && isProjectOperationPayload(value.type, value.payload);
   }
+  if (isAgentJobOperationType(value.type)) {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "operationId", "timestamp", "projectId", "payload"])
+      && isValidAgentRunId(value.operationId)
+      && isTimestamp(value.timestamp)
+      && isUuid(value.projectId)
+      && isJobOperationPayload(value.type, value.payload);
+  }
   return false;
 }
 
@@ -441,6 +538,22 @@ export function isValidAgentWorkerMessage(value: unknown): value is AgentWorkerM
       && isTimestamp(value.timestamp)
       && isProjectOperationError(value.error);
   }
+  if (value.type === "job-operation-result") {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "operationId", "operation", "timestamp", "projectId", "payload"])
+      && isValidAgentRunId(value.operationId) && isAgentJobOperationType(value.operation)
+      && isTimestamp(value.timestamp) && isUuid(value.projectId) && isPlainRecord(value.payload) && isJsonValue(value.payload)
+      && isJobOperationPayload(value.operation, value.payload, true);
+  }
+  if (value.type === "job-operation-error") {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "operationId", "operation", "timestamp", "error"])
+      && isValidAgentRunId(value.operationId) && isAgentJobOperationType(value.operation)
+      && isTimestamp(value.timestamp) && isJobOperationError(value.error);
+  }
+  if (value.type === "job-event") {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "projectId", "jobId", "event"])
+      && isUuid(value.projectId) && isUuid(value.jobId) && isJobEvent(value.event)
+      && value.event.projectId === value.projectId && value.event.jobId === value.jobId;
+  }
   return false;
 }
 
@@ -468,6 +581,11 @@ export function isValidDesktopAgentEvent(value: unknown): value is DesktopAgentE
   }
   if (value.kind === "worker-error") {
     return hasOnlyKeys(value, ["kind", "timestamp", "error"]) && isTimestamp(value.timestamp) && isAgentPublicError(value.error);
+  }
+  if (value.kind === "job-event") {
+    return hasOnlyKeys(value, ["kind", "timestamp", "projectId", "jobId", "event"])
+      && isTimestamp(value.timestamp) && isUuid(value.projectId) && isUuid(value.jobId)
+      && isJobEvent(value.event) && value.event.projectId === value.projectId && value.event.jobId === value.jobId;
   }
   return false;
 }
@@ -552,6 +670,11 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "asset-list";
 }
 
+function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
+  return value === "job-smoke-start" || value === "job-get" || value === "job-list"
+    || value === "job-events-list" || value === "job-cancel" || value === "job-retry";
+}
+
 function isProjectOperationError(value: unknown): value is ProjectOperationError {
   return isPlainRecord(value)
     && hasOnlyKeys(value, ["code", "message"])
@@ -564,6 +687,10 @@ function isProjectOperationError(value: unknown): value is ProjectOperationError
 
 export function isProjectOperationErrorCode(value: unknown): value is ProjectOperationErrorCode {
   return typeof value === "string" && PROJECT_OPERATION_ERROR_CODES.has(value);
+}
+
+export function isJobOperationErrorCode(value: unknown): value is JobOperationErrorCode {
+  return typeof value === "string" && JOB_OPERATION_ERROR_CODES.has(value);
 }
 
 function isProjectOperationPayload(type: AgentProjectOperationType, value: unknown): boolean {
@@ -590,6 +717,45 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
   return hasOnlyKeys(value, ["projectId", "limit"])
     && isUuid(value.projectId)
     && isSafeInteger(value.limit, 1, 1_000);
+}
+
+function isJobOperationPayload(type: AgentJobOperationType, value: unknown, result = false): boolean {
+  if (!isPlainRecord(value) || !isJsonValue(value)) return false;
+  if (result) {
+    if (type === "job-list") return isJobPage(value);
+    if (type === "job-events-list") return isJobEventPage(value);
+    return isJobSummary(value);
+  }
+  if (type === "job-smoke-start") {
+    return hasOnlyKeys(value, ["idempotencyKey", "steps", "delayMs", "failAttempts"])
+      && isSafeString(value.idempotencyKey, 256)
+      && (value.steps === undefined || isSafeInteger(value.steps, 3, 8))
+      && (value.delayMs === undefined || isSafeInteger(value.delayMs, 1, 1_000))
+      && (value.failAttempts === undefined || isSafeInteger(value.failAttempts, 0, 1));
+  }
+  if (type === "job-list") {
+    return hasOnlyKeys(value, ["statuses", "cursor", "limit"])
+      && (value.statuses === undefined || Array.isArray(value.statuses) && value.statuses.length <= 8 && value.statuses.every(isJobStatus))
+      && (value.cursor === undefined || value.cursor === null || isSafeString(value.cursor, 512))
+      && (value.limit === undefined || isSafeInteger(value.limit, 1, 100));
+  }
+  if (type === "job-events-list") {
+    return hasOnlyKeys(value, ["jobId", "afterSequence", "cursor", "limit"])
+      && isUuid(value.jobId) && (value.afterSequence === undefined || isSafeInteger(value.afterSequence, 0, Number.MAX_SAFE_INTEGER))
+      && (value.cursor === undefined || value.cursor === null || isSafeString(value.cursor, 64))
+      && (value.limit === undefined || isSafeInteger(value.limit, 1, 100));
+  }
+  return hasOnlyKeys(value, ["jobId"]) && isUuid(value.jobId);
+}
+
+function isJobStatus(value: unknown): boolean {
+  return value === "queued" || value === "running" || value === "succeeded" || value === "failed"
+    || value === "retrying" || value === "cancelling" || value === "cancelled" || value === "needs_attention";
+}
+
+function isJobOperationError(value: unknown): value is JobOperationError {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["code", "message"])
+    && isJobOperationErrorCode(value.code) && typeof value.message === "string" && value.message.length > 0 && value.message.length <= 128;
 }
 
 const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
@@ -624,6 +790,13 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "CONSTRAINT_VIOLATION",
   "RECORD_NOT_FOUND",
   "INVALID_RECORD",
+]);
+
+const JOB_OPERATION_ERROR_CODES = new Set<string>([
+  ...PROJECT_OPERATION_ERROR_CODES,
+  "JOB_NOT_FOUND", "JOB_STATE_CONFLICT", "JOB_NOT_CANCELLABLE", "JOB_NOT_RETRYABLE", "JOB_RETRY_LIMIT",
+  "JOB_QUEUE_FULL", "JOB_EXECUTOR_UNAVAILABLE", "JOB_CHECKPOINT_INVALID", "JOB_EVENT_GAP",
+  "IDEMPOTENCY_CONFLICT", "JOB_SHUTTING_DOWN", "JOB_EXECUTION_FAILED",
 ]);
 
 function isUuid(value: unknown): value is string {

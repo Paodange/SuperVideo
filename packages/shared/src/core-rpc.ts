@@ -24,6 +24,13 @@ export const CORE_RPC_METHODS = {
   projectInspect: "project.inspect",
   assetReference: "asset.reference",
   assetList: "asset.list",
+  jobSmokeStart: "job.smoke.start",
+  jobGet: "job.get",
+  jobList: "job.list",
+  jobEventsList: "job.events.list",
+  jobCancel: "job.cancel",
+  jobRetry: "job.retry",
+  jobEvent: "core.job.event",
 } as const;
 
 export type CoreRpcMethod = (typeof CORE_RPC_METHODS)[keyof typeof CORE_RPC_METHODS];
@@ -34,7 +41,14 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.projectOpen
   | typeof CORE_RPC_METHODS.projectInspect
   | typeof CORE_RPC_METHODS.assetReference
-  | typeof CORE_RPC_METHODS.assetList;
+  | typeof CORE_RPC_METHODS.assetList
+  | typeof CORE_RPC_METHODS.jobSmokeStart
+  | typeof CORE_RPC_METHODS.jobGet
+  | typeof CORE_RPC_METHODS.jobList
+  | typeof CORE_RPC_METHODS.jobEventsList
+  | typeof CORE_RPC_METHODS.jobCancel
+  | typeof CORE_RPC_METHODS.jobRetry;
+export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "retrying" | "cancelling" | "cancelled" | "needs_attention";
 
 export const CORE_RPC_ERROR_CODES = {
   parseError: "PARSE_ERROR",
@@ -82,6 +96,18 @@ export const CORE_RPC_ERROR_CODES = {
   constraintViolation: "CONSTRAINT_VIOLATION",
   recordNotFound: "RECORD_NOT_FOUND",
   invalidRecord: "INVALID_RECORD",
+  jobNotFound: "JOB_NOT_FOUND",
+  jobStateConflict: "JOB_STATE_CONFLICT",
+  jobNotCancellable: "JOB_NOT_CANCELLABLE",
+  jobNotRetryable: "JOB_NOT_RETRYABLE",
+  jobRetryLimit: "JOB_RETRY_LIMIT",
+  jobQueueFull: "JOB_QUEUE_FULL",
+  jobExecutorUnavailable: "JOB_EXECUTOR_UNAVAILABLE",
+  jobCheckpointInvalid: "JOB_CHECKPOINT_INVALID",
+  jobEventGap: "JOB_EVENT_GAP",
+  idempotencyConflict: "IDEMPOTENCY_CONFLICT",
+  jobShuttingDown: "JOB_SHUTTING_DOWN",
+  jobExecutionFailed: "JOB_EXECUTION_FAILED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -132,6 +158,18 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   CONSTRAINT_VIOLATION: -32128,
   RECORD_NOT_FOUND: -32129,
   INVALID_RECORD: -32130,
+  JOB_NOT_FOUND: -32200,
+  JOB_STATE_CONFLICT: -32201,
+  JOB_NOT_CANCELLABLE: -32202,
+  JOB_NOT_RETRYABLE: -32203,
+  JOB_RETRY_LIMIT: -32204,
+  JOB_QUEUE_FULL: -32205,
+  JOB_EXECUTOR_UNAVAILABLE: -32206,
+  JOB_CHECKPOINT_INVALID: -32207,
+  JOB_EVENT_GAP: -32208,
+  IDEMPOTENCY_CONFLICT: -32209,
+  JOB_SHUTTING_DOWN: -32210,
+  JOB_EXECUTION_FAILED: -32211,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -180,6 +218,18 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   CONSTRAINT_VIOLATION: "Storage constraint was violated.",
   RECORD_NOT_FOUND: "Storage record was not found.",
   INVALID_RECORD: "Storage record is invalid.",
+  JOB_NOT_FOUND: "The job was not found.",
+  JOB_STATE_CONFLICT: "The job state changed concurrently.",
+  JOB_NOT_CANCELLABLE: "The job cannot be cancelled.",
+  JOB_NOT_RETRYABLE: "The job cannot be retried.",
+  JOB_RETRY_LIMIT: "The job retry limit was reached.",
+  JOB_QUEUE_FULL: "The job queue is full.",
+  JOB_EXECUTOR_UNAVAILABLE: "The job executor is unavailable.",
+  JOB_CHECKPOINT_INVALID: "The job checkpoint is invalid.",
+  JOB_EVENT_GAP: "The job event sequence has a gap.",
+  IDEMPOTENCY_CONFLICT: "The idempotency key conflicts with another job.",
+  JOB_SHUTTING_DOWN: "The job service is shutting down.",
+  JOB_EXECUTION_FAILED: "The simulated job failed.",
 };
 
 export type CoreRpcId = string;
@@ -209,6 +259,21 @@ export type ProjectSummary = Readonly<{
 }>;
 export type AssetReferenceParams = Readonly<{ projectId: string; paths: readonly string[] }>;
 export type AssetListParams = Readonly<{ projectId: string; limit: number }>;
+export type JobSmokeStartParams = Readonly<{ projectId: string; idempotencyKey: string; steps?: number; delayMs?: number; failAttempts?: number }>;
+export type JobReferenceParams = Readonly<{ projectId: string; jobId: string }>;
+export type JobListParams = Readonly<{ projectId: string; statuses?: readonly JobStatus[]; cursor?: string | null; limit?: number }>;
+export type JobEventsListParams = Readonly<{ projectId: string; jobId: string; afterSequence?: number; cursor?: string | null; limit?: number }>;
+export type JobSummary = Readonly<{
+  jobId: string; projectId: string; jobType: "smoke.countdown"; status: JobStatus; progress: number;
+  stage: string | null; attempt: number; revision: number; lastEventSequence: number;
+  createdAtMs: number; updatedAtMs: number; startedAtMs: number | null; finishedAtMs: number | null; errorCode: string | null;
+}>;
+export type JobEvent = Readonly<{
+  projectId: string; jobId: string; sequence: number; eventType: string; status: JobStatus;
+  progress: number; stage: string | null; attempt: number; timestamp: number; payload: unknown;
+}>;
+export type JobPage = Readonly<{ projectId: string; items: readonly JobSummary[]; nextCursor: string | null; hasMore: boolean }>;
+export type JobEventPage = Readonly<{ projectId: string; jobId: string; items: readonly JobEvent[]; nextCursor: string | null; hasMore: boolean }>;
 export type AssetSummary = Readonly<{
   assetId: string;
   projectId: string;
@@ -262,8 +327,14 @@ export type CoreCancelNotification = Readonly<{
   params: Readonly<{ requestId: CoreRpcId }>;
 }>;
 
-export type CoreRpcMessage = CoreRpcRequest | CoreRpcResponse | CoreProgressNotification | CoreCancelNotification;
-export type CoreRpcServerMessage = CoreRpcResponse | CoreProgressNotification;
+export type CoreJobEventNotification = Readonly<{
+  jsonrpc: typeof JSON_RPC_VERSION;
+  method: typeof CORE_RPC_METHODS.jobEvent;
+  params: JobEvent;
+}>;
+
+export type CoreRpcMessage = CoreRpcRequest | CoreRpcResponse | CoreProgressNotification | CoreCancelNotification | CoreJobEventNotification;
+export type CoreRpcServerMessage = CoreRpcResponse | CoreProgressNotification | CoreJobEventNotification;
 
 export function createCoreRpcError(errorCode: CoreRpcErrorCode): CoreRpcErrorObject {
   return Object.freeze({
@@ -345,6 +416,10 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.assetList) {
     return isAssetListParams(value.params);
   }
+  if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
+  if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
+  if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
+  if (value.method === CORE_RPC_METHODS.jobEventsList) return isJobEventsListParams(value.params);
   return true;
 }
 
@@ -375,6 +450,11 @@ export function isCoreProgressNotification(value: unknown): value is CoreProgres
     && isCoreProgress(value.params);
 }
 
+export function isCoreJobEventNotification(value: unknown): value is CoreJobEventNotification {
+  if (!isPlainRecord(value) || !isCoreJsonValue(value) || !hasOnlyKeys(value, ["jsonrpc", "method", "params"])) return false;
+  return value.jsonrpc === JSON_RPC_VERSION && value.method === CORE_RPC_METHODS.jobEvent && isJobEvent(value.params);
+}
+
 export function isCoreCancelNotification(value: unknown): value is CoreCancelNotification {
   if (!isPlainRecord(value) || !isCoreJsonValue(value) || !hasOnlyKeys(value, ["jsonrpc", "method", "params"])) {
     return false;
@@ -390,11 +470,12 @@ export function isCoreRpcMessage(value: unknown): value is CoreRpcMessage {
   return isCoreRpcRequest(value)
     || isCoreRpcResponse(value)
     || isCoreProgressNotification(value)
-    || isCoreCancelNotification(value);
+    || isCoreCancelNotification(value)
+    || isCoreJobEventNotification(value);
 }
 
 export function isCoreRpcServerMessage(value: unknown): value is CoreRpcServerMessage {
-  return isCoreRpcResponse(value) || isCoreProgressNotification(value);
+  return isCoreRpcResponse(value) || isCoreProgressNotification(value) || isCoreJobEventNotification(value);
 }
 
 export function isCoreHealth(value: unknown): value is CoreHealth {
@@ -481,6 +562,37 @@ export function isCoreProgress(value: unknown): value is CoreProgress {
     && value.message.length <= CORE_RPC_MAX_PROGRESS_MESSAGE_LENGTH;
 }
 
+export function isJobSummary(value: unknown): value is JobSummary {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["jobId", "projectId", "jobType", "status", "progress", "stage", "attempt", "revision", "lastEventSequence", "createdAtMs", "updatedAtMs", "startedAtMs", "finishedAtMs", "errorCode"])
+    && isUuid(value.jobId) && isUuid(value.projectId) && value.jobType === "smoke.countdown" && isJobStatus(value.status)
+    && isFiniteProgress(value.progress) && (value.stage === null || isSafeString(value.stage, 128))
+    && isSafeInteger(value.attempt, 0, Number.MAX_SAFE_INTEGER)
+    && isSafeInteger(value.revision, 0, Number.MAX_SAFE_INTEGER) && isSafeInteger(value.lastEventSequence, 0, Number.MAX_SAFE_INTEGER)
+    && isTimestamp(value.createdAtMs) && isTimestamp(value.updatedAtMs)
+    && (value.startedAtMs === null || isTimestamp(value.startedAtMs)) && (value.finishedAtMs === null || isTimestamp(value.finishedAtMs))
+    && (value.errorCode === null || isSafeString(value.errorCode, 128));
+}
+
+export function isJobEvent(value: unknown): value is JobEvent {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["projectId", "jobId", "sequence", "eventType", "status", "progress", "stage", "attempt", "timestamp", "payload"])
+    && isUuid(value.projectId) && isUuid(value.jobId) && isSafeInteger(value.sequence, 1, Number.MAX_SAFE_INTEGER)
+    && isSafeString(value.eventType, 64) && isJobStatus(value.status) && isFiniteProgress(value.progress)
+    && (value.stage === null || isSafeString(value.stage, 128)) && isSafeInteger(value.attempt, 0, Number.MAX_SAFE_INTEGER)
+    && isTimestamp(value.timestamp) && isBoundedCoreJsonValue(value.payload, 16 * 1024);
+}
+
+export function isJobPage(value: unknown): value is JobPage {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["projectId", "items", "nextCursor", "hasMore"])
+    && isUuid(value.projectId) && Array.isArray(value.items) && value.items.length <= 100
+    && value.items.every(isJobSummary) && (value.nextCursor === null || isSafeString(value.nextCursor, 512)) && typeof value.hasMore === "boolean";
+}
+
+export function isJobEventPage(value: unknown): value is JobEventPage {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["projectId", "jobId", "items", "nextCursor", "hasMore"])
+    && isUuid(value.projectId) && isUuid(value.jobId) && Array.isArray(value.items) && value.items.length <= 100
+    && value.items.every(isJobEvent) && (value.nextCursor === null || isSafeString(value.nextCursor, 64)) && typeof value.hasMore === "boolean";
+}
+
 export function isCoreRpcErrorObject(value: unknown): value is CoreRpcErrorObject {
   if (!isPlainRecord(value) || !isCoreJsonValue(value) || !hasOnlyKeys(value, ["code", "message", "data"])) {
     return false;
@@ -562,6 +674,54 @@ function isAssetListParams(value: unknown): value is AssetListParams {
     && hasOnlyKeys(value, ["projectId", "limit"])
     && isUuid(value.projectId)
     && isSafeInteger(value.limit, 1, 1_000);
+}
+
+function hasNoUnexpectedKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const expected = new Set(keys);
+  return Object.keys(value).every((key) => expected.has(key));
+}
+
+function isJobStatus(value: unknown): value is JobStatus {
+  return value === "queued" || value === "running" || value === "succeeded" || value === "failed" || value === "retrying" || value === "cancelling" || value === "cancelled" || value === "needs_attention";
+}
+
+function isFiniteProgress(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+export function isJobSmokeStartParams(value: unknown): value is JobSmokeStartParams {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["projectId", "idempotencyKey", "steps", "delayMs", "failAttempts"])
+    && isUuid(value.projectId) && isSafeString(value.idempotencyKey, 256)
+    && (value.steps === undefined || isSafeInteger(value.steps, 3, 8))
+    && (value.delayMs === undefined || isSafeInteger(value.delayMs, 1, 1_000))
+    && (value.failAttempts === undefined || isSafeInteger(value.failAttempts, 0, 1));
+}
+
+export function isJobReferenceParams(value: unknown): value is JobReferenceParams {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["projectId", "jobId"]) && isUuid(value.projectId) && isUuid(value.jobId);
+}
+
+export function isJobListParams(value: unknown): value is JobListParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "statuses", "cursor", "limit"]) || !isUuid(value.projectId)) return false;
+  return (value.statuses === undefined || Array.isArray(value.statuses) && value.statuses.length <= 8 && value.statuses.every(isJobStatus))
+    && (value.cursor === undefined || value.cursor === null || isSafeString(value.cursor, 512))
+    && (value.limit === undefined || isSafeInteger(value.limit, 1, 100));
+}
+
+export function isJobEventsListParams(value: unknown): value is JobEventsListParams {
+  return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["projectId", "jobId", "afterSequence", "cursor", "limit"])
+    && isUuid(value.projectId) && isUuid(value.jobId) && (value.afterSequence === undefined || isSafeInteger(value.afterSequence, 0, Number.MAX_SAFE_INTEGER))
+    && (value.cursor === undefined || value.cursor === null || isSafeString(value.cursor, 64))
+    && (value.limit === undefined || isSafeInteger(value.limit, 1, 100));
+}
+
+function isBoundedCoreJsonValue(value: unknown, maximumBytes: number): boolean {
+  if (!isCoreJsonValue(value)) return false;
+  try {
+    return utf8ByteLength(JSON.stringify(value)) <= maximumBytes;
+  } catch {
+    return false;
+  }
 }
 
 function isUuid(value: unknown): value is string {

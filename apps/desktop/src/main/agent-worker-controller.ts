@@ -4,7 +4,9 @@ import {
   isAgentWorkerMessageWithinLimit,
   isValidAgentRunId,
   isValidAgentWorkerMessage,
+  isJobEvent,
   type AgentPublicErrorCode,
+  type AgentJobOperationType,
   type AgentProjectOperationPayload,
   type AgentProjectOperationType,
   type AgentRunHandle,
@@ -13,6 +15,8 @@ import {
   type AgentWorkerMessage,
   type AgentWorkerStatusSnapshot,
   type ProjectOperationError,
+  type JobOperationError,
+  type JobEvent,
 } from "@supervideo/shared";
 
 export type UtilityProcessLike = {
@@ -59,6 +63,13 @@ export class ProjectOperationControllerError extends Error {
   }
 }
 
+export class JobOperationControllerError extends Error {
+  constructor(readonly operationError: JobOperationError) {
+    super(operationError.message);
+    this.name = "JobOperationControllerError";
+  }
+}
+
 type ActiveProcess = {
   child: UtilityProcessLike;
   generation: number;
@@ -82,6 +93,14 @@ type ActiveRun = {
 type PendingProjectOperation = {
   operationId: string;
   operation: AgentProjectOperationType;
+  generation: number;
+  timer: ReturnType<typeof globalThis.setTimeout>;
+  resolve: (payload: Readonly<Record<string, unknown>>) => void;
+  reject: (error: Error) => void;
+};
+type PendingJobOperation = {
+  operationId: string;
+  operation: AgentJobOperationType;
   generation: number;
   timer: ReturnType<typeof globalThis.setTimeout>;
   resolve: (payload: Readonly<Record<string, unknown>>) => void;
@@ -112,6 +131,8 @@ export class AgentWorkerController {
   private activeProcess?: ActiveProcess;
   private activeRun?: ActiveRun;
   private readonly pendingProjectOperations = new Map<string, PendingProjectOperation>();
+  private readonly pendingJobOperations = new Map<string, PendingJobOperation>();
+  private readonly jobEventSequences = new Map<string, number>();
   private startupWaiter?: { resolve: () => void; reject: (error: AgentWorkerControllerError) => void };
   private restartTimer?: ReturnType<typeof globalThis.setTimeout>;
   private shutdownPromise?: Promise<void>;
@@ -197,7 +218,7 @@ export class AgentWorkerController {
     if (!isValidAgentRunId(runId)) {
       throw new AgentWorkerControllerError("invalid-run-id");
     }
-    if (this.activeRun || this.pendingProjectOperations.size > 0) {
+    if (this.activeRun || this.pendingProjectOperations.size > 0 || this.pendingJobOperations.size > 0) {
       throw new AgentWorkerControllerError("busy");
     }
     const process = this.activeProcess;
@@ -224,12 +245,49 @@ export class AgentWorkerController {
     }
   }
 
+  runJobOperation(
+    operation: AgentJobOperationType,
+    projectId: string,
+    payload: Readonly<Record<string, unknown>>,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    if (this.activeRun || this.pendingProjectOperations.size > 0 || this.pendingJobOperations.size > 0) {
+      return Promise.reject(new AgentWorkerControllerError("busy"));
+    }
+    const process = this.activeProcess;
+    if (!process?.ready || this.status === "unavailable" || this.shutdownRequested) {
+      return Promise.reject(new AgentWorkerControllerError(this.status === "unavailable" ? "worker-unavailable" : "worker-not-ready"));
+    }
+    const operationId = `op-${this.now()}-${++this.runCounter}`;
+    this.setStatus("running");
+    return new Promise<Readonly<Record<string, unknown>>>((resolve, reject) => {
+      const timer = this.setTimer(() => {
+        const pending = this.pendingJobOperations.get(operationId);
+        if (!pending) return;
+        this.pendingJobOperations.delete(operationId);
+        reject(new JobOperationControllerError({ code: "JOB_STATE_CONFLICT", message: "The job state changed concurrently." }));
+        this.setStatus(this.shutdownRequested ? "stopped" : "ready");
+      }, DEFAULT_PROJECT_OPERATION_TIMEOUT_MS);
+      this.pendingJobOperations.set(operationId, { operationId, operation, generation: process.generation, timer, resolve, reject });
+      try {
+        process.child.postMessage({
+          protocolVersion: AGENT_WORKER_PROTOCOL_VERSION, type: operation, operationId,
+          timestamp: this.now(), projectId, payload,
+        });
+      } catch {
+        this.pendingJobOperations.delete(operationId);
+        this.clearTimer(timer);
+        this.setStatus("ready");
+        reject(new AgentWorkerControllerError("internal-error"));
+      }
+    });
+  }
+
   runProjectOperation(
     operation: AgentProjectOperationType,
     payload: AgentProjectOperationPayload,
     projectId?: string,
   ): Promise<Readonly<Record<string, unknown>>> {
-    if (this.activeRun || this.pendingProjectOperations.size > 0) {
+    if (this.activeRun || this.pendingProjectOperations.size > 0 || this.pendingJobOperations.size > 0) {
       return Promise.reject(new AgentWorkerControllerError("busy"));
     }
     const process = this.activeProcess;
@@ -302,6 +360,7 @@ export class AgentWorkerController {
     const process = this.activeProcess;
     if (!process) {
       this.rejectProjectOperations(new AgentWorkerControllerError("worker-unavailable"));
+      this.rejectJobOperations(new AgentWorkerControllerError("worker-unavailable"));
       this.rejectStartup("worker-unavailable");
       this.setStatus("stopped");
       return;
@@ -431,6 +490,28 @@ export class AgentWorkerController {
       }
       return;
     }
+    if (message.type === "job-event") {
+      if (!isJobEvent(message.event) || message.event.projectId !== message.projectId || message.event.jobId !== message.jobId) return;
+      const key = `${message.projectId}:${message.jobId}`;
+      const previous = this.jobEventSequences.get(key) ?? 0;
+      if (message.event.sequence <= previous) return;
+      this.jobEventSequences.set(key, message.event.sequence);
+      this.onMessage?.(message);
+      return;
+    }
+    if (message.type === "job-operation-result" || message.type === "job-operation-error") {
+      const pending = this.pendingJobOperations.get(message.operationId);
+      if (!pending || pending.generation !== process.generation || pending.operation !== message.operation) {
+        this.log("agent-worker-message-rejected", { generation: process.generation, reason: "stale-job-operation" });
+        return;
+      }
+      this.pendingJobOperations.delete(message.operationId);
+      this.clearTimer(pending.timer);
+      this.setStatus(this.shutdownRequested ? "stopped" : "ready");
+      if (message.type === "job-operation-error") pending.reject(new JobOperationControllerError(message.error));
+      else pending.resolve(message.payload);
+      return;
+    }
   }
 
   private handleReady(process: ActiveProcess, message: Extract<AgentWorkerMessage, { type: "ready" }>): void {
@@ -497,6 +578,7 @@ export class AgentWorkerController {
       this.emitInterruptedRun(process);
     }
     this.rejectProjectOperations(new AgentWorkerControllerError("worker-exited"));
+    this.rejectJobOperations(new AgentWorkerControllerError("worker-exited"));
     if (this.startupWaiter && !process.ready) {
       this.rejectStartup(process.ready ? "worker-exited" : this.lastErrorCode === "worker-ready-timeout" ? "worker-ready-timeout" : "worker-exited");
     }
@@ -570,6 +652,7 @@ export class AgentWorkerController {
     this.detachProcess(process);
     this.activeProcess = undefined;
     this.rejectProjectOperations(new AgentWorkerControllerError("worker-exited"));
+    this.rejectJobOperations(new AgentWorkerControllerError("worker-exited"));
     this.status = "stopped";
     this.notifyStatus();
     const resolve = this.shutdownResolve;
@@ -620,6 +703,14 @@ export class AgentWorkerController {
       pending.reject(error);
     }
     this.pendingProjectOperations.clear();
+  }
+
+  private rejectJobOperations(error: Error): void {
+    for (const pending of this.pendingJobOperations.values()) {
+      this.clearTimer(pending.timer);
+      pending.reject(error);
+    }
+    this.pendingJobOperations.clear();
   }
 }
 

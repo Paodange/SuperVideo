@@ -11,12 +11,20 @@ import {
   CORE_RPC_PROTOCOL_VERSION,
   createCoreRpcRequest,
   isCoreHealth,
+  isCoreJobEventNotification,
   isCoreProgressNotification,
   isCoreRpcErrorCode,
   isCoreRpcRequest,
   isCoreRpcServerMessage,
   isCoreSmokeCountdownParams,
   isCoreSmokeCountdownResult,
+  isJobEventPage,
+  isJobEventsListParams,
+  isJobListParams,
+  isJobReferenceParams,
+  isJobSmokeStartParams,
+  isJobPage,
+  isJobSummary,
   isAssetListResult,
   isAssetReferenceBatchResult,
   isProjectSummary,
@@ -34,6 +42,14 @@ import {
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
+  type JobEvent,
+  type JobEventPage,
+  type JobEventsListParams,
+  type JobListParams,
+  type JobPage,
+  type JobReferenceParams,
+  type JobSmokeStartParams,
+  type JobSummary,
 } from "@supervideo/shared";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
@@ -51,6 +67,8 @@ export type CoreRpcRequestOptions = Readonly<{
   onProgress?: (progress: CoreProgress) => void;
 }>;
 
+export type JobEventListener = (event: JobEvent) => void;
+
 export type PythonCoreClientOptions = Readonly<{
   rootDir?: string;
   requestTimeoutMs?: number;
@@ -59,6 +77,7 @@ export type PythonCoreClientOptions = Readonly<{
   maxPendingRequests?: number;
   onProgress?: (progress: CoreProgress) => void;
   onDiagnostic?: (message: string) => void;
+  onJobEvent?: JobEventListener;
   /** Test-only transport seam. It cannot change the executable or arguments. */
   spawnProcess?: (command: string, args: readonly string[], options: SpawnOptions) => CoreProcessLike;
 }>;
@@ -127,6 +146,8 @@ export class PythonCoreClient {
   private readonly maxPendingRequests: number;
   private readonly progressListener?: (progress: CoreProgress) => void;
   private readonly diagnosticListener?: (message: string) => void;
+  private readonly jobEventListeners = new Set<JobEventListener>();
+  private readonly jobEventSequences = new Map<string, number>();
   private readonly spawnProcess: NonNullable<PythonCoreClientOptions["spawnProcess"]>;
   private readonly pending = new Map<string, PendingRequest>();
   private process?: CoreProcessLike;
@@ -150,6 +171,7 @@ export class PythonCoreClient {
     this.maxPendingRequests = clampInteger(options.maxPendingRequests ?? DEFAULT_MAX_PENDING_REQUESTS, 1, 64);
     this.progressListener = options.onProgress;
     this.diagnosticListener = options.onDiagnostic;
+    if (options.onJobEvent) this.jobEventListeners.add(options.onJobEvent);
     this.spawnProcess = options.spawnProcess ?? ((command, args, spawnOptions) => spawn(command, [...args], spawnOptions) as unknown as CoreProcessLike);
   }
 
@@ -231,6 +253,53 @@ export class PythonCoreClient {
     const result = await this.request<unknown>(CORE_RPC_METHODS.assetList, params, options);
     if (!isAssetListResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
+  }
+
+  async startSmokeJob(params: JobSmokeStartParams, options: CoreRpcRequestOptions = {}): Promise<JobSummary> {
+    if (!isJobSmokeStartParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobSmokeStart, params, options);
+    if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async getJob(params: JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<JobSummary> {
+    if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobGet, params, options);
+    if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async listJobs(params: JobListParams, options: CoreRpcRequestOptions = {}): Promise<JobPage> {
+    if (!isJobListParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobList, params, options);
+    if (!isJobPage(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async listJobEvents(params: JobEventsListParams, options: CoreRpcRequestOptions = {}): Promise<JobEventPage> {
+    if (!isJobEventsListParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobEventsList, params, options);
+    if (!isJobEventPage(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async cancelJob(params: JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<JobSummary> {
+    if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobCancel, params, options);
+    if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async retryJob(params: JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<JobSummary> {
+    if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobRetry, params, options);
+    if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  onJobEvent(listener: JobEventListener): () => void {
+    this.jobEventListeners.add(listener);
+    return () => this.jobEventListeners.delete(listener);
   }
 
   getStatus(): CoreClientStatus {
@@ -428,6 +497,16 @@ export class PythonCoreClient {
   }
 
   private routeMessage(message: CoreRpcServerMessage): void {
+    if (isCoreJobEventNotification(message)) {
+      const key = `${message.params.projectId}:${message.params.jobId}`;
+      const previous = this.jobEventSequences.get(key) ?? 0;
+      if (message.params.sequence <= previous) return;
+      this.jobEventSequences.set(key, message.params.sequence);
+      for (const listener of this.jobEventListeners) {
+        try { listener(message.params); } catch { this.emitDiagnostic("Job event listener failed."); }
+      }
+      return;
+    }
     if (isCoreProgressNotification(message)) {
       const pending = this.pending.get(message.params.requestId);
       if (!pending || message.params.sequence <= pending.lastProgressSequence) {

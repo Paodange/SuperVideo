@@ -6,6 +6,8 @@ import type {
   DesktopAgentEvent,
   DesktopEnvironment,
   ProjectSummary,
+  JobEvent,
+  JobSummary,
 } from "@supervideo/shared";
 
 const browserAgentStatus: AgentWorkerStatusSnapshot = {
@@ -30,15 +32,22 @@ export function App() {
   const [targetPlatform, setTargetPlatform] = useState("douyin");
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [jobEvents, setJobEvents] = useState<Record<string, JobEvent[]>>({});
+  const [jobError, setJobError] = useState<string | null>(null);
+  const [jobBusy, setJobBusy] = useState(false);
   const latestSequence = useRef(new Map<string, number>());
   const projectRequest = useRef(0);
+  const jobSequences = useRef(new Map<string, number>());
 
   useEffect(() => {
     const bridge = window.supervideo;
     if (!bridge) { setEnvironment({ mode: "development", platform: "browser preview", electron: "—" }); return; }
     bridge.getEnvironment().then(setEnvironment).catch(() => setEnvironmentError("Desktop status is unavailable."));
     bridge.getAgentStatus().then((status) => { setAgentStatus(status); setRunId(status.activeRunId); setRunStatus(status.runStatus); }).catch(() => setAgentError("Agent Worker status is unavailable."));
-    return bridge.onAgentEvent((event) => applyAgentEvent(event));
+    const removeAgent = bridge.onAgentEvent((event) => applyAgentEvent(event));
+    const removeJobs = bridge.onJobEvent((event) => applyJobEvent(event));
+    return () => { removeAgent(); removeJobs(); };
   }, []);
 
   const createProject = (): void => {
@@ -48,7 +57,7 @@ export function App() {
     setProjectBusy(true); setProjectError(null);
     void bridge.createProject({ name: projectName, targetPlatform }).then((result) => {
       if (request !== projectRequest.current || result.cancelled) return;
-      setProject(result.value); setAssets([]);
+      setProject(result.value); setAssets([]); setJobs([]); setJobEvents({}); jobSequences.current.clear(); void loadJobs(result.value.projectId, request);
     }).catch((error: unknown) => setProjectError(publicErrorMessage(error, "The project could not be created."))).finally(() => { if (request === projectRequest.current) setProjectBusy(false); });
   };
 
@@ -56,13 +65,58 @@ export function App() {
     const bridge = window.supervideo;
     if (!bridge) { setProjectError("Open the desktop app to choose a project folder."); return; }
     const request = ++projectRequest.current;
-    setProjectBusy(true); setProjectError(null); setProject(null); setAssets([]);
+    setProjectBusy(true); setProjectError(null); setProject(null); setAssets([]); setJobs([]); setJobEvents({}); jobSequences.current.clear();
     void bridge.openProject().then(async (result) => {
       if (request !== projectRequest.current || result.cancelled) return;
       setProject(result.value);
       const listed = await bridge.listProjectAssets({ projectId: result.value.projectId });
       if (request === projectRequest.current) setAssets([...listed.items]);
+      await loadJobs(result.value.projectId, request);
     }).catch((error: unknown) => setProjectError(publicErrorMessage(error, "The project could not be opened."))).finally(() => { if (request === projectRequest.current) setProjectBusy(false); });
+  };
+
+  const loadJobs = async (projectId: string, request: number): Promise<void> => {
+    const bridge = window.supervideo;
+    if (!bridge) return;
+    try {
+      const page = await bridge.listJobs({ projectId, limit: 100 });
+      if (request === projectRequest.current) {
+        setJobs([...page.items]);
+        jobSequences.current = new Map(page.items.map((job) => [job.jobId, job.lastEventSequence]));
+        void Promise.all(page.items.map((job) => bridge.listJobEvents({ projectId, jobId: job.jobId, afterSequence: 0, limit: 100 })))
+          .then((pages) => { if (request === projectRequest.current) setJobEvents(Object.fromEntries(pages.map((page) => [page.jobId, [...page.items]]))); })
+          .catch(() => undefined);
+      }
+    } catch (error: unknown) {
+      if (request === projectRequest.current) setJobError(publicErrorMessage(error, "The jobs could not be loaded."));
+    }
+  };
+
+  const startSmokeJob = (): void => {
+    const bridge = window.supervideo;
+    if (!bridge || !project) return;
+    setJobBusy(true); setJobError(null);
+    const idempotencyKey = `ui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    void bridge.startSmokeJob({ projectId: project.projectId, idempotencyKey, steps: 8, delayMs: 150, failAttempts: 0 })
+      .then((job) => { setJobs((current) => mergeJobs(current, [job])); jobSequences.current.set(job.jobId, job.lastEventSequence); })
+      .catch((error: unknown) => setJobError(publicErrorMessage(error, "The job could not be started.")))
+      .finally(() => setJobBusy(false));
+  };
+
+  const cancelJob = (jobId: string): void => {
+    const bridge = window.supervideo;
+    if (!bridge || !project) return;
+    void bridge.cancelJob({ projectId: project.projectId, jobId })
+      .then((job) => { jobSequences.current.set(job.jobId, Math.max(jobSequences.current.get(job.jobId) ?? 0, job.lastEventSequence)); setJobs((current) => mergeJobs(current, [job])); })
+      .catch((error: unknown) => setJobError(publicErrorMessage(error, "The job could not be cancelled.")));
+  };
+
+  const retryJob = (jobId: string): void => {
+    const bridge = window.supervideo;
+    if (!bridge || !project) return;
+    void bridge.retryJob({ projectId: project.projectId, jobId })
+      .then((job) => { jobSequences.current.set(job.jobId, Math.max(jobSequences.current.get(job.jobId) ?? 0, job.lastEventSequence)); setJobs((current) => mergeJobs(current, [job])); })
+      .catch((error: unknown) => setJobError(publicErrorMessage(error, "The job could not be retried.")));
   };
 
   const addAssets = (): void => {
@@ -101,6 +155,7 @@ export function App() {
   function applyAgentEvent(event: DesktopAgentEvent): void {
     if (event.kind === "worker-status") { setAgentStatus(event.status); setRunId(event.status.activeRunId); setRunStatus(event.status.runStatus); return; }
     if (event.kind === "worker-error") { setAgentError(event.error.message); return; }
+    if (event.kind === "job-event") { return; }
     const previousSequence = latestSequence.current.get(event.runId) ?? 0;
     if (event.sequence <= previousSequence) return;
     latestSequence.current.set(event.runId, event.sequence); setRunId(event.runId);
@@ -111,6 +166,33 @@ export function App() {
     else if (runEvent.kind === "tool-started") setTools((current) => [...current.filter((tool) => tool.toolCallId !== runEvent.toolCallId), { toolCallId: runEvent.toolCallId, toolName: runEvent.toolName, state: "started", progress: 0, message: "Tool started" }]);
     else if (runEvent.kind === "tool-progress") setTools((current) => current.map((tool) => tool.toolCallId === runEvent.toolCallId ? { ...tool, state: "progress", progress: runEvent.progress, message: runEvent.message } : tool));
     else if (runEvent.kind === "tool-finished") setTools((current) => current.map((tool) => tool.toolCallId === runEvent.toolCallId ? { ...tool, state: "finished", progress: tool.progress || (runEvent.ok ? 1 : 0), message: runEvent.summary ?? "Tool finished" } : tool));
+  }
+
+  function applyJobEvent(event: JobEvent): void {
+    if (!project || event.projectId !== project.projectId) return;
+    const previous = jobSequences.current.get(event.jobId) ?? 0;
+    if (event.sequence <= previous) return;
+    jobSequences.current.set(event.jobId, event.sequence);
+    const bridge = window.supervideo;
+    if (!bridge) return;
+    setJobEvents((current) => ({ ...current, [event.jobId]: mergeJobEvents(current[event.jobId] ?? [], [event]) }));
+    const hydrate = (afterSequence: number): void => {
+      void bridge.getJob({ projectId: project.projectId, jobId: event.jobId })
+        .then((job) => { if (project && job.projectId === project.projectId) { jobSequences.current.set(job.jobId, Math.max(jobSequences.current.get(job.jobId) ?? 0, job.lastEventSequence)); setJobs((current) => mergeJobs(current, [job])); } })
+        .catch(() => undefined);
+      if (afterSequence < event.sequence - 1) {
+        void bridge.listJobEvents({ projectId: project.projectId, jobId: event.jobId, afterSequence, limit: 100 })
+          .then((page) => {
+            if (!project || page.projectId !== project.projectId || page.jobId !== event.jobId) return;
+            setJobEvents((current) => ({ ...current, [event.jobId]: mergeJobEvents(current[event.jobId] ?? [], page.items) }));
+            for (const persisted of page.items) {
+              if (persisted.sequence > (jobSequences.current.get(event.jobId) ?? 0)) jobSequences.current.set(event.jobId, persisted.sequence);
+            }
+          })
+          .catch(() => undefined);
+      }
+    };
+    hydrate(previous);
   }
 
   const workerUnavailable = agentStatus.status === "unavailable" || agentStatus.status === "stopped";
@@ -130,12 +212,16 @@ export function App() {
 
       <dl className="details"><div><dt>Environment</dt><dd>{environment?.mode ?? "development"}</dd></div><div><dt>Platform</dt><dd>{environment?.platform ?? "Windows target"}</dd></div><div><dt>Electron</dt><dd>{environment?.electron ?? "—"}</dd></div></dl>
       <section className="agent-panel" aria-labelledby="agent-title"><div className="panel-heading"><div><div className="eyebrow">A03 ENGINEERING PANEL</div><h2 id="agent-title">Agent Worker</h2></div><span className={`worker-badge worker-${agentStatus.status}`}>{agentStatus.status}</span></div><dl className="agent-details"><div><dt>Worker version</dt><dd>{agentStatus.workerVersion ?? "—"}</dd></div><div><dt>Generation</dt><dd>{agentStatus.generation}</dd></div><div><dt>Run status</dt><dd>{runStatus}</dd></div><div><dt>Run ID</dt><dd className="run-id">{runId ?? "—"}</dd></div></dl>{workerUnavailable && <p className="hint">The Worker is not available. Check Main diagnostics before retrying.</p>}<div className="actions"><button type="button" onClick={runSmokeTask} disabled={!canRun}>Run smoke task</button><button type="button" className="secondary" onClick={cancelSmokeTask} disabled={!canCancel}>Cancel</button></div><div className="output" aria-live="polite"><div className="output-label">Streaming assistant text</div><p>{assistantText || "Waiting for a smoke run…"}</p><div className="output-label">Tool progress</div>{tools.length === 0 ? <p className="muted">No tool events yet.</p> : tools.map((tool) => <div className="tool-row" key={tool.toolCallId}><span>{tool.toolName}</span><span>{tool.message}</span><progress max="1" value={tool.progress} /><span>{tool.state}</span></div>)}</div></section>
-      <p className="scope">A06 references external files read-only. No recursive scanning, media analysis, chat, or recent-project auto-open is included.</p>
+      {project && <section className="agent-panel jobs-panel" aria-labelledby="jobs-title"><div className="panel-heading"><div><div className="eyebrow">A07 PERSISTENT JOBS</div><h2 id="jobs-title">Jobs</h2></div><span className="worker-badge">{jobs.length}</span></div><p className="hint">SQLite-backed smoke jobs survive Worker/Core restart and stream best-effort events.</p><div className="actions"><button type="button" onClick={startSmokeJob} disabled={jobBusy}>Start 8-step smoke job</button></div>{jobError && <p className="error-text">{jobError}</p>}{jobs.length === 0 ? <p className="muted">No persistent jobs yet.</p> : <div className="job-list">{jobs.map((job) => <JobRow key={job.jobId} job={job} events={jobEvents[job.jobId] ?? []} onCancel={cancelJob} onRetry={retryJob} />)}</div>}</section>}
+      <p className="scope">A07 adds a durable simulated job state machine. Real media executors, external services and background systems remain out of scope.</p>
     </section></main>
   );
 }
 
 function AssetRow({ asset }: { asset: AssetSummary }) { return <article className="asset-row"><div><strong>{asset.fileName}</strong><span>{asset.absolutePath}</span></div><span>{asset.kind} · {formatBytes(asset.sizeBytes)}</span><span>{new Date(asset.modifiedAtMs).toLocaleString()}</span><span className="asset-status">{asset.referenceStatus}</span></article>; }
 function mergeAssets(current: AssetSummary[], incoming: readonly AssetSummary[]): AssetSummary[] { const merged = new Map(current.map((asset) => [asset.assetId, asset])); for (const asset of incoming) merged.set(asset.assetId, asset); return [...merged.values()]; }
+function mergeJobs(current: JobSummary[], incoming: readonly JobSummary[]): JobSummary[] { const merged = new Map(current.map((job) => [job.jobId, job])); for (const job of incoming) merged.set(job.jobId, job); return [...merged.values()].sort((a, b) => a.createdAtMs - b.createdAtMs || a.jobId.localeCompare(b.jobId)); }
+function mergeJobEvents(current: JobEvent[], incoming: readonly JobEvent[]): JobEvent[] { const merged = new Map(current.map((event) => [event.sequence, event])); for (const event of incoming) merged.set(event.sequence, event); return [...merged.values()].sort((a, b) => a.sequence - b.sequence).slice(-100); }
+function JobRow({ job, events, onCancel, onRetry }: { job: JobSummary; events: readonly JobEvent[]; onCancel: (jobId: string) => void; onRetry: (jobId: string) => void }) { const cancellable = job.status === "queued" || job.status === "running"; return <article className="job-row"><div className="job-row-heading"><strong>{job.jobType}</strong><span className={`job-status job-${job.status}`}>{job.status}</span></div><div className="job-meta"><span>{Math.round(job.progress * 100)}%</span><span>{job.stage ?? "—"}</span><span>attempt {job.attempt}</span><span>event {job.lastEventSequence}</span><span>{new Date(job.updatedAtMs).toLocaleTimeString()}</span></div><progress max="1" value={job.progress} /><div className="job-events" aria-label="Job events">{events.slice(-6).map((event) => <span key={event.sequence}>#{event.sequence} {event.eventType}</span>)}</div>{cancellable && <button type="button" className="secondary" onClick={() => onCancel(job.jobId)}>Cancel</button>}{job.status === "failed" && <button type="button" className="secondary" onClick={() => onRetry(job.jobId)}>Retry</button>}</article>; }
 function formatBytes(value: number): string { if (value < 1024) return `${value} B`; if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`; return `${(value / (1024 * 1024)).toFixed(1)} MiB`; }
 function publicErrorMessage(error: unknown, fallback: string): string { return error && typeof error === "object" && "message" in error && typeof error.message === "string" ? error.message : fallback; }

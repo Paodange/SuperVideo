@@ -123,6 +123,20 @@ dd {
   line-height: 1.6;
 }
 
+.job-list { display: grid; gap: 10px; }
+.job-row { border: 1px solid rgba(46, 55, 75, .14); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+.job-row-heading, .job-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.job-row-heading { justify-content: space-between; }
+.job-meta { color: #5d6679; font-size: 12px; }
+.job-status { border-radius: 999px; padding: 3px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.job-running, .job-retrying { background: #e5f1ff; color: #145da0; }
+.job-succeeded { background: #e4f6ea; color: #1f7a42; }
+.job-failed, .job-needs_attention { background: #fff0df; color: #9b4c00; }
+.job-cancelling, .job-cancelled { background: #f0edf6; color: #625b77; }
+.job-events { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.job-events span { border-radius: 999px; background: #eef3f1; color: #51625e; padding: 3px 7px; font-size: 0.72rem; }
+.error-text { color: #a33a3a; }
+
 .agent-panel {
   margin-top: 28px;
   padding: 22px;
