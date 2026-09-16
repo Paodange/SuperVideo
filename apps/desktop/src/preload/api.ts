@@ -3,6 +3,10 @@ import {
   DESKTOP_IPC_CHANNELS,
   isAssetListResult,
   isAssetReferenceBatchResult,
+  isJobEvent,
+  isJobEventPage,
+  isJobPage,
+  isJobSummary,
   isProjectSummary,
   isDesktopPublicError,
   isAgentWorkerStatusSnapshot,
@@ -22,6 +26,14 @@ import {
   type CreateProjectRequest,
   type ListProjectAssetsRequest,
   type ProjectDialogResult,
+  type JobEvent,
+  type JobEventPage,
+  type JobListParams,
+  type JobEventsListParams,
+  type JobReferenceParams,
+  type JobSmokeStartParams,
+  type JobPage,
+  type JobSummary,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -34,7 +46,13 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.createProject
     | typeof DESKTOP_IPC_CHANNELS.openProject
     | typeof DESKTOP_IPC_CHANNELS.addAssetReferences
-    | typeof DESKTOP_IPC_CHANNELS.listProjectAssets,
+    | typeof DESKTOP_IPC_CHANNELS.listProjectAssets
+    | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
+    | typeof DESKTOP_IPC_CHANNELS.getJob
+    | typeof DESKTOP_IPC_CHANNELS.listJobs
+    | typeof DESKTOP_IPC_CHANNELS.listJobEvents
+    | typeof DESKTOP_IPC_CHANNELS.cancelJob
+    | typeof DESKTOP_IPC_CHANNELS.retryJob,
   payload: GetEnvironmentRequest | GetAgentStatusRequest | RunAgentSmokeTaskRequest | CancelAgentRunRequest | CreateProjectRequest | Record<string, unknown>,
 ) => Promise<unknown>;
 
@@ -102,6 +120,20 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
       invoke,
       isAssetListResult,
     ),
+    startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
+    getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),
+    listJobs: (input) => invokeValue(DESKTOP_IPC_CHANNELS.listJobs, input, invoke, isJobPage),
+    listJobEvents: (input) => invokeValue(DESKTOP_IPC_CHANNELS.listJobEvents, input, invoke, isJobEventPage),
+    cancelJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.cancelJob, input, invoke, isJobSummary),
+    retryJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.retryJob, input, invoke, isJobSummary),
+    onJobEvent: (listener) => {
+      let disposed = false;
+      const wrapped = (_event: unknown, payload: unknown): void => {
+        if (!disposed && isValidDesktopAgentEvent(payload) && payload.kind === "job-event" && isJobEvent(payload.event)) listener(payload.event);
+      };
+      const remove = subscribe(DESKTOP_IPC_CHANNELS.agentEvent, wrapped);
+      return () => { if (!disposed) { disposed = true; remove(); } };
+    },
   };
 
   return Object.freeze(api);

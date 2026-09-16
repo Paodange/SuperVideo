@@ -12,6 +12,7 @@ from typing import Any, BinaryIO
 from pydantic import ValidationError
 
 from supervideo_core.project.errors import ProjectError
+from supervideo_core.jobs.errors import JobError
 
 from .errors import RpcServiceError, error_response
 from .models import (
@@ -52,7 +53,7 @@ class RpcServer:
     def __init__(self, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) -> None:
         self.stdin = stdin or sys.stdin.buffer
         self.stdout = stdout or sys.stdout.buffer
-        self.registry = RpcRegistry()
+        self.registry = RpcRegistry(on_job_event=self._on_job_event)
         self.writer_lock = asyncio.Lock()
         self.active_request_id: str | None = None
         self.active_cancel: asyncio.Event | None = None
@@ -130,6 +131,8 @@ class RpcServer:
             await self.send_error(request.id, error.error_code)
         except ProjectError as error:
             await self.send_error(request.id, error.code)
+        except JobError as error:
+            await self.send_error(request.id, error.code)
         except Exception:
             traceback.print_exc(file=sys.stderr)
             await self.send_error(request.id, "INTERNAL_ERROR")
@@ -182,25 +185,29 @@ class RpcServer:
         )
 
     async def send_result(self, request_id: str, result: object) -> None:
-        await self.send_message({"jsonrpc": JSON_RPC_VERSION, "id": request_id, "result": result})
+        message = {"jsonrpc": JSON_RPC_VERSION, "id": request_id, "result": result}
+        if not await self.send_message(message):
+            await self.send_error(request_id, "MESSAGE_TOO_LARGE")
 
     async def send_error(self, request_id: str | None, error_code: str) -> None:
         await self.send_message(error_response(request_id, error_code))
 
-    async def send_message(self, message: dict[str, object]) -> None:
+    async def send_message(self, message: dict[str, object]) -> bool:
         encoded = json.dumps(message, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
         if len(encoded) > CORE_RPC_MAX_LINE_BYTES:
-            return
+            return False
         async with self.writer_lock:
             try:
                 self.stdout.write(encoded + b"\n")
                 self.stdout.flush()
             except (BrokenPipeError, OSError):
                 self.closing = True
+                return False
+        return True
 
     async def close(self) -> None:
         if self.closing and self.active_task is None:
-            self.registry.close()
+            await self.registry.shutdown()
             return
         self.closing = True
         task = self.active_task
@@ -213,7 +220,41 @@ class RpcServer:
         self.active_request_id = None
         self.active_cancel = None
         self.active_task = None
-        self.registry.close()
+        await self.registry.shutdown()
+
+    def _on_job_event(self, event: object) -> None:
+        if self.closing:
+            return
+        if not hasattr(event, "project_id"):
+            return
+        self._schedule_job_event(event)
+
+    def _schedule_job_event(self, event: object) -> None:
+        """Publish only after the repository transaction has returned."""
+
+        asyncio.create_task(self.send_job_event(event))
+
+    async def send_job_event(self, event: object) -> None:
+        try:
+            await self.send_message({
+                "jsonrpc": JSON_RPC_VERSION,
+                "method": "core.job.event",
+                "params": {
+                    "projectId": event.project_id,
+                    "jobId": event.job_id,
+                    "sequence": event.sequence,
+                    "eventType": event.event_type,
+                    "status": event.status,
+                    "progress": event.progress,
+                    "stage": event.stage,
+                    "attempt": event.attempt,
+                    "timestamp": event.created_at_ms,
+                    "payload": event.payload_json,
+                },
+            })
+        except Exception:
+            # Notification delivery is best effort; the event is durable.
+            return
 
     @staticmethod
     def safe_request_id(value: Any) -> str | None:

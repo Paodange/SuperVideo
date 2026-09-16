@@ -5,7 +5,7 @@ A02 只建立 Electron 的进程和内容安全边界，不接入 Agent、Python
 ## 信任边界
 
 - Renderer 是不可信的 React 页面。它没有 Node.js、文件系统、原始 `ipcRenderer`、任意 channel、外链窗口或权限能力。
-- preload 是唯一的窄桥，只暴露冻结的、按业务命名的 `window.supervideo` 能力：环境状态、Agent Worker 状态、smoke run、取消和产品化事件订阅。channel、payload 和返回结构来自 `@supervideo/shared` 的版本化 contract。
+- preload 是唯一的窄桥，只暴露冻结的、按业务命名的 `window.supervideo` 能力：环境状态、Agent Worker 状态、smoke run、取消、固定 project/asset 操作、固定 persistent-job 操作和产品化事件订阅。channel、payload 和返回结构来自 `@supervideo/shared` 的版本化 contract。
 - sandboxed preload 在构建时由 esbuild 内联 shared 的运行时常量，运行时只保留 Electron 内建模块依赖，避免 sandbox preload 通过 `require` 加载 workspace 包。
 - Main 是受信边界，负责 BrowserWindow 配置、来源校验、session 防护、IPC handler 和 Agent Worker owner。所有 IPC 都校验 frame URL、payload 和已知 channel；Worker 事件到达 Renderer 前还会经过产品事件映射和 preload 校验。
 - Main 内部错误只转换为稳定的 `forbidden-sender`、`invalid-payload` 或 `internal-error` 公开错误，不把堆栈、绝对路径、环境变量或 Electron 对象传给 Renderer。
@@ -40,6 +40,14 @@ stable reasons, counts, IDs, and sanitized origin data; they do not record
 selected project paths or asset names. No generic picker, file read/write,
 `dialog`, `ipcRenderer`, `fs`, `path`, MessagePort, or arbitrary RPC bridge is
 exposed to preload.
+
+A07 adds only fixed job IPC methods: `startSmokeJob`, `getJob`, `listJobs`,
+`listJobEvents`, `cancelJob`, `retryJob` and `onJobEvent`. Every request carries
+the active `projectId`; job mutations additionally carry a `jobId` or a bounded
+idempotency key. Main validates sender, payload, Worker generation and stable
+job errors; preload validates summaries/pages/events and returns no generic IPC
+or database capability. Job event payloads are summaries only, never input JSON,
+checkpoint contents, SQL or stack traces.
 
 ## 当前限制
 

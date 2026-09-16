@@ -7,6 +7,9 @@ import {
   DESKTOP_IPC_CHANNELS,
   isAssetListResult,
   isAssetReferenceBatchResult,
+  isJobEventPage,
+  isJobPage,
+  isJobSummary,
   isValidDesktopAgentEvent,
   isProjectSummary,
   type AgentWorkerMessage,
@@ -19,6 +22,13 @@ import {
   type ProjectSummary,
   type AssetReferenceBatchResult,
   type AssetListResult,
+  type JobEventPage,
+  type JobEventsListParams,
+  type JobListParams,
+  type JobPage,
+  type JobReferenceParams,
+  type JobSmokeStartParams,
+  type JobSummary,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -156,6 +166,24 @@ function assetListResult(value: Readonly<Record<string, unknown>>): AssetListRes
   if (!isAssetListResult(value)) {
     throw createDesktopPublicError("CORE_UNAVAILABLE");
   }
+  return value;
+}
+
+function jobEventPageResult(value: Readonly<Record<string, unknown>>): JobEventPage {
+  if (!isJobEventPage(value)) throw new Error("invalid job event page");
+  return value;
+}
+
+function jobSummary(value: Readonly<Record<string, unknown>>): JobSummary {
+  if (!isJobSummary(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+  return value;
+}
+function jobPage(value: Readonly<Record<string, unknown>>): JobPage {
+  if (!isJobPage(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+  return value;
+}
+function jobEventPage(value: Readonly<Record<string, unknown>>): JobEventPage {
+  if (!isJobEventPage(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
   return value;
 }
 
@@ -384,6 +412,99 @@ async function runProjectIntegrationSmoke(firstController: AgentWorkerController
   }
 }
 
+async function runJobsIntegrationSmoke(firstController: AgentWorkerController, firstMessages: AgentWorkerMessage[]): Promise<void> {
+  const smokeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "supervideo-jobs-smoke-"));
+  const projectRoot = path.join(smokeRoot, "persistent jobs project");
+  fs.mkdirSync(projectRoot);
+  try {
+    await firstController.start();
+    const created = projectSummary(await firstController.runProjectOperation("project-create", {
+      name: "A07 jobs smoke", targetPlatform: "douyin", projectRoot,
+    }));
+    const firstJob = jobSummary(await firstController.runJobOperation("job-smoke-start", created.projectId, {
+      idempotencyKey: "a07-success", steps: 8, delayMs: 40, failAttempts: 0,
+    }));
+    await waitForJobMessage(firstController, firstMessages, firstJob.jobId, (event) => event.status === "running" && event.progress >= 0.25);
+    await firstController.shutdown();
+
+    const secondMessages: AgentWorkerMessage[] = [];
+    const secondController = createAgentController(secondMessages);
+    activeAgentController = secondController;
+    try {
+      await secondController.start();
+      const reopened = projectSummary(await secondController.runProjectOperation("project-open", { projectRoot }));
+      if (reopened.projectId !== created.projectId) throw new Error("jobs smoke reopen changed project identity");
+      const recovered = await waitForJobMessage(secondController, secondMessages, firstJob.jobId, (event) => event.status === "succeeded");
+      const recoveredJob = jobSummary(await secondController.runJobOperation("job-get", created.projectId, { jobId: firstJob.jobId }));
+      const recoveredEvents = jobEventPageResult(await secondController.runJobOperation("job-events-list", created.projectId, {
+        jobId: firstJob.jobId, afterSequence: 0, cursor: null, limit: 100,
+      }));
+      if (recoveredJob.status !== "succeeded" || recoveredJob.attempt < 2 || recoveredEvents.items.filter((event) => event.status === "succeeded").length !== 1 || !strictlyIncreasing(recoveredEvents.items.map((event) => event.sequence))) {
+        throw new Error("jobs smoke recovery did not continue from a durable checkpoint");
+      }
+      if (recovered.sequence !== recoveredJob.lastEventSequence) throw new Error("jobs smoke event and summary diverged");
+
+      const cancelJob = jobSummary(await secondController.runJobOperation("job-smoke-start", created.projectId, {
+        idempotencyKey: "a07-cancel", steps: 8, delayMs: 45, failAttempts: 0,
+      }));
+      await waitForJobMessage(secondController, secondMessages, cancelJob.jobId, (event) => event.status === "running" && event.progress >= 0.125);
+      const cancelling = jobSummary(await secondController.runJobOperation("job-cancel", created.projectId, { jobId: cancelJob.jobId }));
+      if (cancelling.status !== "cancelling") throw new Error("jobs smoke did not persist cancelling");
+      await waitForJobMessage(secondController, secondMessages, cancelJob.jobId, (event) => event.status === "cancelled");
+      const cancelled = jobSummary(await secondController.runJobOperation("job-get", created.projectId, { jobId: cancelJob.jobId }));
+      if (cancelled.status !== "cancelled") throw new Error("jobs smoke cancellation was not durable");
+
+      await secondController.shutdown();
+      const thirdMessages: AgentWorkerMessage[] = [];
+      const thirdController = createAgentController(thirdMessages);
+      activeAgentController = thirdController;
+      try {
+        await thirdController.start();
+        await thirdController.runProjectOperation("project-open", { projectRoot });
+        const stillCancelled = jobSummary(await thirdController.runJobOperation("job-get", created.projectId, { jobId: cancelJob.jobId }));
+        if (stillCancelled.status !== "cancelled") throw new Error("cancelled job was resumed after reopen");
+        const failedJob = jobSummary(await thirdController.runJobOperation("job-smoke-start", created.projectId, {
+          idempotencyKey: "a07-retry", steps: 8, delayMs: 20, failAttempts: 1,
+        }));
+        await waitForJobMessage(thirdController, thirdMessages, failedJob.jobId, (event) => event.status === "failed");
+        const retrying = jobSummary(await thirdController.runJobOperation("job-retry", created.projectId, { jobId: failedJob.jobId }));
+        if (retrying.status !== "retrying") throw new Error("jobs smoke retry did not enqueue");
+        await waitForJobMessage(thirdController, thirdMessages, failedJob.jobId, (event) => event.status === "succeeded");
+        const retried = jobSummary(await thirdController.runJobOperation("job-get", created.projectId, { jobId: failedJob.jobId }));
+        if (retried.status !== "succeeded" || retried.attempt !== 2) throw new Error("jobs smoke retry did not advance attempt");
+      } finally {
+        await thirdController.shutdown();
+      }
+    } finally {
+      if (secondController.getStatus().status !== "stopped") await secondController.shutdown();
+    }
+  } finally {
+    if (firstController.getStatus().status !== "stopped") await firstController.shutdown();
+    fs.rmSync(smokeRoot, { recursive: true, force: true });
+  }
+}
+
+async function waitForJobMessage(
+  controller: AgentWorkerController,
+  messages: AgentWorkerMessage[],
+  jobId: string,
+  predicate: (event: Extract<AgentWorkerMessage, { type: "job-event" }>['event']) => boolean,
+  timeoutMs = 30_000,
+): Promise<Extract<AgentWorkerMessage, { type: "job-event" }>['event']> {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const timer = setInterval(() => {
+      const found = messages.find((message): message is Extract<AgentWorkerMessage, { type: "job-event" }> => message.type === "job-event" && message.jobId === jobId && predicate(message.event));
+      if (found) { clearInterval(timer); resolve(found.event); }
+      else if (Date.now() - startedAt >= timeoutMs) { clearInterval(timer); reject(new Error("Timed out waiting for persistent job event.")); }
+    }, 20);
+  });
+}
+
+function strictlyIncreasing(values: readonly number[]): boolean {
+  return values.every((value, index) => index === 0 || value > values[index - 1]!);
+}
+
 function containsFixture(root: string, fixture: Buffer): boolean {
   const pending = [root];
   while (pending.length > 0) {
@@ -446,6 +567,35 @@ app.whenReady().then(() => {
       const result = await agentController.runProjectOperation("asset-list", { projectId: input.projectId, limit: 100 }, input.projectId);
       return assetListResult(result);
     },
+    startSmokeJob: async (_event, input) => jobSummary(await agentController.runJobOperation(
+      "job-smoke-start", input.projectId,
+      {
+        idempotencyKey: input.idempotencyKey,
+        ...(input.steps === undefined ? {} : { steps: input.steps }),
+        ...(input.delayMs === undefined ? {} : { delayMs: input.delayMs }),
+        ...(input.failAttempts === undefined ? {} : { failAttempts: input.failAttempts }),
+      },
+    )),
+    getJob: async (_event, input) => jobSummary(await agentController.runJobOperation("job-get", input.projectId, { jobId: input.jobId })),
+    listJobs: async (_event, input) => jobPage(await agentController.runJobOperation(
+      "job-list", input.projectId,
+      {
+        ...(input.statuses === undefined ? {} : { statuses: input.statuses }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      },
+    )),
+    listJobEvents: async (_event, input) => jobEventPage(await agentController.runJobOperation(
+      "job-events-list", input.projectId,
+      {
+        jobId: input.jobId,
+        ...(input.afterSequence === undefined ? {} : { afterSequence: input.afterSequence }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      },
+    )),
+    cancelJob: async (_event, input) => jobSummary(await agentController.runJobOperation("job-cancel", input.projectId, { jobId: input.jobId })),
+    retryJob: async (_event, input) => jobSummary(await agentController.runJobOperation("job-retry", input.projectId, { jobId: input.jobId })),
     log,
   });
 
@@ -466,6 +616,13 @@ app.whenReady().then(() => {
       .then(() => app.exit(0))
       .catch((error: unknown) => {
         console.error(`[project-smoke] ${error instanceof Error ? error.message : "failed"}`);
+        void agentController.shutdown().finally(() => app.exit(1));
+      });
+  } else if (process.argv.includes("--jobs-smoke")) {
+    void runJobsIntegrationSmoke(agentController, smokeMessages)
+      .then(() => app.exit(0))
+      .catch((error: unknown) => {
+        console.error(`[jobs-smoke] ${error instanceof Error ? error.message : "failed"}`);
         void agentController.shutdown().finally(() => app.exit(1));
       });
   } else {

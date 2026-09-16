@@ -4,6 +4,11 @@ import {
   isDesktopIpcChannel,
   isDesktopPublicError,
   isProjectOperationErrorCode,
+  isJobOperationErrorCode,
+  isJobEventsListParams,
+  isJobListParams,
+  isJobReferenceParams,
+  isJobSmokeStartParams,
   isValidAgentRunId,
   type AgentRunHandle,
   type AgentWorkerMessage,
@@ -22,6 +27,13 @@ import {
   type ProjectSummary,
   type AssetReferenceBatchResult,
   type AssetListResult,
+  type JobEventPage,
+  type JobEventsListParams,
+  type JobListParams,
+  type JobPage,
+  type JobReferenceParams,
+  type JobSmokeStartParams,
+  type JobSummary,
 } from "@supervideo/shared";
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { isTrustedRendererUrl, sanitizeUrlForDiagnostics, type RendererTrustPolicy } from "./policies";
@@ -37,6 +49,12 @@ export type DesktopIpcDependencies = Readonly<{
   openProject: (event: IpcMainInvokeEvent) => Promise<ProjectDialogResult<ProjectSummary>>;
   addAssetReferences: (event: IpcMainInvokeEvent, input: AddAssetReferencesRequest) => Promise<ProjectDialogResult<AssetReferenceBatchResult>>;
   listProjectAssets: (event: IpcMainInvokeEvent, input: ListProjectAssetsRequest) => Promise<AssetListResult>;
+  startSmokeJob: (event: IpcMainInvokeEvent, input: JobSmokeStartParams) => Promise<JobSummary>;
+  getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
+  listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
+  listJobEvents: (event: IpcMainInvokeEvent, input: JobEventsListParams) => Promise<JobEventPage>;
+  cancelJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
+  retryJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   rendererTrustPolicy: RendererTrustPolicy;
   log: SecurityLog;
 }>;
@@ -73,6 +91,12 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.openProject, isValidEmptyPayload, dependencies, (_payload, event) => dependencies.openProject(event)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.addAssetReferences, isValidProjectIdPayload, dependencies, (payload, event) => dependencies.addAssetReferences(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listProjectAssets, isValidProjectIdPayload, dependencies, (payload, event) => dependencies.listProjectAssets(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startSmokeJob, isValidJobSmokeStartPayload, dependencies, (payload, event) => dependencies.startSmokeJob(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobEvents, isValidJobEventsListPayload, dependencies, (payload, event) => dependencies.listJobEvents(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.cancelJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.cancelJob(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.retryJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.retryJob(event, payload)),
   ];
 
   let disposed = false;
@@ -156,6 +180,11 @@ export function isValidProjectIdPayload(value: unknown): value is AddAssetRefere
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.projectId);
 }
 
+export function isValidJobSmokeStartPayload(value: unknown): value is JobSmokeStartParams { return isJobSmokeStartParams(value); }
+export function isValidJobReferencePayload(value: unknown): value is JobReferenceParams { return isJobReferenceParams(value); }
+export function isValidJobListPayload(value: unknown): value is JobListParams { return isJobListParams(value); }
+export function isValidJobEventsListPayload(value: unknown): value is JobEventsListParams { return isJobEventsListParams(value); }
+
 export function toDesktopAgentEvent(message: AgentWorkerMessage): DesktopAgentEvent | undefined {
   if (message.type === "run-event") {
     return Object.freeze({
@@ -179,6 +208,9 @@ export function toDesktopAgentEvent(message: AgentWorkerMessage): DesktopAgentEv
   if (message.type === "worker-error") {
     return Object.freeze({ kind: "worker-error", timestamp: message.timestamp, error: message.error });
   }
+  if (message.type === "job-event") {
+    return Object.freeze({ kind: "job-event", timestamp: message.event.timestamp, projectId: message.projectId, jobId: message.jobId, event: message.event });
+  }
   return undefined;
 }
 
@@ -195,7 +227,7 @@ function publicErrorCode(error: unknown): Parameters<typeof createDesktopPublicE
   }
   if (error && typeof error === "object" && "operationError" in error) {
     const code = (error.operationError as { code?: unknown }).code;
-    if (isProjectOperationErrorCode(code)) return code;
+    if (isProjectOperationErrorCode(code) || isJobOperationErrorCode(code)) return code;
   }
   return "internal-error";
 }

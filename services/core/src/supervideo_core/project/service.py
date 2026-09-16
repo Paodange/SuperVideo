@@ -78,6 +78,12 @@ class ProjectService:
     def active_project_id(self) -> str | None:
         return self._active.project.id if self._active is not None else None
 
+    @property
+    def active_database(self) -> Database | None:
+        """The current trusted database for the Core-owned job manager."""
+
+        return self._active.database if self._active is not None else None
+
     def close(self) -> None:
         active = self._active
         self._active = None

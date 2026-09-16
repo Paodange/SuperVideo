@@ -9,18 +9,21 @@ import {
   CORE_RPC_METHODS,
   isAssetListResult,
   isAssetReferenceBatchResult,
-  isCoreRpcErrorCode,
+  isJobEvent,
   isProjectSummary,
   isValidAgentWorkerCommand,
   isValidAgentWorkerMessage,
   isAgentWorkerMessageWithinLimit,
   type AgentWorkerCommand,
   type AgentProjectOperationType,
+  type AgentJobOperationType,
+  type JobEvent,
+  type JobOperationErrorCode,
   type ProjectOperationErrorCode,
   type AgentWorkerMessage,
 } from "@supervideo/shared";
-import { CoreRpcError, PythonCoreClient } from "./python-core-client.js";
-import { createSmokeAgentRunner } from "./smoke-agent.js";
+import type { PythonCoreClient } from "./python-core-client.js";
+import type { SmokeAgentRunner } from "./smoke-agent.js";
 
 type ParentPortLike = {
   postMessage: (message: AgentWorkerMessage) => void;
@@ -38,7 +41,28 @@ const parent: ParentPortLike = parentPort;
 let shuttingDown = false;
 let shutdownPromise: Promise<void> | undefined;
 let projectOperationBusy = false;
-const coreClient = new PythonCoreClient({ rootDir: process.cwd() });
+let coreClient: PythonCoreClient | undefined;
+let runner: SmokeAgentRunner | undefined;
+let runtimePromise: Promise<{ coreClient: PythonCoreClient; runner: SmokeAgentRunner }> | undefined;
+
+async function ensureRuntime(): Promise<{ coreClient: PythonCoreClient; runner: SmokeAgentRunner }> {
+  if (coreClient && runner) {
+    return { coreClient, runner };
+  }
+  // Keep the utility-process ready path small. Project/RPC and Pi modules are
+  // loaded only when a command needs them, so cold-start readiness does not
+  // depend on unrelated heavy module initialization.
+  if (runtimePromise) return runtimePromise;
+  runtimePromise = Promise.all([
+    import("./python-core-client.js"),
+    import("./smoke-agent.js"),
+  ]).then(([{ PythonCoreClient }, { createSmokeAgentRunner }]) => {
+    coreClient ??= new PythonCoreClient({ rootDir: process.cwd(), onJobEvent: forwardJobEvent });
+    runner ??= createSmokeAgentRunner(send);
+    return { coreClient, runner };
+  });
+  return runtimePromise;
+}
 
 function send(message: AgentWorkerMessage): void {
   if (!isValidAgentWorkerMessage(message) || !isAgentWorkerMessageWithinLimit(message)) {
@@ -56,19 +80,20 @@ function sendError(code: Parameters<typeof createAgentPublicError>[0]): void {
   });
 }
 
-const runner = createSmokeAgentRunner(send);
-
 async function handleCommand(command: AgentWorkerCommand): Promise<void> {
   switch (command.type) {
     case "run-smoke-task":
-      if (runner.isBusy()) {
-        sendError("busy");
-        return;
+      {
+        const runtime = await ensureRuntime();
+        if (runtime.runner.isBusy()) {
+          sendError("busy");
+          return;
+        }
+        await runtime.runner.run(command.runId, command.steps);
       }
-      await runner.run(command.runId, command.steps);
       return;
     case "cancel-run":
-      if (!runner.cancel(command.runId)) {
+      if (!runner || !runner.cancel(command.runId)) {
         sendError("run-not-found");
       }
       return;
@@ -85,6 +110,14 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "asset-list":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
+    case "job-smoke-start":
+    case "job-get":
+    case "job-list":
+    case "job-events-list":
+    case "job-cancel":
+    case "job-retry":
+      await handleJobOperation(command.type, command.operationId, command.projectId, command.payload);
+      return;
     default:
       return;
   }
@@ -95,14 +128,15 @@ async function handleProjectOperation(
   operationId: string,
   payload: Readonly<Record<string, unknown>>,
 ): Promise<void> {
-  if (projectOperationBusy || runner.isBusy()) {
+  if (projectOperationBusy || runner?.isBusy()) {
     sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
     return;
   }
   projectOperationBusy = true;
   try {
-    await coreClient.start();
-    const result = await coreClient.request<unknown>(coreMethod(operation), payload, { timeoutMs: 120_000 });
+    const runtime = await ensureRuntime();
+    await runtime.coreClient.start();
+    const result = await runtime.coreClient.request<unknown>(coreMethod(operation), payload, { timeoutMs: 120_000 });
     const valid = operation === "project-create" || operation === "project-open" || operation === "project-inspect"
       ? isProjectSummary(result)
       : operation === "asset-reference"
@@ -115,7 +149,7 @@ async function handleProjectOperation(
     const projectId = result && typeof result === "object" && "projectId" in result && typeof result.projectId === "string"
       ? result.projectId
       : undefined;
-    parent.postMessage({
+    send({
       protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
       type: "project-operation-result",
       operationId,
@@ -125,12 +159,84 @@ async function handleProjectOperation(
       payload: result as Readonly<Record<string, unknown>>,
     });
   } catch (error) {
-    const code = error instanceof CoreRpcError && isProjectOperationErrorCode(error.code) ? error.code : "CORE_UNAVAILABLE";
+    const code = isCoreProjectError(error) ? error.code : "CORE_UNAVAILABLE";
     sendProjectError(operationId, operation, code);
   } finally {
     projectOperationBusy = false;
   }
 }
+
+function isCoreProjectError(error: unknown): error is { code: ProjectOperationErrorCode } {
+  if (!error || typeof error !== "object" || !("code" in error)) return false;
+  return isProjectOperationErrorCode(String(error.code));
+}
+
+async function handleJobOperation(
+  operation: AgentJobOperationType,
+  operationId: string,
+  projectId: string,
+  payload: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  if (projectOperationBusy || runner?.isBusy()) {
+    sendJobError(operationId, operation, "JOB_STATE_CONFLICT");
+    return;
+  }
+  projectOperationBusy = true;
+  try {
+    const runtime = await ensureRuntime();
+    let result: unknown;
+    if (operation === "job-smoke-start") result = await runtime.coreClient.startSmokeJob({ projectId, ...payload } as never);
+    else if (operation === "job-get") result = await runtime.coreClient.getJob({ projectId, ...payload } as never);
+    else if (operation === "job-list") result = await runtime.coreClient.listJobs({ projectId, ...payload } as never);
+    else if (operation === "job-events-list") result = await runtime.coreClient.listJobEvents({ projectId, ...payload } as never);
+    else if (operation === "job-cancel") result = await runtime.coreClient.cancelJob({ projectId, ...payload } as never);
+    else result = await runtime.coreClient.retryJob({ projectId, ...payload } as never);
+    send({
+      protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
+      type: "job-operation-result",
+      operationId,
+      operation,
+      timestamp: Date.now(),
+      projectId,
+      payload: result as Readonly<Record<string, unknown>>,
+    });
+  } catch (error) {
+    const code = isJobErrorCode(error) ? error.code : "JOB_STATE_CONFLICT";
+    sendJobError(operationId, operation, code);
+  } finally {
+    projectOperationBusy = false;
+  }
+}
+
+function forwardJobEvent(event: JobEvent): void {
+  if (!isJobEvent(event)) return;
+  send({ protocolVersion: AGENT_WORKER_PROTOCOL_VERSION, type: "job-event", projectId: event.projectId, jobId: event.jobId, event });
+}
+
+function isJobErrorCode(error: unknown): error is { code: JobOperationErrorCode } {
+  if (!error || typeof error !== "object" || !("code" in error)) return false;
+  return JOB_ERROR_CODES.has(String(error.code));
+}
+
+function sendJobError(operationId: string, operation: AgentJobOperationType, code: JobErrorCode): void {
+  send({
+    protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
+    type: "job-operation-error",
+    operationId,
+    operation,
+    timestamp: Date.now(),
+    error: { code, message: (CORE_RPC_ERROR_MESSAGES as Readonly<Record<string, string>>)[code] ?? "Job operation failed." },
+  });
+}
+
+type JobErrorCode = JobOperationErrorCode;
+
+const JOB_ERROR_CODES = new Set<string>([
+  "JOB_NOT_FOUND", "JOB_STATE_CONFLICT", "JOB_NOT_CANCELLABLE", "JOB_NOT_RETRYABLE", "JOB_RETRY_LIMIT",
+  "JOB_QUEUE_FULL", "JOB_EXECUTOR_UNAVAILABLE", "JOB_CHECKPOINT_INVALID", "JOB_EVENT_GAP",
+  "IDEMPOTENCY_CONFLICT", "JOB_SHUTTING_DOWN", "JOB_EXECUTION_FAILED",
+  "PROJECT_NOT_ACTIVE", "CORE_UNAVAILABLE", "DATABASE_BUSY", "DATABASE_CORRUPT",
+]);
 
 function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "project-create") return CORE_RPC_METHODS.projectCreate;
@@ -182,7 +288,10 @@ async function shutdown(): Promise<void> {
     return shutdownPromise;
   }
   shuttingDown = true;
-  shutdownPromise = Promise.allSettled([runner.waitForIdle(), coreClient.shutdown()]).then(() => {
+  shutdownPromise = Promise.allSettled([
+    runner?.waitForIdle() ?? Promise.resolve(),
+    coreClient?.shutdown() ?? Promise.resolve(),
+  ]).then(() => {
     process.exit(0);
   });
   return shutdownPromise;

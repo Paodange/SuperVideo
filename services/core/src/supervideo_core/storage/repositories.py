@@ -14,6 +14,8 @@ from .models import (
     AssetCreate,
     AssetRecord,
     JobCreate,
+    JobEventCreate,
+    JobEventRecord,
     JobRecord,
     MessageCreate,
     MessageRecord,
@@ -377,8 +379,10 @@ class JobRepository:
                         id, project_id, job_type, status, progress, stage,
                         input_json, result_json, error_code, idempotency_key,
                         attempt, created_at_ms, updated_at_ms, started_at_ms,
-                        finished_at_ms
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        finished_at_ms, checkpoint_json, checkpoint_version,
+                        executor_version, revision, last_event_sequence,
+                        cancel_requested_at_ms, recovery_count
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         value.id,
@@ -396,6 +400,13 @@ class JobRepository:
                         value.updated_at_ms,
                         value.started_at_ms,
                         value.finished_at_ms,
+                        None if value.checkpoint_json is None else _stored_json(value.checkpoint_json),
+                        value.checkpoint_version,
+                        value.executor_version,
+                        value.revision,
+                        value.last_event_sequence,
+                        value.cancel_requested_at_ms,
+                        value.recovery_count,
                     ),
                 )
         except StorageError:
@@ -414,23 +425,252 @@ class JobRepository:
                 row = self.database.connection.execute(
                     _JOB_SELECT + " WHERE id = ? AND project_id = ?", (record_id, scope)
                 ).fetchone()
+                # Also accept the task-oriented (project_id, job_id) spelling
+                # without weakening project isolation. The legacy A05
+                # (job_id, project_id) spelling remains the fast path.
+                if row is None:
+                    row = self.database.connection.execute(
+                        _JOB_SELECT + " WHERE id = ? AND project_id = ?", (scope, record_id)
+                    ).fetchone()
         except sqlite3.Error as error:
             raise _write_error(error) from error
         if row is None:
             raise StorageError("RECORD_NOT_FOUND")
         return _job_from_row(row)
 
-    def list_for_project(self, project_id: str, limit: int = STORAGE_DEFAULT_LIST_LIMIT) -> list[JobRecord]:
+    def list_for_project(
+        self,
+        project_id: str,
+        limit: int = STORAGE_DEFAULT_LIST_LIMIT,
+        *,
+        statuses: Sequence[str] | None = None,
+        cursor: str | None = None,
+    ) -> list[JobRecord]:
         scope = _project_id(project_id)
         bounded_limit = _limit(limit)
         try:
+            clauses = ["project_id = ?"]
+            params: list[object] = [scope]
+            if statuses is not None:
+                if not statuses or any(status not in _JOB_STATUSES for status in statuses):
+                    raise StorageError("INVALID_RECORD")
+                clauses.append(f"status IN ({','.join('?' for _ in statuses)})")
+                params.extend(statuses)
+            if cursor is not None:
+                if not isinstance(cursor, str) or len(cursor) > 512:
+                    raise StorageError("INVALID_RECORD")
+                try:
+                    cursor_created, cursor_id = cursor.split("/", 1)
+                    cursor_created_ms = int(cursor_created)
+                    _record_id(cursor_id)
+                except (ValueError, TypeError):
+                    raise StorageError("INVALID_RECORD")
+                clauses.append("(created_at_ms > ? OR (created_at_ms = ? AND id > ?))")
+                params.extend([cursor_created_ms, cursor_created_ms, cursor_id])
+            params.append(bounded_limit)
             rows = self.database.connection.execute(
-                _JOB_SELECT + " WHERE project_id = ? ORDER BY created_at_ms ASC, id ASC LIMIT ?",
-                (scope, bounded_limit),
+                _JOB_SELECT + f" WHERE {' AND '.join(clauses)} ORDER BY created_at_ms ASC, id ASC LIMIT ?",
+                tuple(params),
             ).fetchall()
         except sqlite3.Error as error:
             raise _write_error(error) from error
         return [_job_from_row(row) for row in rows]
+
+    def create_job_with_event(self, job: JobCreate, event_type: str = "created", payload: Any = None) -> tuple[JobRecord, JobEventRecord]:
+        value = _require_model(job, JobRecord)
+        if value.last_event_sequence != 0:
+            raise StorageError("INVALID_RECORD")
+        if not isinstance(event_type, str) or not event_type or len(event_type) > 64:
+            raise StorageError("INVALID_RECORD")
+        payload_value = {} if payload is None else payload
+        try:
+            with self.database.transaction() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO jobs(
+                        id, project_id, job_type, status, progress, stage,
+                        input_json, result_json, error_code, idempotency_key,
+                        attempt, created_at_ms, updated_at_ms, started_at_ms,
+                        finished_at_ms, checkpoint_json, checkpoint_version,
+                        executor_version, revision, last_event_sequence,
+                        cancel_requested_at_ms, recovery_count
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        value.id, value.project_id, value.job_type, value.status,
+                        value.progress, value.stage, _stored_json(value.input_json),
+                        None if value.result_json is None else _stored_json(value.result_json),
+                        value.error_code, value.idempotency_key, value.attempt,
+                        value.created_at_ms, value.updated_at_ms, value.started_at_ms,
+                        value.finished_at_ms,
+                        None if value.checkpoint_json is None else _stored_json(value.checkpoint_json),
+                        value.checkpoint_version, value.executor_version, 1,
+                        1, value.cancel_requested_at_ms, value.recovery_count,
+                    ),
+                )
+                event = _insert_job_event(
+                    connection, value, sequence=1, event_type=event_type,
+                    payload=payload_value, created_at_ms=value.created_at_ms,
+                )
+        except StorageError:
+            raise
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        record = value.model_copy(update={"revision": 1, "last_event_sequence": 1})
+        return record, event
+
+    def find_by_idempotency_key(self, project_id: str, job_type: str, key: str) -> JobRecord | None:
+        scope = _project_id(project_id)
+        if not isinstance(job_type, str) or not job_type or len(job_type) > 128 or not isinstance(key, str) or not key or len(key) > 256:
+            raise StorageError("INVALID_RECORD")
+        try:
+            row = self.database.connection.execute(
+                _JOB_SELECT + " WHERE project_id = ? AND job_type = ? AND idempotency_key = ?",
+                (scope, job_type, key),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _job_from_row(row)
+
+    def transition(
+        self,
+        job_id: str,
+        project_id: str,
+        expected_revision: int,
+        from_statuses: Sequence[str],
+        to_status: str,
+        *,
+        progress: float | None = None,
+        stage: str | None = None,
+        attempt: int | None = None,
+        error_code: str | None = None,
+        result_json: dict[str, Any] | None = None,
+        checkpoint_json: dict[str, Any] | None = None,
+        checkpoint_version: int | None = None,
+        cancel_requested_at_ms: int | None = None,
+        recovery_count: int | None = None,
+        event_type: str,
+        payload: Any = None,
+        timestamp_ms: int,
+    ) -> tuple[JobRecord, JobEventRecord]:
+        record_id = _record_id(job_id)
+        scope = _project_id(project_id)
+        if not isinstance(expected_revision, int) or isinstance(expected_revision, bool) or expected_revision < 0:
+            raise StorageError("INVALID_RECORD")
+        allowed = tuple(from_statuses)
+        if not allowed or any(status not in _JOB_STATUSES for status in allowed) or to_status not in _JOB_STATUSES:
+            raise StorageError("INVALID_RECORD")
+        if progress is not None and (not isinstance(progress, (int, float)) or isinstance(progress, bool) or not 0 <= progress <= 1):
+            raise StorageError("INVALID_RECORD")
+        if attempt is not None and (not isinstance(attempt, int) or isinstance(attempt, bool) or attempt < 0):
+            raise StorageError("INVALID_RECORD")
+        try:
+            with self.database.transaction() as connection:
+                row = connection.execute(_JOB_SELECT + " WHERE id = ? AND project_id = ?", (record_id, scope)).fetchone()
+                if row is None:
+                    raise StorageError("RECORD_NOT_FOUND")
+                current = _job_from_row(row)
+                if current.revision != expected_revision or current.status not in allowed:
+                    raise StorageError("CONSTRAINT_VIOLATION")
+                next_progress = current.progress if progress is None else float(progress)
+                next_attempt = current.attempt if attempt is None else attempt
+                if next_attempt == current.attempt and next_progress < current.progress:
+                    raise StorageError("CONSTRAINT_VIOLATION")
+                sequence = current.last_event_sequence + 1
+                finished = timestamp_ms if to_status in _TERMINAL_JOB_STATUSES else None
+                next_stage = current.stage if stage is None else stage
+                next_checkpoint = current.checkpoint_json if checkpoint_json is None else checkpoint_json
+                stored_checkpoint = None if next_checkpoint is None else _stored_json(next_checkpoint)
+                connection.execute(
+                    f"""
+                    UPDATE jobs SET status = ?, progress = ?, stage = ?,
+                        result_json = ?, error_code = ?, attempt = ?,
+                        updated_at_ms = ?, started_at_ms = ?, finished_at_ms = ?,
+                        checkpoint_json = ?, checkpoint_version = ?,
+                        cancel_requested_at_ms = ?, recovery_count = ?,
+                        revision = revision + 1, last_event_sequence = ?
+                    WHERE id = ? AND project_id = ? AND revision = ?
+                      AND status IN ({','.join('?' for _ in allowed)})
+                    """,
+                    (
+                        to_status, next_progress, next_stage,
+                        None if result_json is None else _stored_json(result_json), error_code,
+                        next_attempt, timestamp_ms,
+                        current.started_at_ms if current.started_at_ms is not None else (timestamp_ms if to_status in {"running", "retrying"} else None),
+                        finished,
+                        stored_checkpoint,
+                        current.checkpoint_version if checkpoint_version is None else checkpoint_version,
+                        current.cancel_requested_at_ms if cancel_requested_at_ms is None else cancel_requested_at_ms,
+                        current.recovery_count if recovery_count is None else recovery_count,
+                        sequence, record_id, scope, expected_revision, *allowed,
+                    ),
+                )
+                if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StorageError("CONSTRAINT_VIOLATION")
+                candidate = current.model_copy(update={
+                    "status": to_status, "progress": next_progress, "stage": next_stage,
+                    "result_json": result_json, "error_code": error_code, "attempt": next_attempt,
+                    "updated_at_ms": timestamp_ms,
+                    "started_at_ms": current.started_at_ms if current.started_at_ms is not None else (timestamp_ms if to_status in {"running", "retrying"} else None),
+                    "finished_at_ms": finished,
+                    "checkpoint_json": current.checkpoint_json if checkpoint_json is None else checkpoint_json,
+                    "checkpoint_version": current.checkpoint_version if checkpoint_version is None else checkpoint_version,
+                    "cancel_requested_at_ms": current.cancel_requested_at_ms if cancel_requested_at_ms is None else cancel_requested_at_ms,
+                    "recovery_count": current.recovery_count if recovery_count is None else recovery_count,
+                    "revision": expected_revision + 1, "last_event_sequence": sequence,
+                })
+                event = _insert_job_event(connection, candidate, sequence=sequence, event_type=event_type,
+                                          payload={} if payload is None else payload, created_at_ms=timestamp_ms)
+        except (StorageError, ValidationError):
+            raise
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return candidate, event
+
+    def append_progress_and_checkpoint(
+        self,
+        job_id: str,
+        project_id: str,
+        expected_revision: int,
+        progress: float,
+        stage: str,
+        checkpoint_json: dict[str, Any],
+        checkpoint_version: int = 1,
+        *,
+        event_type: str = "progress",
+        payload: Any = None,
+        timestamp_ms: int,
+    ) -> tuple[JobRecord, JobEventRecord]:
+        return self.transition(
+            job_id, project_id, expected_revision, ("running",), "running",
+            progress=progress, stage=stage, checkpoint_json=checkpoint_json,
+            checkpoint_version=checkpoint_version, event_type=event_type,
+            payload=payload if payload is not None else {"checkpointVersion": checkpoint_version},
+            timestamp_ms=timestamp_ms,
+        )
+
+    def find_incomplete(self, project_id: str) -> list[JobRecord]:
+        return self.list_for_project(project_id, STORAGE_MAX_LIST_LIMIT,
+                                     statuses=("queued", "running", "retrying", "cancelling"))
+
+    def list_events(self, project_id: str, job_id: str, after_sequence: int = 0, limit: int = STORAGE_DEFAULT_LIST_LIMIT) -> list[JobEventRecord]:
+        scope = _project_id(project_id)
+        record_id = _record_id(job_id)
+        if not isinstance(after_sequence, int) or isinstance(after_sequence, bool) or after_sequence < 0:
+            raise StorageError("INVALID_RECORD")
+        bounded_limit = _limit(limit)
+        try:
+            rows = self.database.connection.execute(
+                """SELECT id, project_id, job_id, sequence, event_type, status,
+                          progress, stage, attempt, payload_json, created_at_ms
+                   FROM job_events
+                   WHERE project_id = ? AND job_id = ? AND sequence > ?
+                   ORDER BY sequence ASC LIMIT ?""",
+                (scope, record_id, after_sequence, bounded_limit),
+            ).fetchall()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return [_job_event_from_row(row) for row in rows]
 
 
 class MessageRepository:
@@ -579,9 +819,16 @@ class TimelineVersionRepository:
 _JOB_SELECT = """
 SELECT id, project_id, job_type, status, progress, stage,
        input_json, result_json, error_code, idempotency_key, attempt,
-       created_at_ms, updated_at_ms, started_at_ms, finished_at_ms
+       created_at_ms, updated_at_ms, started_at_ms, finished_at_ms,
+       checkpoint_json, checkpoint_version, executor_version, revision,
+       last_event_sequence, cancel_requested_at_ms, recovery_count
 FROM jobs
 """
+
+_JOB_STATUSES = {
+    "queued", "running", "succeeded", "failed", "retrying", "cancelling", "cancelled", "needs_attention",
+}
+_TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled", "needs_attention"}
 
 _TIMELINE_SELECT = """
 SELECT id, project_id, version_number, parent_version_id, schema_version,
@@ -650,6 +897,67 @@ def _job_from_row(row: Sequence[object]) -> JobRecord:
             "updated_at_ms": row[12],
             "started_at_ms": row[13],
             "finished_at_ms": row[14],
+            "checkpoint_json": None if row[15] is None else _json_from_row(row[15]),
+            "checkpoint_version": row[16],
+            "executor_version": row[17],
+            "revision": row[18],
+            "last_event_sequence": row[19],
+            "cancel_requested_at_ms": row[20],
+            "recovery_count": row[21],
+        },
+    )
+
+
+def _insert_job_event(
+    connection: sqlite3.Connection,
+    job: JobRecord,
+    *,
+    sequence: int,
+    event_type: str,
+    payload: Any,
+    created_at_ms: int,
+) -> JobEventRecord:
+    event = JobEventCreate(
+        project_id=job.project_id,
+        job_id=job.id,
+        sequence=sequence,
+        event_type=event_type,
+        status=job.status,
+        progress=job.progress,
+        stage=job.stage,
+        attempt=job.attempt,
+        payload_json=payload,
+        created_at_ms=created_at_ms,
+    )
+    connection.execute(
+        """INSERT INTO job_events(
+             id, project_id, job_id, sequence, event_type, status,
+             progress, stage, attempt, payload_json, created_at_ms
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            event.id, event.project_id, event.job_id, event.sequence,
+            event.event_type, event.status, event.progress, event.stage,
+            event.attempt, _stored_json(event.payload_json), event.created_at_ms,
+        ),
+    )
+    return event
+
+
+def _job_event_from_row(row: Sequence[object]) -> JobEventRecord:
+    return _model_from_row(
+        JobEventRecord,
+        {
+            "id": row[0],
+            "project_id": row[1],
+            "job_id": row[2],
+            "sequence": row[3],
+            "event_type": row[4],
+            "status": row[5],
+            "progress": row[6],
+            "stage": row[7],
+            "attempt": row[8],
+            "payload_json": _json_from_row(row[9]),
+            "created_at_ms": row[10],
         },
     )
 

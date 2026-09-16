@@ -186,7 +186,7 @@ class RpcServerTests(unittest.TestCase):
                 }
             )
             created = self.read_line()["result"]
-            self.assertEqual(created["databaseSchemaVersion"], 1)
+            self.assertEqual(created["databaseSchemaVersion"], 2)
             self.send(
                 {
                     "jsonrpc": "2.0",
@@ -208,6 +208,152 @@ class RpcServerTests(unittest.TestCase):
             listed = self.read_line()["result"]
             self.assertEqual(len(listed["items"]), 1)
         finally:
+            shutil.rmtree(temp_root, ignore_errors=True)
+
+    def test_persistent_job_returns_fast_and_streams_durable_events(self) -> None:
+        import shutil
+        import tempfile
+
+        temp_root = Path(tempfile.mkdtemp(prefix="supervideo rpc jobs "))
+        project_root = temp_root / "项目 with spaces"
+        project_root.mkdir()
+        try:
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "job-project-create",
+                    "method": "project.create",
+                    "params": {"name": "RPC jobs", "targetPlatform": "douyin", "projectRoot": str(project_root)},
+                }
+            )
+            project = self.read_line()["result"]
+            project_id = project["projectId"]
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "job-start",
+                    "method": "job.smoke.start",
+                    "params": {
+                        "projectId": project_id,
+                        "idempotencyKey": "rpc-job-key",
+                        "steps": 3,
+                        "delayMs": 1,
+                        "failAttempts": 0,
+                    },
+                }
+            )
+            messages = [self.read_line() for _ in range(7)]
+            response = next(message for message in messages if message.get("id") == "job-start")
+            self.assertEqual(response["result"]["status"], "queued")
+            job_id = response["result"]["jobId"]
+            events = [message["params"] for message in messages if message.get("method") == "core.job.event"]
+            self.assertEqual([event["sequence"] for event in events], list(range(1, 7)))
+            self.assertEqual(events[-1]["status"], "succeeded")
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "job-events",
+                    "method": "job.events.list",
+                    "params": {"projectId": project_id, "jobId": job_id, "afterSequence": 3, "limit": 10},
+                }
+            )
+            persisted = self.read_line()["result"]
+            self.assertEqual([event["sequence"] for event in persisted["items"]], [4, 5, 6])
+        finally:
+            shutil.rmtree(temp_root, ignore_errors=True)
+
+    def test_abrupt_core_exit_leaves_recoverable_sqlite_state(self) -> None:
+        import shutil
+        import tempfile
+
+        temp_root = Path(tempfile.mkdtemp(prefix="supervideo rpc abrupt jobs "))
+        project_root = temp_root / "abrupt project"
+        project_root.mkdir()
+        try:
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "abrupt-project-create",
+                    "method": "project.create",
+                    "params": {"name": "Abrupt jobs", "targetPlatform": "douyin", "projectRoot": str(project_root)},
+                }
+            )
+            project_id = self.read_line()["result"]["projectId"]
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "abrupt-job-start",
+                    "method": "job.smoke.start",
+                    "params": {
+                        "projectId": project_id,
+                        "idempotencyKey": "abrupt-key",
+                        "steps": 8,
+                        "delayMs": 20,
+                        "failAttempts": 0,
+                    },
+                }
+            )
+            start_messages: list[dict[str, Any]] = []
+            while not any(message.get("id") == "abrupt-job-start" for message in start_messages) or not any(
+                message.get("method") == "core.job.event" and message["params"]["progress"] > 0 for message in start_messages
+            ):
+                start_messages.append(self.read_line())
+                if len(start_messages) > 20:
+                    raise AssertionError("job did not persist progress before abrupt exit")
+            start_response = next(message for message in start_messages if message.get("id") == "abrupt-job-start")
+            job_id = start_response["result"]["jobId"]
+            self.assertTrue(any(message.get("method") == "core.job.event" and message["params"]["progress"] > 0 for message in start_messages))
+            old_process = self.process
+            old_process.kill()
+            old_process.wait(timeout=3)
+            if old_process.stdout:
+                old_process.stdout.close()
+            if old_process.stderr:
+                old_process.stderr.close()
+            if old_process.stdin:
+                old_process.stdin.close()
+
+            source = ROOT / "services" / "core" / "src"
+            environment = {**os.environ, "PYTHONPATH": str(source)}
+            self.process = subprocess.Popen(
+                [sys.executable, "-m", "supervideo_core.rpc"],
+                cwd=ROOT,
+                env=environment,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            def read_until(request_id: str) -> dict[str, Any]:
+                for _ in range(20):
+                    message = self.read_line()
+                    if message.get("id") == request_id:
+                        return message
+                raise AssertionError("RPC response was not observed")
+
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "abrupt-project-open",
+                    "method": "project.open",
+                    "params": {"projectRoot": str(project_root)},
+                }
+            )
+            self.assertEqual(read_until("abrupt-project-open")["result"]["projectId"], project_id)
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "abrupt-job-get",
+                    "method": "job.get",
+                    "params": {"projectId": project_id, "jobId": job_id},
+                }
+            )
+            recovered = read_until("abrupt-job-get")["result"]
+            self.assertIn(recovered["status"], {"retrying", "running", "succeeded"})
+            self.assertGreaterEqual(recovered["attempt"], 1)
+        finally:
+            if self.process.poll() is None:
+                self.process.terminate()
             shutil.rmtree(temp_root, ignore_errors=True)
 
 

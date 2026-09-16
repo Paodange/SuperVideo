@@ -203,15 +203,46 @@ class JobRecord(StorageModel):
     updated_at_ms: int = Field(default_factory=utc_now_ms, strict=True, ge=0)
     started_at_ms: int | None = Field(default=None, strict=True, ge=0)
     finished_at_ms: int | None = Field(default=None, strict=True, ge=0)
+    checkpoint_json: dict[str, Any] | None = None
+    checkpoint_version: int | None = Field(default=None, strict=True, ge=1)
+    executor_version: int = Field(default=1, strict=True, ge=1)
+    revision: int = Field(default=0, strict=True, ge=0)
+    last_event_sequence: int = Field(default=0, strict=True, ge=0)
+    cancel_requested_at_ms: int | None = Field(default=None, strict=True, ge=0)
+    recovery_count: int = Field(default=0, strict=True, ge=0)
 
     _id = field_validator("id")(validate_id)
     _project_id = field_validator("project_id")(validate_id)
     _input = field_validator("input_json", mode="before")(_json_field)
     _result = field_validator("result_json", mode="before")(_json_field)
+    _checkpoint = field_validator("checkpoint_json", mode="before")(_json_field)
 
 
 JobCreate = JobRecord
 Job = JobRecord
+
+
+class JobEventCreate(StorageModel):
+    id: str = Field(default_factory=new_id)
+    project_id: str
+    job_id: str
+    sequence: int = Field(strict=True, ge=1)
+    event_type: str = Field(min_length=1, max_length=64)
+    status: JobStatus
+    progress: float = Field(strict=True, ge=0.0, le=1.0)
+    stage: str | None = Field(default=None, max_length=128)
+    attempt: int = Field(strict=True, ge=0)
+    payload_json: Any = Field(default_factory=dict)
+    created_at_ms: int = Field(default_factory=utc_now_ms, strict=True, ge=0)
+
+    _id = field_validator("id")(validate_id)
+    _project_id = field_validator("project_id")(validate_id)
+    _job_id = field_validator("job_id")(validate_id)
+    _payload = field_validator("payload_json", mode="before")(_json_field)
+
+
+class JobEventRecord(JobEventCreate):
+    pass
 
 
 class MessageCreate(StorageModel):

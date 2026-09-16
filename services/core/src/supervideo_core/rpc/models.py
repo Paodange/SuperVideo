@@ -71,6 +71,53 @@ class CancelParams(StrictModel):
         return value
 
 
+class JobSmokeStartParams(StrictModel):
+    project_id: str = Field(alias="projectId")
+    idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=256)
+    steps: int = Field(default=8, strict=True, ge=3, le=8)
+    delay_ms: int = Field(default=150, alias="delayMs", strict=True, ge=1, le=1_000)
+    fail_attempts: int = Field(default=0, alias="failAttempts", strict=True, ge=0, le=1)
+
+    @field_validator("project_id")
+    @classmethod
+    def validate_project_id(cls, value: str) -> str:
+        if re.fullmatch(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value) is None:
+            raise ValueError("invalid project id")
+        return value
+
+
+class JobReferenceParams(StrictModel):
+    project_id: str = Field(alias="projectId")
+    job_id: str = Field(alias="jobId")
+
+    @field_validator("project_id", "job_id")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        if re.fullmatch(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value) is None:
+            raise ValueError("invalid id")
+        return value
+
+
+class JobListParams(StrictModel):
+    project_id: str = Field(alias="projectId")
+    statuses: list[Literal["queued", "running", "succeeded", "failed", "retrying", "cancelling", "cancelled", "needs_attention"]] | None = Field(default=None, max_length=8)
+    cursor: str | None = Field(default=None, max_length=512)
+    limit: int = Field(default=100, strict=True, ge=1, le=100)
+
+    @field_validator("project_id")
+    @classmethod
+    def validate_project_id(cls, value: str) -> str:
+        if re.fullmatch(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value) is None:
+            raise ValueError("invalid project id")
+        return value
+
+
+class JobEventsListParams(JobReferenceParams):
+    after_sequence: int = Field(default=0, alias="afterSequence", strict=True, ge=0)
+    cursor: str | None = Field(default=None, max_length=64)
+    limit: int = Field(default=100, strict=True, ge=1, le=100)
+
+
 class CoreHealth(StrictModel):
     service: Literal["python-core"]
     status: Literal["ok"]
@@ -109,6 +156,41 @@ class RpcProgressNotification(StrictModel):
     jsonrpc: Literal["2.0"]
     method: Literal["core.progress"]
     params: ProgressParams
+
+
+class JobEventParams(StrictModel):
+    project_id: str = Field(alias="projectId")
+    job_id: str = Field(alias="jobId")
+    sequence: int = Field(strict=True, ge=1)
+    event_type: str = Field(alias="eventType", min_length=1, max_length=64)
+    status: Literal["queued", "running", "succeeded", "failed", "retrying", "cancelling", "cancelled", "needs_attention"]
+    progress: float = Field(strict=True, ge=0, le=1)
+    stage: str | None = Field(default=None, max_length=128)
+    attempt: int = Field(strict=True, ge=0)
+    timestamp: int = Field(strict=True, ge=0)
+    payload: Any
+
+    @field_validator("project_id", "job_id")
+    @classmethod
+    def validate_event_id(cls, value: str) -> str:
+        if re.fullmatch(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value) is None:
+            raise ValueError("invalid event id")
+        return value
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, value: Any) -> Any:
+        from supervideo_core.storage.models import serialize_json_value
+
+        if len(serialize_json_value(value).encode("utf-8")) > 16 * 1024:
+            raise ValueError("event payload is too large")
+        return value
+
+
+class RpcJobEventNotification(StrictModel):
+    jsonrpc: Literal["2.0"]
+    method: Literal["core.job.event"]
+    params: JobEventParams
 
 
 class RpcCancelNotification(StrictModel):
@@ -182,6 +264,14 @@ def validate_request(value: Any) -> RpcRequest:
         AssetReferenceRequest.model_validate(request.params)
     elif request.method == "asset.list":
         AssetListRequest.model_validate(request.params)
+    elif request.method == "job.smoke.start":
+        JobSmokeStartParams.model_validate(request.params)
+    elif request.method in {"job.get", "job.cancel", "job.retry"}:
+        JobReferenceParams.model_validate(request.params)
+    elif request.method == "job.list":
+        JobListParams.model_validate(request.params)
+    elif request.method == "job.events.list":
+        JobEventsListParams.model_validate(request.params)
     return request
 
 
@@ -195,6 +285,8 @@ def validate_rpc_message(value: Any) -> Any:
             return validate_request(value)
         if value.get("method") == "core.progress":
             return RpcProgressNotification.model_validate(value)
+        if value.get("method") == "core.job.event":
+            return RpcJobEventNotification.model_validate(value)
         if value.get("method") == "core.cancel":
             return RpcCancelNotification.model_validate(value)
         raise ValueError("unknown notification")
@@ -228,6 +320,12 @@ def health_result() -> dict[str, object]:
             "project.inspect",
             "asset.reference",
             "asset.list",
+            "job.smoke.start",
+            "job.get",
+            "job.list",
+            "job.events.list",
+            "job.cancel",
+            "job.retry",
         ],
     )
     return health.model_dump(by_alias=True)

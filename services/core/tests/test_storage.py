@@ -91,8 +91,8 @@ class MigrationTests(StorageTestCase):
         finally:
             first_database.close()
 
-        self.assertEqual(first.current_version, 1)
-        self.assertEqual(second.applied_versions, (1,))
+        self.assertEqual(first.current_version, 2)
+        self.assertEqual(second.applied_versions, (1, 2))
         self.assertEqual(
             self.database.pragma_values(),
             {"foreign_keys": 1, "journal_mode": "wal", "synchronous": 1, "busy_timeout": 5_000},
@@ -126,6 +126,33 @@ class MigrationTests(StorageTestCase):
         finally:
             tampered.close()
         self.database = Database.open(self.database_path)
+
+    def test_v1_database_upgrades_and_preserves_old_job_rows(self) -> None:
+        upgrade_path = self.temp_root / "upgrade" / "project.db"
+        upgrade_path.parent.mkdir()
+        database = Database.open(upgrade_path)
+        try:
+            first = MigrationRunner(database, [discover_migrations()[0]]).migrate()
+            self.assertEqual(first.current_version, 1)
+            project_id = "33333333-3333-4333-8333-333333333333"
+            job_id = "44444444-4444-4444-8444-444444444444"
+            with database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO projects(id, name, project_root, target_platform, config_json, created_at_ms, updated_at_ms, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (project_id, "legacy", str(self.temp_root / "legacy-root"), "douyin", "{}", 1, 1, 0),
+                )
+                connection.execute(
+                    "INSERT INTO jobs(id, project_id, job_type, status, progress, stage, input_json, result_json, error_code, idempotency_key, attempt, created_at_ms, updated_at_ms, started_at_ms, finished_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (job_id, project_id, "preview", "queued", 0.0, "legacy", '{"steps":3}', None, None, None, 0, 1, 1, None, None),
+                )
+            upgraded = database.migrate()
+            self.assertEqual(upgraded.current_version, 2)
+            self.assertEqual(database.connection.execute("SELECT COUNT(*) FROM job_events").fetchone()[0], 0)
+            legacy = JobRepository(database).get(job_id, project_id)
+            self.assertEqual((legacy.executor_version, legacy.revision, legacy.last_event_sequence, legacy.recovery_count), (1, 0, 0, 0))
+            self.assertIsNone(legacy.checkpoint_json)
+        finally:
+            database.close()
 
     def test_database_schema_too_new_is_rejected(self) -> None:
         self.database.close()
@@ -163,7 +190,7 @@ class MigrationTests(StorageTestCase):
 
     def test_migration_names_and_checksum_are_normalized(self) -> None:
         self.assertEqual(migration_checksum("select 1;\n"), migration_checksum("select 1;\r\n"))
-        self.assertEqual([item.name for item in discover_migrations()], ["0001_initial"])
+        self.assertEqual([item.name for item in discover_migrations()], ["0001_initial", "0002_persistent_jobs"])
         with self.assertRaises(StorageError):
             MigrationRunner(self.database, [Migration(2, "0002_gap", "SELECT 1;")])
         with self.assertRaises(StorageError):
@@ -490,7 +517,7 @@ class ProcessPersistenceTests(unittest.TestCase):
                 [*command, "--phase", "verify"], cwd=ROOT, env=environment, capture_output=True, text=True, check=False
             )
             self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertIn("schema version 1", second.stdout)
+            self.assertIn("schema version 2", second.stdout)
             self.assertIn("projects=1", second.stdout)
             self.assertNotIn(str(database_path), second.stdout + second.stderr)
         finally:

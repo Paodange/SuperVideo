@@ -16,9 +16,18 @@ from supervideo_core.project.models import (
     ProjectInspectRequest,
     ProjectOpenRequest,
 )
+from supervideo_core.jobs import JobManager, JobSmokeInput
 
 from .errors import RpcServiceError
-from .models import HealthParams, SmokeCountdownParams, health_result
+from .models import (
+    HealthParams,
+    JobEventsListParams,
+    JobListParams,
+    JobReferenceParams,
+    JobSmokeStartParams,
+    SmokeCountdownParams,
+    health_result,
+)
 
 ProgressEmitter = Callable[[int, float, str], Awaitable[None]]
 
@@ -49,7 +58,7 @@ async def project_create_handler(
     _cancelled: asyncio.Event,
     service: ProjectService,
 ) -> dict[str, object]:
-    result = await asyncio.to_thread(service.create, params)
+    result = service.create(params)
     return result.model_dump(by_alias=True)
 
 
@@ -59,7 +68,7 @@ async def project_open_handler(
     _cancelled: asyncio.Event,
     service: ProjectService,
 ) -> dict[str, object]:
-    result = await asyncio.to_thread(service.open, params)
+    result = service.open(params)
     return result.model_dump(by_alias=True)
 
 
@@ -69,7 +78,7 @@ async def project_inspect_handler(
     _cancelled: asyncio.Event,
     service: ProjectService,
 ) -> dict[str, object]:
-    result = await asyncio.to_thread(service.inspect, params)
+    result = service.inspect(params)
     return result.model_dump(by_alias=True)
 
 
@@ -79,7 +88,7 @@ async def asset_reference_handler(
     _cancelled: asyncio.Event,
     service: ProjectService,
 ) -> dict[str, object]:
-    result = await asyncio.to_thread(service.reference_assets, params)
+    result = service.reference_assets(params)
     return result.model_dump(by_alias=True)
 
 
@@ -89,25 +98,61 @@ async def asset_list_handler(
     _cancelled: asyncio.Event,
     service: ProjectService,
 ) -> dict[str, object]:
-    result = await asyncio.to_thread(service.list_assets, params)
+    result = service.list_assets(params)
+    return result.model_dump(by_alias=True)
+
+
+async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
+    previous = registry.job_manager.active_project_id
+    await registry.job_manager.pause_for_project_change()
+    try:
+        result = registry.project_service.create(params)
+    except Exception:
+        if previous and registry.project_service.active_project_id == previous:
+            await registry.job_manager.activate(previous)
+        raise
+    await registry.job_manager.activate(result.project_id)
+    return result.model_dump(by_alias=True)
+
+
+async def _project_open_with_jobs(params: ProjectOpenRequest, registry: "RpcRegistry") -> dict[str, object]:
+    previous = registry.job_manager.active_project_id
+    await registry.job_manager.pause_for_project_change()
+    try:
+        result = registry.project_service.open(params)
+    except Exception:
+        if previous and registry.project_service.active_project_id == previous:
+            await registry.job_manager.activate(previous)
+        raise
+    await registry.job_manager.activate(result.project_id)
+    return result.model_dump(by_alias=True)
+
+
+async def job_smoke_start_handler(params: JobSmokeStartParams, manager: JobManager) -> dict[str, object]:
+    result = await manager.start_smoke(
+        params.project_id,
+        params.idempotency_key,
+        JobSmokeInput(steps=params.steps, delayMs=params.delay_ms, failAttempts=params.fail_attempts),
+    )
     return result.model_dump(by_alias=True)
 
 
 class RpcRegistry:
     """Registry whose method names are all explicit source-level entries."""
 
-    def __init__(self, service: ProjectService | None = None) -> None:
+    def __init__(self, service: ProjectService | None = None, on_job_event: Callable[[object], None] | None = None) -> None:
         self.project_service = service or ProjectService()
+        self.job_manager = JobManager(self.project_service, on_event=on_job_event)  # type: ignore[arg-type]
         self._methods: dict[str, tuple[type[BaseModel], Callable[..., Awaitable[dict[str, object]]]]] = {
             "core.health": (HealthParams, health_handler),
             "core.smoke.countdown": (SmokeCountdownParams, countdown_handler),
             "project.create": (
                 ProjectCreateRequest,
-                lambda params, emit, cancelled: project_create_handler(params, emit, cancelled, self.project_service),
+                lambda params, _emit, _cancelled: _project_create_with_jobs(params, self),
             ),
             "project.open": (
                 ProjectOpenRequest,
-                lambda params, emit, cancelled: project_open_handler(params, emit, cancelled, self.project_service),
+                lambda params, _emit, _cancelled: _project_open_with_jobs(params, self),
             ),
             "project.inspect": (
                 ProjectInspectRequest,
@@ -120,6 +165,30 @@ class RpcRegistry:
             "asset.list": (
                 AssetListRequest,
                 lambda params, emit, cancelled: asset_list_handler(params, emit, cancelled, self.project_service),
+            ),
+            "job.smoke.start": (
+                JobSmokeStartParams,
+                lambda params, _emit, _cancelled: job_smoke_start_handler(params, self.job_manager),
+            ),
+            "job.get": (
+                JobReferenceParams,
+                lambda params, _emit, _cancelled: _job_get(params, self.job_manager),
+            ),
+            "job.list": (
+                JobListParams,
+                lambda params, _emit, _cancelled: _job_list(params, self.job_manager),
+            ),
+            "job.events.list": (
+                JobEventsListParams,
+                lambda params, _emit, _cancelled: _job_events(params, self.job_manager),
+            ),
+            "job.cancel": (
+                JobReferenceParams,
+                lambda params, _emit, _cancelled: _job_cancel(params, self.job_manager),
+            ),
+            "job.retry": (
+                JobReferenceParams,
+                lambda params, _emit, _cancelled: _job_retry(params, self.job_manager),
             ),
         }
 
@@ -151,3 +220,27 @@ class RpcRegistry:
 
     def close(self) -> None:
         self.project_service.close()
+
+    async def shutdown(self) -> None:
+        await self.job_manager.shutdown()
+        self.project_service.close()
+
+
+async def _job_get(params: JobReferenceParams, manager: JobManager) -> dict[str, object]:
+    return manager.get(params.project_id, params.job_id).model_dump(by_alias=True)
+
+
+async def _job_list(params: JobListParams, manager: JobManager) -> dict[str, object]:
+    return manager.list(params.project_id, params.statuses, params.cursor, params.limit).model_dump(by_alias=True)
+
+
+async def _job_events(params: JobEventsListParams, manager: JobManager) -> dict[str, object]:
+    return manager.events(params.project_id, params.job_id, params.after_sequence, params.cursor, params.limit).model_dump(by_alias=True)
+
+
+async def _job_cancel(params: JobReferenceParams, manager: JobManager) -> dict[str, object]:
+    return (await manager.cancel(params.project_id, params.job_id)).model_dump(by_alias=True)
+
+
+async def _job_retry(params: JobReferenceParams, manager: JobManager) -> dict[str, object]:
+    return (await manager.retry(params.project_id, params.job_id)).model_dump(by_alias=True)
