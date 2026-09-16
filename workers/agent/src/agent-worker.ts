@@ -9,6 +9,7 @@ import {
   CORE_RPC_METHODS,
   isAssetListResult,
   isAssetReferenceBatchResult,
+  isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
   isValidAgentWorkerCommand,
@@ -21,6 +22,7 @@ import {
   type JobOperationErrorCode,
   type ProjectOperationErrorCode,
   type AgentWorkerMessage,
+  type AgentDiagnosticEvent,
 } from "@supervideo/shared";
 import type { PythonCoreClient } from "./python-core-client.js";
 import type { SmokeAgentRunner } from "./smoke-agent.js";
@@ -57,7 +59,7 @@ async function ensureRuntime(): Promise<{ coreClient: PythonCoreClient; runner: 
     import("./python-core-client.js"),
     import("./smoke-agent.js"),
   ]).then(([{ PythonCoreClient }, { createSmokeAgentRunner }]) => {
-    coreClient ??= new PythonCoreClient({ rootDir: process.cwd(), onJobEvent: forwardJobEvent });
+    coreClient ??= new PythonCoreClient({ rootDir: process.cwd(), onJobEvent: forwardJobEvent, onDiagnostic: forwardCoreDiagnostic });
     runner ??= createSmokeAgentRunner(send);
     return { coreClient, runner };
   });
@@ -77,6 +79,31 @@ function sendError(code: Parameters<typeof createAgentPublicError>[0]): void {
     type: "worker-error",
     timestamp: Date.now(),
     error: createAgentPublicError(code),
+  });
+}
+
+function sendDiagnostic(event: AgentDiagnosticEvent): void {
+  if (!isAgentDiagnosticEvent(event)) return;
+  send({ protocolVersion: AGENT_WORKER_PROTOCOL_VERSION, type: "diagnostic-event", event });
+}
+
+function forwardCoreDiagnostic(line: string): void {
+  try {
+    const value = JSON.parse(line) as unknown;
+    if (isAgentDiagnosticEvent(value) && value.component === "python-core") {
+      sendDiagnostic(value);
+      return;
+    }
+  } catch {
+    // stderr is intentionally never forwarded verbatim.
+  }
+  sendDiagnostic({
+    schemaVersion: 1,
+    timestamp: new Date().toISOString(),
+    level: "warn",
+    component: "agent-worker",
+    event: "core-stderr-rejected",
+    details: { reason: "invalid-structured-stderr" },
   });
 }
 

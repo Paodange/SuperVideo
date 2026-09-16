@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, utilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, utilityProcess } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -38,6 +38,9 @@ import {
   type RuntimeConfig,
 } from "./security/config";
 import { createSecurityLogger } from "./security/diagnostics";
+import { createElectronCredentialEncryptionAdapter, CredentialVault } from "./security/credential-vault";
+import { DiagnosticsCollector } from "./diagnostics/collector";
+import { exportDiagnostics } from "./diagnostics/exporter";
 import {
   createDesktopAgentStatusEvent,
   registerDesktopIpcHandlers,
@@ -47,7 +50,14 @@ import { denyWindowOpen, isTrustedRendererUrl, sanitizeUrlForDiagnostics } from 
 import { registerSessionSecurity } from "./security/session";
 import { createAgentWorkerController, type AgentWorkerController, type UtilityProcessLike } from "./agent-worker-controller";
 
-const log = createSecurityLogger();
+const logger = createSecurityLogger({ getLogDirectory: () => path.join(app.getPath("userData"), "logs") });
+const log = logger;
+let latestCoreState = {
+  status: "unknown",
+  protocolVersion: 1,
+  coreVersion: null as string | null,
+  capabilityCount: 0,
+};
 
 function getRendererPath(): string {
   // __dirname is the compiled Main directory. Renderer input is not involved in
@@ -136,10 +146,28 @@ function createAgentController(smokeMessages: AgentWorkerMessage[]): AgentWorker
         stdio: "ignore",
       }) as unknown as UtilityProcessLike;
     },
-    log: (event, details) => log(`agent-${event}`, details),
-    onMessage: (message) => {
-      smokeMessages.push(message);
-      const event = toDesktopAgentEvent(message);
+      log: (event, details) => log(event, details),
+      onMessage: (message) => {
+        smokeMessages.push(message);
+        if (message.type === "diagnostic-event") {
+          logger.writeDiagnostic(message.event);
+          if (message.event.component === "python-core") {
+            if (message.event.event === "core-started") {
+              latestCoreState = { ...latestCoreState, status: "starting" };
+            } else if (message.event.event === "core-ready") {
+              const details = message.event.details ?? {};
+              latestCoreState = {
+                status: "ready",
+                protocolVersion: 1,
+                coreVersion: typeof details.coreVersion === "string" ? details.coreVersion : latestCoreState.coreVersion,
+                capabilityCount: typeof details.capabilityCount === "number" ? details.capabilityCount : latestCoreState.capabilityCount,
+              };
+            } else if (message.event.event === "core-exit") {
+              latestCoreState = { ...latestCoreState, status: "stopped" };
+            }
+          }
+        }
+        const event = toDesktopAgentEvent(message);
       if (event) {
         publishAgentEvent(event);
       }
@@ -520,6 +548,7 @@ function containsFixture(root: string, fixture: Buffer): boolean {
 }
 
 app.whenReady().then(() => {
+  log("app-ready");
   const runtime = createRuntimeConfig({
     isPackaged: app.isPackaged,
     argv: process.argv,
@@ -539,6 +568,33 @@ app.whenReady().then(() => {
   const smokeMessages: AgentWorkerMessage[] = [];
   const agentController = createAgentController(smokeMessages);
   activeAgentController = agentController;
+
+  const credentialVault = new CredentialVault({
+    filePath: path.join(app.getPath("userData"), "security", "credentials.v1.json"),
+    encryption: createElectronCredentialEncryptionAdapter(safeStorage),
+  });
+  let diagnosticProject = { open: false, manifestSchemaVersion: null as number | null, databaseSchemaVersion: null as number | null };
+  let diagnosticJobs: JobSummary[] = [];
+  const rememberJob = (job: JobSummary): JobSummary => {
+    const index = diagnosticJobs.findIndex((item) => item.jobId === job.jobId);
+    if (index < 0) diagnosticJobs = [...diagnosticJobs, job];
+    else diagnosticJobs = diagnosticJobs.map((item, itemIndex) => itemIndex === index ? job : item);
+    return job;
+  };
+  const diagnosticsCollector = new DiagnosticsCollector({
+    appVersion: app.getVersion(),
+    electronVersion: process.versions.electron ?? "unknown",
+    nodeVersion: process.versions.node ?? "unknown",
+    platform: process.platform,
+    release: process.platform === "win32" ? os.release() : process.platform,
+    architecture: process.arch,
+    getWorkerStatus: () => agentController.getStatus(),
+    getCoreState: () => latestCoreState,
+    getProject: () => diagnosticProject,
+    getJobs: () => diagnosticJobs,
+    vault: credentialVault,
+    logger,
+  });
 
   let projectDialogBusy = false;
   const withDialogLock = async <T>(kind: string, action: () => Promise<T>): Promise<T> => {
@@ -560,14 +616,25 @@ app.whenReady().then(() => {
     getAgentStatus: () => agentController.getStatus(),
     runSmokeTask: () => agentController.runSmokeTask(),
     cancelSmokeRun: (runId) => agentController.cancelRun(runId),
-    createProject: (event, input) => withDialogLock("create", () => createProjectDialogHandler(agentController, event, input)),
-    openProject: (event) => withDialogLock("open", () => openProjectDialogHandler(agentController, event)),
+    createProject: async (event, input) => {
+      const result = await withDialogLock("create", () => createProjectDialogHandler(agentController, event, input));
+      if (!result.cancelled) {
+        diagnosticProject = { open: true, manifestSchemaVersion: result.value.manifestSchemaVersion, databaseSchemaVersion: result.value.databaseSchemaVersion };
+        diagnosticJobs = [];
+      }
+      return result;
+    },
+    openProject: async (event) => {
+      const result = await withDialogLock("open", () => openProjectDialogHandler(agentController, event));
+      if (!result.cancelled) diagnosticProject = { open: true, manifestSchemaVersion: result.value.manifestSchemaVersion, databaseSchemaVersion: result.value.databaseSchemaVersion };
+      return result;
+    },
     addAssetReferences: (event, input) => withDialogLock("asset", () => addAssetDialogHandler(agentController, event, input)),
     listProjectAssets: async (_event, input) => {
       const result = await agentController.runProjectOperation("asset-list", { projectId: input.projectId, limit: 100 }, input.projectId);
       return assetListResult(result);
     },
-    startSmokeJob: async (_event, input) => jobSummary(await agentController.runJobOperation(
+    startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(
       "job-smoke-start", input.projectId,
       {
         idempotencyKey: input.idempotencyKey,
@@ -575,16 +642,20 @@ app.whenReady().then(() => {
         ...(input.delayMs === undefined ? {} : { delayMs: input.delayMs }),
         ...(input.failAttempts === undefined ? {} : { failAttempts: input.failAttempts }),
       },
-    )),
-    getJob: async (_event, input) => jobSummary(await agentController.runJobOperation("job-get", input.projectId, { jobId: input.jobId })),
-    listJobs: async (_event, input) => jobPage(await agentController.runJobOperation(
-      "job-list", input.projectId,
-      {
-        ...(input.statuses === undefined ? {} : { statuses: input.statuses }),
-        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
-        ...(input.limit === undefined ? {} : { limit: input.limit }),
-      },
-    )),
+    ))),
+    getJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation("job-get", input.projectId, { jobId: input.jobId }))),
+    listJobs: async (_event, input) => {
+      const result = jobPage(await agentController.runJobOperation(
+        "job-list", input.projectId,
+        {
+          ...(input.statuses === undefined ? {} : { statuses: input.statuses }),
+          ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+          ...(input.limit === undefined ? {} : { limit: input.limit }),
+        },
+      ));
+      diagnosticJobs = [...result.items];
+      return result;
+    },
     listJobEvents: async (_event, input) => jobEventPage(await agentController.runJobOperation(
       "job-events-list", input.projectId,
       {
@@ -594,8 +665,48 @@ app.whenReady().then(() => {
         ...(input.limit === undefined ? {} : { limit: input.limit }),
       },
     )),
-    cancelJob: async (_event, input) => jobSummary(await agentController.runJobOperation("job-cancel", input.projectId, { jobId: input.jobId })),
-    retryJob: async (_event, input) => jobSummary(await agentController.runJobOperation("job-retry", input.projectId, { jobId: input.jobId })),
+    cancelJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation("job-cancel", input.projectId, { jobId: input.jobId }))),
+    retryJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation("job-retry", input.projectId, { jobId: input.jobId }))),
+    credentialsStatus: () => {
+      const status = credentialVault.status();
+      log("credential-status", { available: status.available, state: status.state });
+      return status;
+    },
+    credentialsList: async () => {
+      const result = await credentialVault.list();
+      log("credential-status", { count: result.items.length });
+      return result;
+    },
+    credentialsSave: async (input) => {
+      const result = await credentialVault.save(input);
+      log("credential-saved", { serviceKind: result.serviceKind, configured: true });
+      return result;
+    },
+    credentialsReplace: async (input) => {
+      const result = await credentialVault.replace(input);
+      log("credential-replaced", { serviceKind: result.serviceKind, configured: true });
+      return result;
+    },
+    credentialsRemove: async (input) => {
+      const result = await credentialVault.remove(input);
+      log("credential-removed", { configured: false });
+      return result;
+    },
+    diagnosticsExport: async (event) => {
+      log("diagnostic-export-started");
+      try {
+        const result = await exportDiagnostics({
+          owner: dialogOwner(event),
+          showSaveDialog: (owner, options) => dialog.showSaveDialog(owner as BrowserWindow, options as Electron.SaveDialogOptions),
+          collector: diagnosticsCollector,
+        });
+        log("diagnostic-export-finished", { status: result.status });
+        return result;
+      } catch (error) {
+        log("diagnostic-export-failed", { errorCode: "DIAGNOSTIC_EXPORT_FAILED" });
+        throw error;
+      }
+    },
     log,
   });
 
@@ -607,22 +718,22 @@ app.whenReady().then(() => {
   if (process.argv.includes("--agent-smoke")) {
     void runAgentIntegrationSmoke(agentController, smokeMessages)
       .then(() => agentController.shutdown().then(() => app.exit(0)))
-      .catch((error: unknown) => {
-        console.error(`[agent-smoke] ${error instanceof Error ? error.message : "failed"}`);
+      .catch((_error: unknown) => {
+        log("agent-start-failed", { reason: "agent-smoke-failed" });
         void agentController.shutdown().finally(() => app.exit(1));
       });
   } else if (process.argv.includes("--project-smoke")) {
     void runProjectIntegrationSmoke(agentController)
       .then(() => app.exit(0))
-      .catch((error: unknown) => {
-        console.error(`[project-smoke] ${error instanceof Error ? error.message : "failed"}`);
+      .catch((_error: unknown) => {
+        log("agent-start-failed", { reason: "project-smoke-failed" });
         void agentController.shutdown().finally(() => app.exit(1));
       });
   } else if (process.argv.includes("--jobs-smoke")) {
     void runJobsIntegrationSmoke(agentController, smokeMessages)
       .then(() => app.exit(0))
-      .catch((error: unknown) => {
-        console.error(`[jobs-smoke] ${error instanceof Error ? error.message : "failed"}`);
+      .catch((_error: unknown) => {
+        log("agent-start-failed", { reason: "jobs-smoke-failed" });
         void agentController.shutdown().finally(() => app.exit(1));
       });
   } else {
@@ -646,8 +757,9 @@ app.on("before-quit", (event) => {
   }
   event.preventDefault();
   quitting = true;
+  log("app-shutdown");
   const shutdown = activeAgentController?.shutdown() ?? Promise.resolve();
-  void shutdown.finally(() => app.exit(0));
+  void shutdown.finally(() => logger.flush().finally(() => app.exit(0)));
 });
 
 let activeAgentController: AgentWorkerController | undefined;

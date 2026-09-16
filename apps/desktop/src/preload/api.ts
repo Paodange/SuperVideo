@@ -12,6 +12,14 @@ import {
   isAgentWorkerStatusSnapshot,
   isValidAgentRunId,
   isValidDesktopAgentEvent,
+  isCredentialListResult,
+  isCredentialMetadata,
+  isCredentialRemoveRequest,
+  isCredentialRemoveResult,
+  isCredentialReplaceRequest,
+  isCredentialSaveRequest,
+  isCredentialStorageStatus,
+  isDiagnosticExportResult,
   type AgentRunHandle,
   type AgentWorkerStatusSnapshot,
   type DesktopAgentEvent,
@@ -34,6 +42,14 @@ import {
   type JobSmokeStartParams,
   type JobPage,
   type JobSummary,
+  type CredentialListResult,
+  type CredentialMetadata,
+  type CredentialRemoveRequest,
+  type CredentialRemoveResult,
+  type CredentialReplaceRequest,
+  type CredentialSaveRequest,
+  type CredentialStorageStatus,
+  type DiagnosticExportResult,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -52,8 +68,14 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.listJobs
     | typeof DESKTOP_IPC_CHANNELS.listJobEvents
     | typeof DESKTOP_IPC_CHANNELS.cancelJob
-    | typeof DESKTOP_IPC_CHANNELS.retryJob,
-  payload: GetEnvironmentRequest | GetAgentStatusRequest | RunAgentSmokeTaskRequest | CancelAgentRunRequest | CreateProjectRequest | Record<string, unknown>,
+    | typeof DESKTOP_IPC_CHANNELS.retryJob
+    | typeof DESKTOP_IPC_CHANNELS.credentialsStatus
+    | typeof DESKTOP_IPC_CHANNELS.credentialsList
+    | typeof DESKTOP_IPC_CHANNELS.credentialsSave
+    | typeof DESKTOP_IPC_CHANNELS.credentialsReplace
+    | typeof DESKTOP_IPC_CHANNELS.credentialsRemove
+    | typeof DESKTOP_IPC_CHANNELS.diagnosticsExport,
+  payload: unknown,
 ) => Promise<unknown>;
 
 type Subscribe = (
@@ -134,6 +156,25 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
       const remove = subscribe(DESKTOP_IPC_CHANNELS.agentEvent, wrapped);
       return () => { if (!disposed) { disposed = true; remove(); } };
     },
+    credentials: Object.freeze({
+      status: () => invokeValue(DESKTOP_IPC_CHANNELS.credentialsStatus, {}, invoke, isCredentialStorageStatus),
+      list: () => invokeValue(DESKTOP_IPC_CHANNELS.credentialsList, {}, invoke, isCredentialListResult),
+      save: (input) => {
+        if (!isCredentialSaveRequest(input)) return Promise.reject(createDesktopPublicError("INVALID_CREDENTIAL_INPUT"));
+        return invokeValue(DESKTOP_IPC_CHANNELS.credentialsSave, input, invoke, isCredentialMetadata);
+      },
+      replace: (input) => {
+        if (!isCredentialReplaceRequest(input)) return Promise.reject(createDesktopPublicError("INVALID_CREDENTIAL_INPUT"));
+        return invokeValue(DESKTOP_IPC_CHANNELS.credentialsReplace, input, invoke, isCredentialMetadata);
+      },
+      remove: (input) => {
+        if (!isCredentialRemoveRequest(input)) return Promise.reject(createDesktopPublicError("INVALID_CREDENTIAL_INPUT"));
+        return invokeValue(DESKTOP_IPC_CHANNELS.credentialsRemove, input, invoke, isCredentialRemoveResult);
+      },
+    }),
+    diagnostics: Object.freeze({
+      export: () => invokeValue(DESKTOP_IPC_CHANNELS.diagnosticsExport, {}, invoke, isDiagnosticExportResult),
+    }),
   };
 
   return Object.freeze(api);

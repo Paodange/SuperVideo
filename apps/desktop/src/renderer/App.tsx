@@ -8,6 +8,9 @@ import type {
   ProjectSummary,
   JobEvent,
   JobSummary,
+  CredentialMetadata,
+  CredentialServiceKind,
+  CredentialStorageStatus,
 } from "@supervideo/shared";
 
 const browserAgentStatus: AgentWorkerStatusSnapshot = {
@@ -36,6 +39,18 @@ export function App() {
   const [jobEvents, setJobEvents] = useState<Record<string, JobEvent[]>>({});
   const [jobError, setJobError] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
+  const [credentialStatus, setCredentialStatus] = useState<CredentialStorageStatus>({ available: false, state: "unavailable" });
+  const [credentials, setCredentials] = useState<CredentialMetadata[]>([]);
+  const [credentialServiceKind, setCredentialServiceKind] = useState<CredentialServiceKind>("llm");
+  const [credentialProviderId, setCredentialProviderId] = useState("");
+  const [credentialDisplayName, setCredentialDisplayName] = useState("");
+  const [credentialReplaceRef, setCredentialReplaceRef] = useState<string | null>(null);
+  const [credentialBusy, setCredentialBusy] = useState(false);
+  const [credentialError, setCredentialError] = useState<string | null>(null);
+  const [credentialNotice, setCredentialNotice] = useState<string | null>(null);
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false);
+  const [diagnosticNotice, setDiagnosticNotice] = useState<string | null>(null);
+  const credentialSecretInput = useRef<HTMLInputElement>(null);
   const latestSequence = useRef(new Map<string, number>());
   const projectRequest = useRef(0);
   const jobSequences = useRef(new Map<string, number>());
@@ -45,6 +60,8 @@ export function App() {
     if (!bridge) { setEnvironment({ mode: "development", platform: "browser preview", electron: "—" }); return; }
     bridge.getEnvironment().then(setEnvironment).catch(() => setEnvironmentError("Desktop status is unavailable."));
     bridge.getAgentStatus().then((status) => { setAgentStatus(status); setRunId(status.activeRunId); setRunStatus(status.runStatus); }).catch(() => setAgentError("Agent Worker status is unavailable."));
+    bridge.credentials.status().then(setCredentialStatus).catch(() => setCredentialStatus({ available: false, state: "unavailable" }));
+    bridge.credentials.list().then((result) => setCredentials([...result.items])).catch((error: unknown) => setCredentialError(publicErrorMessage(error, "Secure credentials are unavailable.")));
     const removeAgent = bridge.onAgentEvent((event) => applyAgentEvent(event));
     const removeJobs = bridge.onJobEvent((event) => applyJobEvent(event));
     return () => { removeAgent(); removeJobs(); };
@@ -139,6 +156,55 @@ export function App() {
     void bridge.listProjectAssets({ projectId: project.projectId }).then((result) => { if (request === projectRequest.current) setAssets([...result.items]); }).catch((error: unknown) => setProjectError(publicErrorMessage(error, "The asset list could not be loaded."))).finally(() => { if (request === projectRequest.current) setProjectBusy(false); });
   };
 
+  const saveCredential = (): void => {
+    const bridge = window.supervideo;
+    const secret = credentialSecretInput.current?.value ?? "";
+    if (!bridge) { setCredentialError("Open the desktop app to configure secure credentials."); return; }
+    if (!credentialProviderId.trim() || !credentialDisplayName.trim() || !secret) { setCredentialError("Enter a provider, display name and secret."); return; }
+    setCredentialBusy(true); setCredentialError(null); setCredentialNotice(null);
+    // The secret is never placed in React state and is cleared as soon as the
+    // one-way Main call is made, including when the call fails.
+    if (credentialSecretInput.current) credentialSecretInput.current.value = "";
+    void bridge.credentials.save({ serviceKind: credentialServiceKind, providerId: credentialProviderId.trim(), displayName: credentialDisplayName.trim(), secret })
+      .then((metadata) => { setCredentials((current) => [...current, metadata]); setCredentialStatus({ available: true, state: "available" }); setCredentialNotice("Credential saved. The secret cannot be viewed here."); })
+      .catch((error: unknown) => setCredentialError(publicErrorMessage(error, "The credential could not be saved.")))
+      .finally(() => setCredentialBusy(false));
+  };
+
+  const replaceCredential = (): void => {
+    const bridge = window.supervideo;
+    const secret = credentialSecretInput.current?.value ?? "";
+    if (!bridge || !credentialReplaceRef) { setCredentialError("Select a configured credential to replace."); return; }
+    if (!secret) { setCredentialError("Enter a new secret before replacing."); return; }
+    const credentialRef = credentialReplaceRef;
+    setCredentialBusy(true); setCredentialError(null); setCredentialNotice(null);
+    if (credentialSecretInput.current) credentialSecretInput.current.value = "";
+    void bridge.credentials.replace({ credentialRef, secret })
+      .then((metadata) => { setCredentials((current) => current.map((item) => item.credentialRef === metadata.credentialRef ? metadata : item)); setCredentialNotice("Credential replaced. The previous secret was not displayed."); setCredentialReplaceRef(null); })
+      .catch((error: unknown) => setCredentialError(publicErrorMessage(error, "The credential could not be replaced.")))
+      .finally(() => setCredentialBusy(false));
+  };
+
+  const removeCredential = (credentialRef: string): void => {
+    const bridge = window.supervideo;
+    if (!bridge || !window.confirm("Delete this saved credential? The secret cannot be recovered by SuperVideo.")) return;
+    setCredentialBusy(true); setCredentialError(null); setCredentialNotice(null);
+    void bridge.credentials.remove({ credentialRef })
+      .then((result) => { if (result.removed) setCredentials((current) => current.filter((item) => item.credentialRef !== credentialRef)); if (credentialReplaceRef === credentialRef) setCredentialReplaceRef(null); setCredentialNotice("Credential deleted."); })
+      .catch((error: unknown) => setCredentialError(publicErrorMessage(error, "The credential could not be deleted.")))
+      .finally(() => setCredentialBusy(false));
+  };
+
+  const exportDiagnostics = (): void => {
+    const bridge = window.supervideo;
+    if (!bridge) { setDiagnosticNotice("Open the desktop app to export diagnostics."); return; }
+    setDiagnosticBusy(true); setDiagnosticNotice(null);
+    void bridge.diagnostics.export()
+      .then((result) => setDiagnosticNotice(result.status === "saved" ? "Diagnostics exported. The file is redacted and was not uploaded." : "Diagnostics export cancelled."))
+      .catch((error: unknown) => setDiagnosticNotice(publicErrorMessage(error, "Diagnostics could not be exported.")))
+      .finally(() => setDiagnosticBusy(false));
+  };
+
   const runSmokeTask = (): void => {
     const bridge = window.supervideo;
     if (!bridge) { setAgentError("Open the desktop app to run the smoke task."); return; }
@@ -213,7 +279,9 @@ export function App() {
       <dl className="details"><div><dt>Environment</dt><dd>{environment?.mode ?? "development"}</dd></div><div><dt>Platform</dt><dd>{environment?.platform ?? "Windows target"}</dd></div><div><dt>Electron</dt><dd>{environment?.electron ?? "—"}</dd></div></dl>
       <section className="agent-panel" aria-labelledby="agent-title"><div className="panel-heading"><div><div className="eyebrow">A03 ENGINEERING PANEL</div><h2 id="agent-title">Agent Worker</h2></div><span className={`worker-badge worker-${agentStatus.status}`}>{agentStatus.status}</span></div><dl className="agent-details"><div><dt>Worker version</dt><dd>{agentStatus.workerVersion ?? "—"}</dd></div><div><dt>Generation</dt><dd>{agentStatus.generation}</dd></div><div><dt>Run status</dt><dd>{runStatus}</dd></div><div><dt>Run ID</dt><dd className="run-id">{runId ?? "—"}</dd></div></dl>{workerUnavailable && <p className="hint">The Worker is not available. Check Main diagnostics before retrying.</p>}<div className="actions"><button type="button" onClick={runSmokeTask} disabled={!canRun}>Run smoke task</button><button type="button" className="secondary" onClick={cancelSmokeTask} disabled={!canCancel}>Cancel</button></div><div className="output" aria-live="polite"><div className="output-label">Streaming assistant text</div><p>{assistantText || "Waiting for a smoke run…"}</p><div className="output-label">Tool progress</div>{tools.length === 0 ? <p className="muted">No tool events yet.</p> : tools.map((tool) => <div className="tool-row" key={tool.toolCallId}><span>{tool.toolName}</span><span>{tool.message}</span><progress max="1" value={tool.progress} /><span>{tool.state}</span></div>)}</div></section>
       {project && <section className="agent-panel jobs-panel" aria-labelledby="jobs-title"><div className="panel-heading"><div><div className="eyebrow">A07 PERSISTENT JOBS</div><h2 id="jobs-title">Jobs</h2></div><span className="worker-badge">{jobs.length}</span></div><p className="hint">SQLite-backed smoke jobs survive Worker/Core restart and stream best-effort events.</p><div className="actions"><button type="button" onClick={startSmokeJob} disabled={jobBusy}>Start 8-step smoke job</button></div>{jobError && <p className="error-text">{jobError}</p>}{jobs.length === 0 ? <p className="muted">No persistent jobs yet.</p> : <div className="job-list">{jobs.map((job) => <JobRow key={job.jobId} job={job} events={jobEvents[job.jobId] ?? []} onCancel={cancelJob} onRetry={retryJob} />)}</div>}</section>}
-      <p className="scope">A07 adds a durable simulated job state machine. Real media executors, external services and background systems remain out of scope.</p>
+      <section className="agent-panel security-panel" aria-labelledby="credentials-title"><div className="panel-heading"><div><div className="eyebrow">A08 SECURE SETTINGS</div><h2 id="credentials-title">Service credentials</h2></div><span className={`worker-badge ${credentialStatus.state === "available" ? "worker-ready" : "worker-unavailable"}`}>{credentialStatus.state}</span></div><p className="hint">Secrets are encrypted by the Windows secure storage boundary, never returned to this page, and never uploaded.</p><div className="form-grid credential-grid"><label>Service<select value={credentialServiceKind} onChange={(event) => setCredentialServiceKind(event.target.value as CredentialServiceKind)} disabled={credentialBusy || credentialStatus.state !== "available"}><option value="llm">LLM</option><option value="tts">TTS</option><option value="image">Image</option><option value="video">Video</option></select></label><label>Provider ID<input value={credentialProviderId} onChange={(event) => setCredentialProviderId(event.target.value)} maxLength={64} placeholder="example-provider" disabled={credentialBusy || credentialStatus.state !== "available"} /></label><label>Display name<input value={credentialDisplayName} onChange={(event) => setCredentialDisplayName(event.target.value)} maxLength={80} placeholder="Default provider" disabled={credentialBusy || credentialStatus.state !== "available"} /></label><label>Secret<input ref={credentialSecretInput} type="password" maxLength={8192} autoComplete="new-password" placeholder="Enter once; it will be cleared" disabled={credentialBusy || credentialStatus.state !== "available"} /></label></div><div className="actions"><button type="button" onClick={saveCredential} disabled={credentialBusy || credentialStatus.state !== "available"}>Save credential</button>{credentialReplaceRef && <button type="button" className="secondary" onClick={replaceCredential} disabled={credentialBusy || credentialStatus.state !== "available"}>Replace selected</button>}</div>{credentialError && <p className="error-text">{credentialError}</p>}{credentialNotice && <p className="hint" aria-live="polite">{credentialNotice}</p>}<h3>Configured services</h3>{credentials.length === 0 ? <p className="muted">No credentials are configured.</p> : <div className="credential-list">{credentials.map((credential) => <article className="credential-row" key={credential.credentialRef}><div><strong>{credential.displayName}</strong><span>{credential.serviceKind} · {credential.providerId} · configured</span></div><div className="actions"><button type="button" className="secondary" onClick={() => setCredentialReplaceRef(credential.credentialRef)} disabled={credentialBusy}>{credentialReplaceRef === credential.credentialRef ? "Selected" : "Replace"}</button><button type="button" className="secondary" onClick={() => removeCredential(credential.credentialRef)} disabled={credentialBusy}>Delete</button></div></article>)}</div>}</section>
+      <section className="agent-panel diagnostics-panel" aria-labelledby="diagnostics-title"><div className="panel-heading"><div><div className="eyebrow">A08 SUPPORT</div><h2 id="diagnostics-title">Diagnostics</h2></div></div><p className="hint">Export a bounded, redacted JSON file for local troubleshooting. SuperVideo does not upload it or open an external page.</p><div className="actions"><button type="button" onClick={exportDiagnostics} disabled={diagnosticBusy}>{diagnosticBusy ? "Exporting…" : "Export diagnostics"}</button></div>{diagnosticNotice && <p className="hint" aria-live="polite">{diagnosticNotice}</p>}</section>
+      <p className="scope">A08 adds secure local credentials, correlated redacted logs, and user-triggered diagnostics. Real providers and media executors remain out of scope.</p>
     </section></main>
   );
 }

@@ -12,6 +12,20 @@ import type {
   ProjectSummary,
 } from "./core-rpc";
 import { isJobEvent, isJobEventPage, isJobPage, isJobSummary } from "./core-rpc";
+import {
+  PUBLIC_A08_ERROR_CODES,
+  isAgentDiagnosticEvent,
+  type A08PublicErrorCode,
+  type AgentDiagnosticEvent,
+  type CredentialListResult,
+  type CredentialMetadata,
+  type CredentialRemoveRequest,
+  type CredentialRemoveResult,
+  type CredentialReplaceRequest,
+  type CredentialSaveRequest,
+  type CredentialStorageStatus,
+  type DiagnosticExportResult,
+} from "./diagnostics-protocol";
 
 /**
  * The protocol between Electron Main and the isolated Agent utility process.
@@ -22,7 +36,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "jobs"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -53,6 +67,7 @@ export const AGENT_WORKER_MESSAGE_TYPES = {
   jobOperationResult: "job-operation-result",
   jobOperationError: "job-operation-error",
   jobEvent: "job-event",
+  diagnosticEvent: "diagnostic-event",
 } as const;
 
 export type AgentWorkerCommandType = (typeof AGENT_WORKER_COMMAND_TYPES)[keyof typeof AGENT_WORKER_COMMAND_TYPES];
@@ -231,6 +246,11 @@ export type AgentWorkerMessage =
     }>
   | Readonly<{
       protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
+      type: "diagnostic-event";
+      event: AgentDiagnosticEvent;
+    }>
+  | Readonly<{
+      protocolVersion: typeof AGENT_WORKER_PROTOCOL_VERSION;
       type: "project-operation-error";
       operationId: string;
       operation: AgentProjectOperationType;
@@ -289,6 +309,12 @@ export const DESKTOP_IPC_CHANNELS = {
   listJobEvents: "desktop:v2:list-job-events",
   cancelJob: "desktop:v2:cancel-job",
   retryJob: "desktop:v2:retry-job",
+  credentialsStatus: "desktop:v2:credentials-status",
+  credentialsList: "desktop:v2:credentials-list",
+  credentialsSave: "desktop:v2:credentials-save",
+  credentialsReplace: "desktop:v2:credentials-replace",
+  credentialsRemove: "desktop:v2:credentials-remove",
+  diagnosticsExport: "desktop:v2:diagnostics-export",
 } as const;
 
 export type DesktopIpcChannel = (typeof DESKTOP_IPC_CHANNELS)[keyof typeof DESKTOP_IPC_CHANNELS];
@@ -317,9 +343,11 @@ export type ListJobsRequest = JobListParams;
 export type ListJobEventsRequest = JobEventsListParams;
 export type CancelJobRequest = JobReferenceParams;
 export type RetryJobRequest = JobReferenceParams;
+export type CredentialsStatusRequest = Record<string, never>;
+export type CredentialsListRequest = Record<string, never>;
 export type ProjectDialogResult<T> = Readonly<{ cancelled: true }> | Readonly<{ cancelled: false; value: T }>;
 
-export type DesktopPublicErrorCode = AgentPublicErrorCode | JobOperationErrorCode;
+export type DesktopPublicErrorCode = AgentPublicErrorCode | JobOperationErrorCode | A08PublicErrorCode;
 export type DesktopPublicError = Readonly<{
   code: DesktopPublicErrorCode;
   message: string;
@@ -346,6 +374,14 @@ export type DesktopApi = Readonly<{
   cancelJob: (input: JobReferenceParams) => Promise<JobSummary>;
   retryJob: (input: JobReferenceParams) => Promise<JobSummary>;
   onJobEvent: (listener: (event: JobEvent) => void) => () => void;
+  credentials: Readonly<{
+    status: () => Promise<CredentialStorageStatus>;
+    list: () => Promise<CredentialListResult>;
+    save: (input: CredentialSaveRequest) => Promise<CredentialMetadata>;
+    replace: (input: CredentialReplaceRequest) => Promise<CredentialMetadata>;
+    remove: (input: CredentialRemoveRequest) => Promise<CredentialRemoveResult>;
+  }>;
+  diagnostics: Readonly<{ export: () => Promise<DiagnosticExportResult> }>;
 }>;
 
 const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = {
@@ -404,6 +440,13 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   IDEMPOTENCY_CONFLICT: "The idempotency key conflicts with another job.",
   JOB_SHUTTING_DOWN: "The job service is shutting down.",
   JOB_EXECUTION_FAILED: "The simulated job failed.",
+  CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
+  CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
+  CREDENTIAL_NOT_FOUND: "The credential was not found.",
+  INVALID_CREDENTIAL_INPUT: "The credential input is invalid.",
+  CREDENTIAL_WRITE_FAILED: "Secure credential storage could not be updated.",
+  DIAGNOSTIC_EXPORT_CANCELLED: "The diagnostics export was cancelled.",
+  DIAGNOSTIC_EXPORT_FAILED: "Diagnostics could not be exported.",
 };
 
 export function createDesktopPublicError(code: DesktopPublicErrorCode): DesktopPublicError {
@@ -420,11 +463,18 @@ export function isDesktopPublicError(value: unknown): value is DesktopPublicErro
   }
 
   const candidate = value as Partial<DesktopPublicError>;
-  return isAgentPublicErrorCode(candidate.code) && candidate.message === PUBLIC_ERROR_MESSAGES[candidate.code];
+  return isDesktopPublicErrorCode(candidate.code) && candidate.message === PUBLIC_ERROR_MESSAGES[candidate.code];
 }
 
 export function isAgentPublicErrorCode(value: unknown): value is AgentPublicErrorCode {
-  return typeof value === "string" && value in PUBLIC_ERROR_MESSAGES;
+  return value === "busy" || value === "cancelled" || value === "forbidden-sender" || value === "internal-error"
+    || value === "invalid-message" || value === "invalid-payload" || value === "invalid-run-id"
+    || value === "run-not-found" || value === "worker-exited" || value === "worker-not-ready"
+    || value === "worker-ready-timeout" || value === "worker-unavailable";
+}
+
+export function isDesktopPublicErrorCode(value: unknown): value is DesktopPublicErrorCode {
+  return isAgentPublicErrorCode(value) || isJobOperationErrorCode(value) || (typeof value === "string" && (PUBLIC_A08_ERROR_CODES as readonly string[]).includes(value));
 }
 
 export function isValidAgentRunId(value: unknown): value is string {
@@ -554,6 +604,10 @@ export function isValidAgentWorkerMessage(value: unknown): value is AgentWorkerM
       && isUuid(value.projectId) && isUuid(value.jobId) && isJobEvent(value.event)
       && value.event.projectId === value.projectId && value.event.jobId === value.jobId;
   }
+  if (value.type === "diagnostic-event") {
+    return hasOnlyKeys(value, ["protocolVersion", "type", "event"])
+      && isAgentDiagnosticEvent(value.event);
+  }
   return false;
 }
 
@@ -659,7 +713,9 @@ function isAgentRunEvent(value: unknown): value is AgentRunEvent {
 }
 
 function isAgentPublicError(value: unknown): value is AgentPublicError {
-  return isDesktopPublicError(value);
+  return isDesktopPublicError(value)
+    && isPlainRecord(value)
+    && isAgentPublicErrorCode(value.code);
 }
 
 function isAgentProjectOperationType(value: unknown): value is AgentProjectOperationType {

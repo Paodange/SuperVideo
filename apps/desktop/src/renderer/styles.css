@@ -136,6 +136,13 @@ dd {
 .job-events { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
 .job-events span { border-radius: 999px; background: #eef3f1; color: #51625e; padding: 3px 7px; font-size: 0.72rem; }
 .error-text { color: #a33a3a; }
+.security-panel, .diagnostics-panel { border-color: rgba(255, 190, 74, 0.28); }
+.credential-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.credential-list { display: grid; gap: 8px; }
+.credential-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid rgba(167, 190, 238, 0.1); border-radius: 10px; color: #d8e3ff; font-size: 12px; }
+.credential-row strong, .credential-row span { display: block; }
+.credential-row span { margin-top: 4px; color: #8998b8; }
+.credential-row .actions { margin-top: 0; }
 
 .agent-panel {
   margin-top: 28px;
@@ -401,9 +408,12 @@ progress {
   }
 
   .form-grid,
-  .asset-row {
+  .asset-row,
+  .credential-grid {
     grid-template-columns: 1fr;
   }
+
+  .credential-row { align-items: flex-start; flex-direction: column; }
 
   .agent-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));

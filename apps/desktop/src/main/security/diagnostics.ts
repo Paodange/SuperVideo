@@ -1,7 +1,6 @@
+import { createStructuredLogger, type StructuredLogger, type StructuredLoggerOptions } from "../observability/logger";
 import type { SecurityLog } from "./ipc";
 
-export function createSecurityLogger(): SecurityLog {
-  return (event, details = {}) => {
-    console.warn(`[desktop-security] ${JSON.stringify({ event, ...details })}`);
-  };
+export function createSecurityLogger(options: StructuredLoggerOptions = {}): SecurityLog & StructuredLogger {
+  return createStructuredLogger(options) as SecurityLog & StructuredLogger;
 }
