@@ -3,6 +3,7 @@ import {
   DIAGNOSTICS_MAX_LOG_EVENTS,
   isCredentialStorageStatus,
   isDiagnosticDocument,
+  isLogEvent,
   LOG_SCHEMA_VERSION,
   type AgentWorkerStatusSnapshot,
   type CredentialMetadata,
@@ -115,7 +116,7 @@ export class DiagnosticsCollector {
       recentLogs: this.options.logger.getRecentEvents(DIAGNOSTICS_MAX_LOG_EVENTS),
       truncated: false,
     };
-    if (!isDiagnosticDocument(document)) throw new Error("Diagnostic model failed validation.");
+    if (!isDiagnosticDocument(document)) throw new Error(diagnosticModelFailureReason(document));
     return Object.freeze(document);
   }
 
@@ -127,6 +128,26 @@ export class DiagnosticsCollector {
       return [];
     }
   }
+}
+
+function diagnosticModelFailureReason(document: DiagnosticDocument): string {
+  const checks: readonly [string, boolean][] = [
+    ["application", isPlainRecord(document.application) && Object.values(document.application).every((value) => typeof value === "string")],
+    ["platform", isPlainRecord(document.platform) && Object.values(document.platform).every((value) => typeof value === "string")],
+    ["worker", isPlainRecord(document.worker) && typeof document.worker.status === "string"],
+    ["core", isPlainRecord(document.core) && typeof document.core.status === "string"],
+    ["safeStorage", isCredentialStorageStatus(document.safeStorage)],
+    ["credentials", isPlainRecord(document.credentials)],
+    ["project", isPlainRecord(document.project)],
+    ["jobs", isPlainRecord(document.jobs)],
+    ["logging", isPlainRecord(document.logging)],
+    ["recentLogs", Array.isArray(document.recentLogs) && document.recentLogs.every((event) => isLogEvent(event))],
+  ];
+  return `Diagnostic model failed validation: ${checks.find(([, valid]) => !valid)?.[0] ?? "document"}.`;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function emptyCredentialCounts(): Record<CredentialServiceKind, number> {

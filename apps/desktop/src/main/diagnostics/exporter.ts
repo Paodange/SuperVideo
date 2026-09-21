@@ -20,7 +20,7 @@ export type DiagnosticsSaveDialog = (owner: unknown, options: Readonly<{
 export class DiagnosticsExporterError extends Error {
   readonly code = "DIAGNOSTIC_EXPORT_FAILED" as const;
 
-  constructor() {
+  constructor(readonly phase: "dialog" | "collect" | "validate" | "write" = "validate") {
     super("Diagnostics could not be exported.");
     this.name = "DiagnosticsExporterError";
   }
@@ -41,22 +41,28 @@ export async function exportDiagnostics(options: Readonly<{
       filters: [{ name: "JSON diagnostics", extensions: ["json"] }],
     });
   } catch {
-    throw new DiagnosticsExporterError();
+    throw new DiagnosticsExporterError("dialog");
   }
   if (selection.canceled || !selection.filePath) return Object.freeze({ status: "cancelled" });
-  if (!path.isAbsolute(selection.filePath) || selection.filePath.includes("\u0000")) throw new DiagnosticsExporterError();
+  if (!path.isAbsolute(selection.filePath) || selection.filePath.includes("\u0000")) throw new DiagnosticsExporterError("validate");
 
+  let collected: DiagnosticDocument;
   try {
-    const collected = await options.collector.collect();
-    const document = fitWithinLimit(collected);
+    collected = await options.collector.collect();
+  } catch {
+    throw new DiagnosticsExporterError("collect");
+  }
+  let document: DiagnosticDocument;
+  try {
+    document = fitWithinLimit(collected);
     const serialized = `${JSON.stringify(document, null, 2)}\n`;
-    if (Buffer.byteLength(serialized, "utf8") > DIAGNOSTICS_MAX_FILE_BYTES || !isDiagnosticDocument(document)) throw new DiagnosticsExporterError();
+    if (Buffer.byteLength(serialized, "utf8") > DIAGNOSTICS_MAX_FILE_BYTES || !isDiagnosticDocument(document)) throw new Error("invalid-document");
     await writeAtomic(selection.filePath, serialized);
-    return Object.freeze({ status: "saved" });
   } catch (error) {
     if (error instanceof DiagnosticsExporterError) throw error;
-    throw new DiagnosticsExporterError();
+    throw new DiagnosticsExporterError("write");
   }
+  return Object.freeze({ status: "saved" });
 }
 
 export function fitWithinLimit(document: DiagnosticDocument): DiagnosticDocument {
@@ -67,7 +73,7 @@ export function fitWithinLimit(document: DiagnosticDocument): DiagnosticDocument
     const encoded = JSON.stringify(candidate, null, 2);
     const logBytes = Buffer.byteLength(JSON.stringify(candidate.recentLogs), "utf8");
     if (logBytes <= DIAGNOSTICS_MAX_LOG_BYTES && Buffer.byteLength(encoded, "utf8") + 1 <= DIAGNOSTICS_MAX_FILE_BYTES) return Object.freeze(candidate);
-    if (recentLogs.length === 0) throw new DiagnosticsExporterError();
+    if (recentLogs.length === 0) throw new DiagnosticsExporterError("validate");
     recentLogs = recentLogs.slice(1);
     truncated = true;
   }
