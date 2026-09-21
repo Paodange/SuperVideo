@@ -35,6 +35,7 @@ export const CORE_RPC_METHODS = {
   mediaSentenceIndex: "media.sentences.index",
   mediaSentenceRetrieve: "media.sentences.retrieve",
   mediaSentenceRerank: "media.sentences.rerank",
+  mediaScriptAlign: "media.script.align",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -64,6 +65,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaSentenceIndex
   | typeof CORE_RPC_METHODS.mediaSentenceRetrieve
   | typeof CORE_RPC_METHODS.mediaSentenceRerank
+  | typeof CORE_RPC_METHODS.mediaScriptAlign
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -176,6 +178,13 @@ export const CORE_RPC_ERROR_CODES = {
   rerankOutputInvalid: "RERANK_OUTPUT_INVALID",
   rerankTimeout: "RERANK_TIMEOUT",
   rerankCancelled: "RERANK_CANCELLED",
+  slotInputInvalid: "SLOT_INPUT_INVALID",
+  slotSourceInvalid: "SLOT_SOURCE_INVALID",
+  slotSourceStale: "SLOT_SOURCE_STALE",
+  slotRetrievalInvalid: "SLOT_RETRIEVAL_INVALID",
+  slotOutputInvalid: "SLOT_OUTPUT_INVALID",
+  slotTimeout: "SLOT_TIMEOUT",
+  slotCancelled: "SLOT_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -284,6 +293,13 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   RERANK_OUTPUT_INVALID: -32343,
   RERANK_TIMEOUT: -32344,
   RERANK_CANCELLED: -32345,
+  SLOT_INPUT_INVALID: -32346,
+  SLOT_SOURCE_INVALID: -32347,
+  SLOT_SOURCE_STALE: -32348,
+  SLOT_RETRIEVAL_INVALID: -32349,
+  SLOT_OUTPUT_INVALID: -32350,
+  SLOT_TIMEOUT: -32351,
+  SLOT_CANCELLED: -32352,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -390,6 +406,13 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   RERANK_OUTPUT_INVALID: "The sentence reranking output was invalid.",
   RERANK_TIMEOUT: "The sentence reranking operation timed out.",
   RERANK_CANCELLED: "The sentence reranking operation was cancelled.",
+  SLOT_INPUT_INVALID: "The information-slot input is invalid or exceeds its bounds.",
+  SLOT_SOURCE_INVALID: "The B08/B09 source is invalid for slot alignment.",
+  SLOT_SOURCE_STALE: "The B08/B09 source is stale for slot alignment.",
+  SLOT_RETRIEVAL_INVALID: "The B08/B09 retrieval result is invalid for slot alignment.",
+  SLOT_OUTPUT_INVALID: "The information-slot alignment output was invalid.",
+  SLOT_TIMEOUT: "The information-slot alignment operation timed out.",
+  SLOT_CANCELLED: "The information-slot alignment operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -492,6 +515,11 @@ export type RerankScores = Readonly<{ originalScore: number; narrationClaritySco
 export type RerankExplanation = Readonly<{ reasons: readonly string[]; qaOpenMarkerCount: number; qaIssueTypes: readonly string[]; duplicateOfSentenceId: string | null; selectedSourceAssetCount: number; visualQualityStatus: "measured" | "degraded"; visualQualityReason: string }>;
 export type RerankCandidate = Readonly<{ rank: number; retrievalRank: number; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: RerankTimecode; text: string; quality: "complete" | "needs_review"; qualityStatus: "complete" | "needs_review"; qualityReasons: readonly string[]; previewUri: string; scores: RerankScores; explanation: RerankExplanation }>;
 export type RerankResult = Readonly<{ schemaVersion: 1; rerankVersion: "quality-rerank-v1"; projectId: string; query: string; mode: "lexical" | "vector" | "hybrid"; candidateLimit: number; limit: number; candidateCount: number; candidates: readonly RerankCandidate[] }>;
+export type SlotAlignmentParams = Readonly<{ projectId: string; inputKind?: "copy" | "outline"; inputText: string; assetIds?: readonly string[]; candidateLimit?: number; useRerank?: boolean; timeoutMs?: number }>;
+export type SlotAlignmentTimecode = Readonly<{ startMs: number; endMs: number }>;
+export type SlotAlignmentCandidate = Readonly<{ rank: number; origin: "b08-retrieval" | "b09-quality-rerank"; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: SlotAlignmentTimecode; text: string; score: number; quality: "complete"; previewUri: string; selectionReason: string; preservedFacts: readonly string[] }>;
+export type InformationSlot = Readonly<{ slotId: string; order: number; kind: "hook" | "context" | "claim" | "evidence" | "benefit" | "requirement" | "process" | "cta" | "closing" | "other"; sourceText: string; query: string; keyFacts: readonly string[]; status: "matched" | "gap"; selectedCandidateRank: number | null; candidates: readonly SlotAlignmentCandidate[]; selectionReason: string | null; gapReason: string | null }>;
+export type SlotAlignmentResult = Readonly<{ schemaVersion: 1; alignmentVersion: "information-slot-alignment-v1"; splitterVersion: "deterministic-slot-split-v1"; projectId: string; inputKind: "copy" | "outline"; inputText: string; sourceDigest: string; slotCount: number; matchedCount: number; slots: readonly InformationSlot[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -642,6 +670,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaSentenceIndex) return isSentenceIndexParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceRetrieve) return isRetrievalParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceRerank) return isRerankParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaScriptAlign) return isSlotAlignmentParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -860,6 +889,18 @@ export function isRerankResult(value: unknown): value is RerankResult {
     && isSafeInteger(value.candidateLimit, 1, 50) && isSafeInteger(value.limit, 1, 50) && value.limit <= value.candidateLimit
     && isSafeInteger(value.candidateCount, 0, 50) && Array.isArray(value.candidates) && value.candidates.length === value.candidateCount
     && value.candidates.every((item, index) => isRerankCandidate(item, index + 1))
+    && isBoundedCoreJsonValue(value, 60 * 1024);
+}
+
+export function isSlotAlignmentResult(value: unknown): value is SlotAlignmentResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "alignmentVersion", "splitterVersion", "projectId", "inputKind", "inputText", "sourceDigest", "slotCount", "matchedCount", "slots"])
+    && value.schemaVersion === 1 && value.alignmentVersion === "information-slot-alignment-v1" && value.splitterVersion === "deterministic-slot-split-v1"
+    && isUuid(value.projectId) && (value.inputKind === "copy" || value.inputKind === "outline")
+    && isBoundedMultilineText(value.inputText, 8_192) && isSentenceCacheKey(value.sourceDigest)
+    && isSafeInteger(value.slotCount, 1, 32) && isSafeInteger(value.matchedCount, 0, 32)
+    && Array.isArray(value.slots) && value.slots.length === value.slotCount
+    && value.slots.every((slot, index) => isInformationSlot(slot, index + 1))
+    && value.matchedCount === value.slots.filter((slot) => (slot as Record<string, unknown>).status === "matched").length
     && isBoundedCoreJsonValue(value, 60 * 1024);
 }
 
@@ -1115,6 +1156,17 @@ export function isRerankParams(value: unknown): value is RerankParams {
     && (values.every((item) => item === undefined) || values.some((item) => item !== undefined && item > 0));
 }
 
+export function isSlotAlignmentParams(value: unknown): value is SlotAlignmentParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "inputKind", "inputText", "assetIds", "candidateLimit", "useRerank", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || (value.inputKind !== undefined && value.inputKind !== "copy" && value.inputKind !== "outline")) return false;
+  if (!isBoundedMultilineText(value.inputText, 8_192)) return false;
+  if (value.candidateLimit !== undefined && !isSafeInteger(value.candidateLimit, 1, 8)) return false;
+  if (value.useRerank !== undefined && typeof value.useRerank !== "boolean") return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  return value.assetIds === undefined || Array.isArray(value.assetIds) && value.assetIds.length >= 1 && value.assetIds.length <= 100
+    && value.assetIds.length === new Set(value.assetIds).size && value.assetIds.every(isUuid);
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1142,6 +1194,11 @@ export function isSentenceCacheKey(value: unknown): value is string {
 
 export function isBoundedText(value: unknown, maximumLength: number): value is string {
   return typeof value === "string" && value.length <= maximumLength && !/[\u0000-\u001f]/.test(value);
+}
+
+function isBoundedMultilineText(value: unknown, maximumLength: number): value is string {
+  return typeof value === "string" && value.length <= maximumLength && value.trim().length > 0
+    && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
 }
 
 function isSentenceQaMarker(value: unknown): value is SentenceQaMarker {
@@ -1244,6 +1301,55 @@ function isRerankCandidate(value: unknown, rank: number): value is RerankCandida
   return isSafeInteger(value.explanation.selectedSourceAssetCount, 1, 50)
     && (value.explanation.visualQualityStatus === "measured" || value.explanation.visualQualityStatus === "degraded")
     && isSafeString(value.explanation.visualQualityReason, 96);
+}
+
+function isInformationSlot(value: unknown, order: number): value is InformationSlot {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["slotId", "order", "kind", "sourceText", "query", "keyFacts", "status", "selectedCandidateRank", "candidates", "selectionReason", "gapReason"])) return false;
+  if (value.slotId !== `slot-${order}` || value.order !== order || !["hook", "context", "claim", "evidence", "benefit", "requirement", "process", "cta", "closing", "other"].includes(value.kind as string)) return false;
+  if (!isBoundedText(value.sourceText, 512) || !isBoundedText(value.query, 512)) return false;
+  if (!Array.isArray(value.keyFacts) || value.keyFacts.length > 8 || !value.keyFacts.every((item) => isBoundedText(item, 64))) return false;
+  const keyFacts = value.keyFacts as readonly string[];
+  if (!Array.isArray(value.candidates) || value.candidates.length > 8 || !value.candidates.every((candidate, index) => isSlotAlignmentCandidate(candidate, index + 1, keyFacts))) return false;
+  if (value.status === "matched") {
+    return value.candidates.length > 0
+      && value.candidates.every((candidate) => candidate.preservedFacts.length === keyFacts.length && keyFacts.every((fact) => candidate.preservedFacts.includes(fact)))
+      && value.selectedCandidateRank === 1 && isBoundedText(value.selectionReason, 128) && value.gapReason === null;
+  }
+  return value.status === "gap" && value.candidates.length === 0 && value.selectedCandidateRank === null && value.selectionReason === null && isBoundedText(value.gapReason, 128);
+}
+
+function isSlotAlignmentCandidate(value: unknown, rank: number, keyFacts: readonly string[]): value is SlotAlignmentCandidate {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["rank", "origin", "sentenceId", "sourceAssetId", "sourceSentenceCacheKey", "sentenceIndex", "timecode", "text", "score", "quality", "previewUri", "selectionReason", "preservedFacts"])) return false;
+  if (value.rank !== rank || (value.origin !== "b08-retrieval" && value.origin !== "b09-quality-rerank") || !isSentenceCacheKey(value.sentenceId) || !isUuid(value.sourceAssetId) || !isSentenceCacheKey(value.sourceSentenceCacheKey)) return false;
+  if (!isSafeInteger(value.sentenceIndex, 0, 1_999) || !isBoundedText(value.text, 2_048) || !isFiniteInRange(value.score, 0, 1) || value.quality !== "complete") return false;
+  if (!isPlainRecord(value.timecode) || !hasOnlyKeys(value.timecode, ["startMs", "endMs"]) || !isSafeInteger(value.timecode.startMs, 0, 86_400_000) || !isSafeInteger(value.timecode.endMs, 1, 86_400_000) || value.timecode.endMs <= value.timecode.startMs) return false;
+  if (value.previewUri !== `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`) return false;
+  return isBoundedText(value.selectionReason, 128)
+    && Array.isArray(value.preservedFacts)
+    && value.preservedFacts.length <= 8
+    && value.preservedFacts.every((item) => isBoundedText(item, 64) && keyFacts.includes(item) && extractSlotFacts(value.text as string).includes(item));
+}
+
+function extractSlotFacts(text: string): string[] {
+  const source = text.replace(/^\s*\d{1,3}[.)、]\s*/gm, "");
+  const patterns = [
+    /\d{4}年\d{1,2}月\d{1,2}日/g,
+    /\d{1,2}月\d{1,2}日/g,
+    /\d+(?:\.\d+)?\s*(?:(?:万|千)?元|万|千|岁|人|天|月|年|分钟|秒|小时|%|％)/g,
+    /\b[A-Z][A-Za-z0-9_-]{1,31}\b/g,
+    /(?<![A-Za-z0-9])\d+(?:\.\d+)?(?![A-Za-z0-9])/g,
+  ];
+  const matches: Array<{ position: number; value: string }> = [];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      if (match.index !== undefined) matches.push({ position: match.index, value: match[0] });
+    }
+  }
+  const values: string[] = [];
+  for (const item of matches.sort((left, right) => left.position - right.position || (left.value < right.value ? -1 : left.value > right.value ? 1 : 0))) {
+    if (item.value && !values.includes(item.value)) values.push(item.value);
+  }
+  return values.filter((item) => !values.some((other) => item !== other && other.includes(item))).slice(0, 8);
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {

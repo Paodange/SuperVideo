@@ -17,12 +17,15 @@ from typing import Any
 from pydantic import ValidationError
 
 from supervideo_core.media.errors import MediaError
+from supervideo_core.rpc.errors import error_payload
 from supervideo_core.rpc.server import RpcServer
 from supervideo_core.rpc.models import (
     HealthParams,
     RpcRequest,
     SmokeCountdownParams,
+    health_result,
     is_valid_rpc_message,
+    validate_request,
     validate_rpc_message,
 )
 
@@ -56,6 +59,38 @@ class RpcModelTests(unittest.TestCase):
         }
         self.assertTrue(is_valid_rpc_message(message))
         self.assertEqual(validate_rpc_message(message).method, "core.no_such_method")
+
+    def test_b10_request_health_capability_and_error_codes_are_stable(self) -> None:
+        request = {
+            "jsonrpc": "2.0",
+            "id": "slot-align-1",
+            "method": "media.script.align",
+            "params": {
+                "projectId": "11111111-1111-4111-8111-111111111111",
+                "inputKind": "outline",
+                "inputText": "1. 岗位介绍\n2. 月薪 8000 元",
+                "candidateLimit": 5,
+                "useRerank": True,
+                "timeoutMs": 120000,
+            },
+        }
+        self.assertEqual(validate_request(request).method, "media.script.align")
+        invalid = {**request, "params": {**request["params"], "path": "C:\\secret\\source.mp4"}}
+        with self.assertRaises(ValidationError):
+            validate_request(invalid)
+        self.assertIn("media.script.align", health_result()["capabilities"])
+        expected_codes = {
+            "SLOT_INPUT_INVALID": -32346,
+            "SLOT_SOURCE_INVALID": -32347,
+            "SLOT_SOURCE_STALE": -32348,
+            "SLOT_RETRIEVAL_INVALID": -32349,
+            "SLOT_OUTPUT_INVALID": -32350,
+            "SLOT_TIMEOUT": -32351,
+            "SLOT_CANCELLED": -32352,
+        }
+        for error_code, code in expected_codes.items():
+            with self.subTest(error_code=error_code):
+                self.assertEqual(error_payload(error_code)["code"], code)
 
 
 class RpcServerTests(unittest.TestCase):
