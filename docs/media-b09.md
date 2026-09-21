@@ -14,12 +14,18 @@ asset, stale B05 result, or invalid B08 source fails with a stable B09 error;
 no source is silently substituted.
 
 The reranker is deterministic and local. It combines the original B08 score,
-registered narration confidence, sentence completeness, open QA issue weights,
-duplicate similarity, and source-asset diversity. Selection is greedy over
+registered narration confidence, existing B02 probe metadata (video
+resolution and bitrate), sentence completeness, a bounded sentence
+independence heuristic, open QA issue weights, duplicate similarity, and
+source-asset diversity. Selection is greedy over
 bounded candidates, applies `maxPerAsset`, and resolves ties by B08 rank and
 sentence ID. Every result includes the original score, bounded component
-scores, final score, quality status, ranking reasons, source asset, timecode,
-preview URI, sentence identity, and QA explanation.
+scores for narration clarity/quality, visual quality, sentence completeness,
+sentence independence, QA, duplicate penalty, and source diversity, plus the
+final score, quality status, ranking reasons, source asset, timecode, preview
+URI, sentence identity, and QA explanation. Visual quality reports
+`measured` when a current B02 probe cache is valid; missing or incomplete
+metadata is a bounded `degraded` score with an explicit reason.
 
 The public schema is `quality-rerank-v1`. The Worker, shared runtime
 validator, and constrained Desktop API expose only the typed RPC operation

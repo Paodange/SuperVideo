@@ -45,15 +45,17 @@ def _validate_text(value: str, maximum: int) -> str:
 
 
 class RerankWeights(RerankModel):
-    original_score: float = Field(default=0.45, alias="originalScore", strict=True, ge=0, le=1)
-    narration_clarity: float = Field(default=0.20, alias="narrationClarity", strict=True, ge=0, le=1)
-    sentence_completeness: float = Field(default=0.15, alias="sentenceCompleteness", strict=True, ge=0, le=1)
-    qa_quality: float = Field(default=0.15, alias="qaQuality", strict=True, ge=0, le=1)
-    source_diversity: float = Field(default=0.05, alias="sourceDiversity", strict=True, ge=0, le=1)
+    original_score: float = Field(default=0.30, alias="originalScore", strict=True, ge=0, le=1)
+    narration_clarity: float = Field(default=0.15, alias="narrationClarity", strict=True, ge=0, le=1)
+    visual_quality: float = Field(default=0.15, alias="visualQuality", strict=True, ge=0, le=1)
+    sentence_completeness: float = Field(default=0.10, alias="sentenceCompleteness", strict=True, ge=0, le=1)
+    sentence_independence: float = Field(default=0.10, alias="sentenceIndependence", strict=True, ge=0, le=1)
+    qa_quality: float = Field(default=0.10, alias="qaQuality", strict=True, ge=0, le=1)
+    source_diversity: float = Field(default=0.10, alias="sourceDiversity", strict=True, ge=0, le=1)
 
     @model_validator(mode="after")
     def validate_total(self) -> "RerankWeights":
-        total = self.original_score + self.narration_clarity + self.sentence_completeness + self.qa_quality + self.source_diversity
+        total = self.original_score + self.narration_clarity + self.visual_quality + self.sentence_completeness + self.sentence_independence + self.qa_quality + self.source_diversity
         if not math.isfinite(total) or total <= 0:
             raise ValueError("rerank weights must sum to a positive value")
         return self
@@ -105,7 +107,9 @@ class RerankScores(RerankModel):
     original_score: float = Field(alias="originalScore", strict=True, ge=0, le=1)
     narration_clarity_score: float = Field(alias="narrationClarityScore", strict=True, ge=0, le=1)
     narration_quality_score: float = Field(alias="narrationQualityScore", strict=True, ge=0, le=1)
+    visual_quality_score: float = Field(alias="visualQualityScore", strict=True, ge=0, le=1)
     sentence_completeness_score: float = Field(alias="sentenceCompletenessScore", strict=True, ge=0, le=1)
+    sentence_independence_score: float = Field(alias="sentenceIndependenceScore", strict=True, ge=0, le=1)
     qa_score: float = Field(alias="qaScore", strict=True, ge=0, le=1)
     duplicate_penalty: float = Field(alias="duplicatePenalty", strict=True, ge=0, le=1)
     source_diversity_reward: float = Field(alias="sourceDiversityReward", strict=True, ge=0, le=1)
@@ -118,6 +122,8 @@ class RerankExplanation(RerankModel):
     qa_issue_types: list[str] = Field(alias="qaIssueTypes", max_length=5)
     duplicate_of_sentence_id: str | None = Field(default=None, alias="duplicateOfSentenceId")
     selected_source_asset_count: int = Field(alias="selectedSourceAssetCount", strict=True, ge=1, le=RERANK_MAX_LIMIT)
+    visual_quality_status: Literal["measured", "degraded"] = Field(alias="visualQualityStatus")
+    visual_quality_reason: str = Field(alias="visualQualityReason", min_length=1, max_length=RERANK_MAX_REASON_LENGTH)
 
     @field_validator("reasons")
     @classmethod
@@ -135,6 +141,13 @@ class RerankExplanation(RerankModel):
             raise ValueError("invalid rerank issue types")
         if len(value) != len(set(value)):
             raise ValueError("rerank issue types must be unique")
+        return value
+
+    @field_validator("visual_quality_reason")
+    @classmethod
+    def validate_visual_reason(cls, value: str) -> str:
+        if not value.strip() or any(ord(char) < 32 for char in value):
+            raise ValueError("invalid visual quality reason")
         return value
 
     @field_validator("duplicate_of_sentence_id")

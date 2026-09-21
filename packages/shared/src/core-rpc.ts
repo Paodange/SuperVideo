@@ -484,12 +484,12 @@ export type RetrievalTimecode = Readonly<{ startMs: number; endMs: number }>;
 export type RetrievalExplanation = Readonly<{ queryKeywords: readonly string[]; matchedKeywords: readonly string[]; matchedTopics: readonly string[]; vectorProvider: "sha256-hash-v1"; scoreFormula: "lexical-keyword-overlap-v1" | "vector-cosine-v1" | "hybrid-0.6-0.4-v1" }>;
 export type RetrievalCandidate = Readonly<{ rank: number; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: RetrievalTimecode; text: string; lexicalScore: number; vectorScore: number; hybridScore: number; score: number; explanation: RetrievalExplanation; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[]; previewUri: string }>;
 export type RetrievalResult = Readonly<{ schemaVersion: 1; retrievalVersion: "hybrid-retrieval-v1"; projectId: string; query: string; mode: "lexical" | "vector" | "hybrid"; limit: number; candidateCount: number; candidates: readonly RetrievalCandidate[] }>;
-export type RerankWeights = Readonly<{ originalScore?: number; narrationClarity?: number; sentenceCompleteness?: number; qaQuality?: number; sourceDiversity?: number }>;
+export type RerankWeights = Readonly<{ originalScore?: number; narrationClarity?: number; visualQuality?: number; sentenceCompleteness?: number; sentenceIndependence?: number; qaQuality?: number; sourceDiversity?: number }>;
 export type RerankConfig = Readonly<{ weights?: RerankWeights; duplicatePenalty?: number; diversityReward?: number; duplicateThreshold?: number; maxPerAsset?: number }>;
 export type RerankParams = Readonly<{ projectId: string; query: string; mode?: "lexical" | "vector" | "hybrid"; assetIds?: readonly string[]; filters?: RetrievalFilters; candidateLimit?: number; limit?: number; config?: RerankConfig; timeoutMs?: number }>;
 export type RerankTimecode = Readonly<{ startMs: number; endMs: number }>;
-export type RerankScores = Readonly<{ originalScore: number; narrationClarityScore: number; narrationQualityScore: number; sentenceCompletenessScore: number; qaScore: number; duplicatePenalty: number; sourceDiversityReward: number; finalScore: number }>;
-export type RerankExplanation = Readonly<{ reasons: readonly string[]; qaOpenMarkerCount: number; qaIssueTypes: readonly string[]; duplicateOfSentenceId: string | null; selectedSourceAssetCount: number }>;
+export type RerankScores = Readonly<{ originalScore: number; narrationClarityScore: number; narrationQualityScore: number; visualQualityScore: number; sentenceCompletenessScore: number; sentenceIndependenceScore: number; qaScore: number; duplicatePenalty: number; sourceDiversityReward: number; finalScore: number }>;
+export type RerankExplanation = Readonly<{ reasons: readonly string[]; qaOpenMarkerCount: number; qaIssueTypes: readonly string[]; duplicateOfSentenceId: string | null; selectedSourceAssetCount: number; visualQualityStatus: "measured" | "degraded"; visualQualityReason: string }>;
 export type RerankCandidate = Readonly<{ rank: number; retrievalRank: number; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: RerankTimecode; text: string; quality: "complete" | "needs_review"; qualityStatus: "complete" | "needs_review"; qualityReasons: readonly string[]; previewUri: string; scores: RerankScores; explanation: RerankExplanation }>;
 export type RerankResult = Readonly<{ schemaVersion: 1; rerankVersion: "quality-rerank-v1"; projectId: string; query: string; mode: "lexical" | "vector" | "hybrid"; candidateLimit: number; limit: number; candidateCount: number; candidates: readonly RerankCandidate[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
@@ -1109,8 +1109,8 @@ export function isRerankParams(value: unknown): value is RerankParams {
   if (config.maxPerAsset !== undefined && !isSafeInteger(config.maxPerAsset, 1, 50)) return false;
   if (config.weights === undefined) return true;
   const weights = config.weights;
-  if (!isPlainRecord(weights) || !hasNoUnexpectedKeys(weights, ["originalScore", "narrationClarity", "sentenceCompleteness", "qaQuality", "sourceDiversity"])) return false;
-  const values = [weights.originalScore, weights.narrationClarity, weights.sentenceCompleteness, weights.qaQuality, weights.sourceDiversity];
+  if (!isPlainRecord(weights) || !hasNoUnexpectedKeys(weights, ["originalScore", "narrationClarity", "visualQuality", "sentenceCompleteness", "sentenceIndependence", "qaQuality", "sourceDiversity"])) return false;
+  const values = [weights.originalScore, weights.narrationClarity, weights.visualQuality, weights.sentenceCompleteness, weights.sentenceIndependence, weights.qaQuality, weights.sourceDiversity];
   return values.every((item) => item === undefined || isFiniteInRange(item, 0, 1))
     && (values.every((item) => item === undefined) || values.some((item) => item !== undefined && item > 0));
 }
@@ -1235,13 +1235,15 @@ function isRerankCandidate(value: unknown, rank: number): value is RerankCandida
   if (!Array.isArray(value.qualityReasons) || value.qualityReasons.length > 8 || !value.qualityReasons.every((item) => isSafeString(item, 2_048))) return false;
   if (value.quality === "complete" && value.qualityReasons.length > 0 || value.quality === "needs_review" && value.qualityReasons.length === 0) return false;
   if (value.previewUri !== `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`) return false;
-  if (!isPlainRecord(value.scores) || !hasOnlyKeys(value.scores, ["originalScore", "narrationClarityScore", "narrationQualityScore", "sentenceCompletenessScore", "qaScore", "duplicatePenalty", "sourceDiversityReward", "finalScore"])) return false;
-  if (![value.scores.originalScore, value.scores.narrationClarityScore, value.scores.narrationQualityScore, value.scores.sentenceCompletenessScore, value.scores.qaScore, value.scores.duplicatePenalty, value.scores.sourceDiversityReward, value.scores.finalScore].every((item) => isFiniteInRange(item, 0, 1))) return false;
-  if (!isPlainRecord(value.explanation) || !hasOnlyKeys(value.explanation, ["reasons", "qaOpenMarkerCount", "qaIssueTypes", "duplicateOfSentenceId", "selectedSourceAssetCount"])) return false;
+  if (!isPlainRecord(value.scores) || !hasOnlyKeys(value.scores, ["originalScore", "narrationClarityScore", "narrationQualityScore", "visualQualityScore", "sentenceCompletenessScore", "sentenceIndependenceScore", "qaScore", "duplicatePenalty", "sourceDiversityReward", "finalScore"])) return false;
+  if (![value.scores.originalScore, value.scores.narrationClarityScore, value.scores.narrationQualityScore, value.scores.visualQualityScore, value.scores.sentenceCompletenessScore, value.scores.sentenceIndependenceScore, value.scores.qaScore, value.scores.duplicatePenalty, value.scores.sourceDiversityReward, value.scores.finalScore].every((item) => isFiniteInRange(item, 0, 1))) return false;
+  if (!isPlainRecord(value.explanation) || !hasOnlyKeys(value.explanation, ["reasons", "qaOpenMarkerCount", "qaIssueTypes", "duplicateOfSentenceId", "selectedSourceAssetCount", "visualQualityStatus", "visualQualityReason"])) return false;
   if (!Array.isArray(value.explanation.reasons) || value.explanation.reasons.length > 8 || !value.explanation.reasons.every((item) => isSafeString(item, 96))) return false;
   if (!isSafeInteger(value.explanation.qaOpenMarkerCount, 0, 500) || !Array.isArray(value.explanation.qaIssueTypes) || value.explanation.qaIssueTypes.length > 5 || !value.explanation.qaIssueTypes.every((item) => isSafeString(item, 64))) return false;
   if (value.explanation.duplicateOfSentenceId !== null && !isSentenceCacheKey(value.explanation.duplicateOfSentenceId)) return false;
-  return isSafeInteger(value.explanation.selectedSourceAssetCount, 1, 50);
+  return isSafeInteger(value.explanation.selectedSourceAssetCount, 1, 50)
+    && (value.explanation.visualQualityStatus === "measured" || value.explanation.visualQualityStatus === "degraded")
+    && isSafeString(value.explanation.visualQualityReason, 96);
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {
