@@ -1,8 +1,9 @@
 # SuperVideo
 
-SuperVideo is a local-first desktop video creation agent. A04 adds a bounded,
-versioned JSON-RPC boundary from the Pi Agent Worker to a local Python Core;
-the media core and real model providers remain out of scope.
+SuperVideo is a local-first desktop video creation agent. The Pi Agent Worker
+uses a bounded, versioned JSON-RPC boundary to a local Python Core; B03 adds a
+controlled optional faster-whisper transcription adapter with fake-runner
+coverage and project-local versioned caching.
 
 ## Environment
 
@@ -107,4 +108,4 @@ A02 keeps `contextIsolation`, sandboxing, `nodeIntegration: false`, `webSecurity
 
 ## Known limitations
 
-A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains the health/countdown and A06 project/asset RPC methods; A05 adds the internal per-project SQLite foundation, A06 adds trusted project creation/open plus read-only external references, B01 adds shallow video/audio directory scanning with versioned sampled fingerprints, B02 adds fixed ffprobe/FFmpeg media probe and proxy RPC methods with project cache, and A07 adds one deterministic persistent smoke executor with cancel/retry/reopen recovery. A08 adds Windows `safeStorage` credentials outside project folders, redacted rotating JSONL logs, and explicit bounded diagnostics export; it never uploads diagnostics or exposes a saved secret. The product still excludes natural-language paths, recursive scanning, Whisper, Remotion, 剪映 integration, formal Pi tool registration, backup/restore, cross-machine recovery, and background services. A03 smoke runs and raw RPC requests are not persisted; select **Open project** again to restore the project and rebuild A07 jobs from SQLite. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.
+A03 uses only a deterministic, keyless Pi faux provider and an in-memory smoke tool. A04's Python Core contains the health/countdown and A06 project/asset RPC methods; A05 adds the internal per-project SQLite foundation, A06 adds trusted project creation/open plus read-only external references, B01 adds shallow video/audio directory scanning with versioned sampled fingerprints, B02 adds fixed ffprobe/FFmpeg media probe and proxy RPC methods with project cache, B03 adds the fixed local transcription RPC and optional faster-whisper adapter with versioned project cache, and A07 adds one deterministic persistent smoke executor with cancel/retry/reopen recovery. A08 adds Windows `safeStorage` credentials outside project folders, redacted rotating JSONL logs, and explicit bounded diagnostics export; it never uploads diagnostics or exposes a saved secret. The product still excludes VAD, natural-language paths, recursive scanning, Remotion, 剪映 integration, formal Pi tool registration, backup/restore, cross-machine recovery, and background services. A03 smoke runs and raw RPC requests are not persisted; select **Open project** again to restore the project and rebuild A07 jobs from SQLite. The existing `spikes/pi-electron-bridge` directory is untouched and remains runnable with its own `npm run validate` command.

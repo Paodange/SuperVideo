@@ -24,8 +24,9 @@ from supervideo_core.storage import (
     new_id,
     utc_now_ms,
 )
-from supervideo_core.media import MediaService
+from supervideo_core.media import MediaService, TranscriptionService
 from supervideo_core.media.models import MediaProbeParams, MediaProbeResult, MediaProxyParams, MediaProxyResult
+from supervideo_core.media.transcription_models import TranscriptionParams, TranscriptionResult
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -78,9 +79,10 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
+        self.transcription_service = transcription_service or TranscriptionService()
 
     @property
     def active_project_id(self) -> str | None:
@@ -107,6 +109,11 @@ class ProjectService:
         active = self._require_active(request.project_id)
         self.media_service.bind_session(active.root, active.database)
         return await self.media_service.proxy(request, cancelled)
+
+    async def transcribe_media(self, request: TranscriptionParams, cancelled: asyncio.Event) -> TranscriptionResult:
+        active = self._require_active(request.project_id)
+        self.transcription_service.bind_session(active.root, active.database)
+        return await self.transcription_service.transcribe(request, cancelled)
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:

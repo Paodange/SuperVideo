@@ -12,6 +12,11 @@ MediaErrorCode = Literal[
     "MEDIA_NOT_MEDIA",
     "MEDIA_OUTPUT_INVALID",
     "MEDIA_CANCELLED",
+    "TRANSCRIPTION_TOOL_UNAVAILABLE",
+    "TRANSCRIPTION_MODEL_UNAVAILABLE",
+    "TRANSCRIPTION_OUTPUT_INVALID",
+    "TRANSCRIPTION_TIMEOUT",
+    "TRANSCRIPTION_CANCELLED",
 ]
 
 
@@ -27,6 +32,11 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "MEDIA_NOT_MEDIA": MediaErrorDefinition("The selected asset is not a valid media file."),
     "MEDIA_OUTPUT_INVALID": MediaErrorDefinition("The generated media output was invalid."),
     "MEDIA_CANCELLED": MediaErrorDefinition("The media operation was cancelled."),
+    "TRANSCRIPTION_TOOL_UNAVAILABLE": MediaErrorDefinition("The local transcription tool is unavailable."),
+    "TRANSCRIPTION_MODEL_UNAVAILABLE": MediaErrorDefinition("The local transcription model is unavailable."),
+    "TRANSCRIPTION_OUTPUT_INVALID": MediaErrorDefinition("The local transcription output was invalid."),
+    "TRANSCRIPTION_TIMEOUT": MediaErrorDefinition("The local transcription timed out."),
+    "TRANSCRIPTION_CANCELLED": MediaErrorDefinition("The local transcription was cancelled."),
 }
 
 

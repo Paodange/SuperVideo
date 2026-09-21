@@ -98,6 +98,13 @@ test("Agent Worker protocol accepts valid messages and rejects malformed wire da
       timestamp: now(),
       payload: { projectId: "11111111-1111-4111-8111-111111111111", directory: "C:\\素材\\口播" },
     },
+    {
+      protocolVersion: 1,
+      type: "media-transcribe",
+      operationId: "op-transcribe-1",
+      timestamp: now(),
+      payload: { projectId: "11111111-1111-4111-8111-111111111111", assetId: "22222222-2222-4222-8222-222222222222", timeoutMs: 120000 },
+    },
     readyMessage(),
     { protocolVersion: 1, type: "pong", timestamp: now() },
     eventMessage("run-1", 1, { kind: "run-started" }),
@@ -112,6 +119,26 @@ test("Agent Worker protocol accepts valid messages and rejects malformed wire da
   for (const message of valid) {
     assert.equal(shared.isValidAgentWireMessage(message), true, JSON.stringify(message));
   }
+  assert.equal(shared.isValidAgentWorkerMessage({
+    protocolVersion: 1,
+    type: "project-operation-result",
+    operationId: "op-transcribe-1",
+    operation: "media-transcribe",
+    timestamp: now(),
+    projectId: "11111111-1111-4111-8111-111111111111",
+    payload: {
+      schemaVersion: 1,
+      projectId: "11111111-1111-4111-8111-111111111111",
+      assetId: "22222222-2222-4222-8222-222222222222",
+      cacheStatus: "created",
+      cacheKey: "a".repeat(64),
+      model: { adapterVersion: "faster-whisper-v1", provider: "faster-whisper", modelName: "tiny", device: "cpu", computeType: "int8" },
+      language: "zh",
+      languageProbability: 0.9,
+      durationMs: 1000,
+      segments: [{ index: 0, startMs: 0, endMs: 1000, text: "测试。", confidence: null, avgLogprob: -0.2, noSpeechProbability: 0.01, compressionRatio: 1.1, words: [] }],
+    },
+  }), true);
 
   const invalid = [
     { protocolVersion: 2, type: "ping" },

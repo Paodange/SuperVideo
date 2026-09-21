@@ -52,6 +52,9 @@ A06 adds fixed Main-to-Worker project commands: `project-create`,
 the fixed `asset-scan` command; its payload is still a typed project operation,
 not a generic filesystem request, and the directory is expected to originate
 from a Main-owned native directory dialog.
+B02/B03 add the fixed `media-probe`, `media-proxy`, and `media-transcribe`
+commands. `media-transcribe` carries only project/asset IDs and a bounded
+timeout; its result remains below the Worker message limit.
 They carry an operation ID and strict, bounded payload. They are controller
 commands, not Pi tools. The controller permits at most one project operation or
 A03 smoke run at a time, applies a bounded operation timeout, rejects duplicate
@@ -68,6 +71,11 @@ A07 adds fixed job commands and forwards durable `core.job.event` messages.
 The Worker does not persist job state and does not expose generic
 RPC/notifications; after a restart, the caller reopens the project and reads
 SQLite-backed jobs/events.
+
+Media requests use the same single active project-operation slot. Core
+`core.cancel` is sent by the reusable Python client on timeout/abort, and a
+transcription retry is safe because only a complete versioned cache manifest
+is a cache hit.
 
 A08 adds one fixed `diagnostic-event` Worker-to-Main message. It carries only a
 versioned, allowlisted, scalar diagnostic summary and uses the same `send()`
@@ -117,5 +125,5 @@ The faux provider is deterministic and keyless for engineering verification;
 it is not a real LLM integration. A04 adds the reusable
 `PythonCoreClient`/Python JSON-RPC boundary described in
 [docs/python-rpc.md](python-rpc.md). Persistent conversations, real media
-executors, real providers, and media tools remain intentionally out of scope;
+executors, real providers, and later media tools remain intentionally out of scope;
 persistent job recovery is provided by A07.

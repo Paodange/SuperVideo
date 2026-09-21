@@ -46,6 +46,9 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
   查询有界的外部素材摘要。
 - `media.probe`、`media.proxy`：只接受当前已验证项目中的 `assetId`，由 Core 使用固定
   的受控 ffprobe/FFmpeg 参数处理媒体；不得传入命令、可执行文件或任意路径。
+- `media.transcribe`：只接受当前已验证项目中的 `assetId`，由 Core 使用受控的
+  faster-whisper 适配器和版本化项目缓存输出段级/字词级时间戳；不得传入模型路径、
+  命令、可执行文件或输出路径。模型配置只来自 allowlist 环境变量。
 
 A06 的 project/asset 方法仍使用 Core RPC protocol v1；它们不是任意路径或
 SQL 转发。Worker 只能通过固定 controller command 调用这些方法。每次
@@ -162,7 +165,7 @@ A07 已在此边界之上增加固定 job methods 和 `core.job.event`，继续�
 protocol v1，因为只增加了向后兼容的方法/通知。公共契约发生不兼容变化时必须
 升级协议版本，并提供兼容说明；实时通知丢失时必须使用 `job.events.list` 补漏。
 
-A04/A07/B01 不包含 Whisper、Remotion、真实模型/TTS、网络下载、
+A04/A07/B01 不包含 Remotion、真实 TTS、网络下载、
 正式 Pi tool 注册、真实媒体 executor、跨机器恢复、后台服务或打包 Python。原始 spike 保持独立，
 正式模块不依赖 spike 路径或其运行时文件。
 A08 的 stderr 诊断是独立的版本化 JSON 事件，每行有固定 schema 和 4 KiB
