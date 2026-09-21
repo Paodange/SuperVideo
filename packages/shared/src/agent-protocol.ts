@@ -10,8 +10,10 @@ import type {
   JobSmokeStartParams,
   JobSummary,
   ProjectSummary,
+  SentenceQaParams,
+  SentenceQaSaveParams,
 } from "./core-rpc";
-import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isTranscriptionResult, isVadResult, isSentenceResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -54,6 +56,8 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaTranscribe: "media-transcribe",
   mediaVad: "media-vad",
   mediaSentences: "media-sentences",
+  mediaSentenceQaContext: "media-sentence-qa-context",
+  mediaSentenceQaSave: "media-sentence-qa-save",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
   jobList: "job-list",
@@ -89,7 +93,9 @@ export type AgentProjectOperationType =
   | "media-proxy"
   | "media-transcribe"
   | "media-vad"
-  | "media-sentences";
+  | "media-sentences"
+  | "media-sentence-qa-context"
+  | "media-sentence-qa-save";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -128,7 +134,8 @@ export type ProjectOperationErrorCode =
   | "MEDIA_NOT_MEDIA" | "MEDIA_OUTPUT_INVALID" | "MEDIA_CANCELLED"
   | "TRANSCRIPTION_TOOL_UNAVAILABLE" | "TRANSCRIPTION_MODEL_UNAVAILABLE" | "TRANSCRIPTION_OUTPUT_INVALID" | "TRANSCRIPTION_TIMEOUT" | "TRANSCRIPTION_CANCELLED"
   | "VAD_TOOL_UNAVAILABLE" | "VAD_OUTPUT_INVALID" | "VAD_TIMEOUT" | "VAD_CANCELLED"
-  | "SENTENCE_PREREQUISITE_UNAVAILABLE" | "SENTENCE_PREREQUISITE_INVALID" | "SENTENCE_OUTPUT_INVALID" | "SENTENCE_TIMEOUT" | "SENTENCE_CANCELLED";
+  | "SENTENCE_PREREQUISITE_UNAVAILABLE" | "SENTENCE_PREREQUISITE_INVALID" | "SENTENCE_OUTPUT_INVALID" | "SENTENCE_TIMEOUT" | "SENTENCE_CANCELLED"
+  | "SENTENCE_QA_RESULT_NOT_FOUND" | "SENTENCE_QA_RESULT_INVALID" | "SENTENCE_QA_INDEX_INVALID" | "SENTENCE_QA_STORAGE_INVALID" | "SENTENCE_QA_OUTPUT_INVALID";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -320,6 +327,8 @@ export const DESKTOP_IPC_CHANNELS = {
   openProject: "desktop:v2:open-project",
   addAssetReferences: "desktop:v2:add-asset-references",
   listProjectAssets: "desktop:v2:list-project-assets",
+  inspectSentenceQa: "desktop:v2:inspect-sentence-qa",
+  saveSentenceQa: "desktop:v2:save-sentence-qa",
   startSmokeJob: "desktop:v2:start-smoke-job",
   getJob: "desktop:v2:get-job",
   listJobs: "desktop:v2:list-jobs",
@@ -384,6 +393,8 @@ export type DesktopApi = Readonly<{
   openProject: () => Promise<ProjectDialogResult<ProjectSummary>>;
   addAssetReferences: (input: AddAssetReferencesRequest) => Promise<ProjectDialogResult<AssetReferenceBatchResult>>;
   listProjectAssets: (input: ListProjectAssetsRequest) => Promise<AssetListResult>;
+  inspectSentenceQa: (input: SentenceQaParams) => Promise<import("./core-rpc").SentenceQaContextResult>;
+  saveSentenceQa: (input: SentenceQaSaveParams) => Promise<import("./core-rpc").SentenceQaSaveResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -477,6 +488,11 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   SENTENCE_OUTPUT_INVALID: "The sentence segmentation output was invalid.",
   SENTENCE_TIMEOUT: "The sentence segmentation timed out.",
   SENTENCE_CANCELLED: "The sentence segmentation was cancelled.",
+  SENTENCE_QA_RESULT_NOT_FOUND: "The requested B05 sentence result is unavailable.",
+  SENTENCE_QA_RESULT_INVALID: "The requested B05 sentence result is invalid.",
+  SENTENCE_QA_INDEX_INVALID: "The requested sentence index is invalid.",
+  SENTENCE_QA_STORAGE_INVALID: "The saved sentence QA markers are invalid.",
+  SENTENCE_QA_OUTPUT_INVALID: "The sentence QA output was invalid.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -767,7 +783,9 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "media-proxy"
     || value === "media-transcribe"
     || value === "media-vad"
-    || value === "media-sentences";
+    || value === "media-sentences"
+    || value === "media-sentence-qa-context"
+    || value === "media-sentence-qa-save";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -834,6 +852,13 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
       && (value.config.minSentenceMs === undefined || isSafeInteger(value.config.minSentenceMs, 0, 5_000))
       && (value.config.preRollMs === undefined || isSafeInteger(value.config.preRollMs, 0, 180))
       && (value.config.postRollMs === undefined || isSafeInteger(value.config.postRollMs, 0, 250));
+  }
+  if (type === "media-sentence-qa-context" || type === "media-sentence-qa-save") {
+    if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"]) || !isUuid(value.projectId) || !isUuid(value.assetId) || !isSentenceCacheKey(value.sentenceCacheKey) || !isSafeInteger(value.sentenceIndex, 0, 1_999)) return false;
+    if (value.contextBefore !== undefined && !isSafeInteger(value.contextBefore, 0, 3)) return false;
+    if (value.contextAfter !== undefined && !isSafeInteger(value.contextAfter, 0, 3)) return false;
+    if (type === "media-sentence-qa-context") return value.markers === undefined;
+    return value.markers === undefined || Array.isArray(value.markers) && value.markers.length <= 500 && value.markers.every(isSentenceQaMarkerInput);
   }
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
@@ -929,6 +954,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "TRANSCRIPTION_TOOL_UNAVAILABLE", "TRANSCRIPTION_MODEL_UNAVAILABLE", "TRANSCRIPTION_OUTPUT_INVALID", "TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_CANCELLED",
   "VAD_TOOL_UNAVAILABLE", "VAD_OUTPUT_INVALID", "VAD_TIMEOUT", "VAD_CANCELLED",
   "SENTENCE_PREREQUISITE_UNAVAILABLE", "SENTENCE_PREREQUISITE_INVALID", "SENTENCE_OUTPUT_INVALID", "SENTENCE_TIMEOUT", "SENTENCE_CANCELLED",
+  "SENTENCE_QA_RESULT_NOT_FOUND", "SENTENCE_QA_RESULT_INVALID", "SENTENCE_QA_INDEX_INVALID", "SENTENCE_QA_STORAGE_INVALID", "SENTENCE_QA_OUTPUT_INVALID",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -965,12 +991,26 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-transcribe") return isTranscriptionResult(value);
   if (type === "media-vad") return isVadResult(value);
   if (type === "media-sentences") return isSentenceResult(value);
+  if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
+  if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;
 }
 
 function hasNoUnexpectedKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const expected = new Set(keys);
   return Object.keys(value).every((key) => expected.has(key));
+}
+
+function isSentenceQaMarkerInput(value: unknown): boolean {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["sentenceIndex", "issueType", "status", "source", "note", "expectedText"])) return false;
+  const validFields = isSafeInteger(value.sentenceIndex, 0, 1_999)
+    && ["missing-text", "half-sentence", "low-confidence", "boundary-uncertain", "other"].includes(value.issueType as string)
+    && (value.status === undefined || value.status === "open" || value.status === "resolved")
+    && (value.source === undefined || value.source === "manual" || value.source === "automatic")
+    && (value.note === undefined || isBoundedText(value.note, 256))
+    && (value.expectedText === undefined || value.expectedText === null || isBoundedText(value.expectedText, 2_048));
+  if (!validFields) return false;
+  return value.issueType !== "missing-text" || value.status === "resolved" || (value.expectedText !== undefined && value.expectedText !== null) || (typeof value.note === "string" && value.note.length > 0);
 }
 
 function isSafeInteger(value: unknown, minimum: number, maximum: number): value is number {

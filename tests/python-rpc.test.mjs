@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const shared = await import(pathToFileURL(path.join(root, "packages", "shared", "dist", "index.js")).href);
 const clientModule = await import(pathToFileURL(path.join(root, "workers", "agent", "dist", "python-core-client.js")).href);
+const playback = await import(pathToFileURL(path.join(root, "apps", "desktop", "dist", "main", "media-playback.js")).href);
 const { CoreRpcError, PythonCoreClient } = clientModule;
 
 function response(id, result) {
@@ -87,6 +88,30 @@ test("VAD runtime validator rejects a gap between otherwise valid intervals", ()
     { ...base.intervals[0], endMs: 400 },
     { ...base.intervals[1], startMs: 400 },
   ] }), true);
+});
+
+test("sentence QA validators enforce the Python cache/text contract", () => {
+  const base = {
+    projectId: "11111111-1111-4111-8111-111111111111",
+    assetId: "22222222-2222-4222-8222-222222222222",
+    sentenceCacheKey: "a".repeat(64),
+    sentenceIndex: 0,
+  };
+  assert.equal(shared.isSentenceQaParams(base), true);
+  assert.equal(shared.isSentenceQaParams({ ...base, sentenceCacheKey: "A".repeat(64) }), false);
+  assert.equal(shared.isSentenceQaSaveParams({ ...base, markers: [{ sentenceIndex: 0, issueType: "half-sentence", note: "", expectedText: "" }] }), true);
+  assert.equal(shared.isSentenceQaSaveParams({ ...base, markers: [{ sentenceIndex: 0, issueType: "half-sentence", note: "\u0000" }] }), false);
+});
+
+test("desktop playback protocol parser keeps asset and range inputs bounded", () => {
+  const assetId = "22222222-2222-4222-8222-222222222222";
+  assert.deepEqual(playback.parseSuperVideoPlaybackRequest(`supervideo://asset/${assetId}?kind=video&startMs=100&endMs=500`), { assetId, kind: "video", startMs: 100, endMs: 500 });
+  assert.equal(playback.parseSuperVideoPlaybackRequest(`supervideo://asset/${assetId}?kind=video&startMs=500&endMs=100`), undefined);
+  assert.equal(playback.parseSuperVideoPlaybackRequest(`supervideo://asset/${assetId}/..?kind=video&startMs=100&endMs=500`), undefined);
+  assert.equal(playback.parseSuperVideoPlaybackRequest(`supervideo://asset/${assetId}?kind=video&startMs=100&endMs=500&path=C%3A%5Csecret`), undefined);
+  const proxyKey = "a".repeat(64);
+  assert.equal(playback.resolveProxyOutput("C:\\project", { kind: "video", relativePath: `cache/media-cache-v1/proxy/${proxyKey}/video.mp4`, sizeBytes: 1 }, "video"), path.join("C:\\project", "cache", "media-cache-v1", "proxy", proxyKey, "video.mp4"));
+  assert.equal(playback.resolveProxyOutput("C:\\project", { kind: "video", relativePath: "cache/media-cache-v1/../../secret.mp4", sizeBytes: 1 }, "video"), undefined);
 });
 
 test("client frames CRLF/chunked messages and ignores stale progress or responses", async () => {

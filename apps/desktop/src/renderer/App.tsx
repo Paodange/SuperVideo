@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import type {
   AgentRunStatus,
   AgentWorkerStatusSnapshot,
@@ -11,6 +11,8 @@ import type {
   CredentialMetadata,
   CredentialServiceKind,
   CredentialStorageStatus,
+  SentenceQaContextResult,
+  SentenceQaMarkerInput,
 } from "@supervideo/shared";
 
 const browserAgentStatus: AgentWorkerStatusSnapshot = {
@@ -50,6 +52,12 @@ export function App() {
   const [credentialNotice, setCredentialNotice] = useState<string | null>(null);
   const [diagnosticBusy, setDiagnosticBusy] = useState(false);
   const [diagnosticNotice, setDiagnosticNotice] = useState<string | null>(null);
+  const [qaContext, setQaContext] = useState<SentenceQaContextResult | null>(null);
+  const [qaCacheKey, setQaCacheKey] = useState("");
+  const [qaIndex, setQaIndex] = useState("0");
+  const [qaBusy, setQaBusy] = useState(false);
+  const [qaError, setQaError] = useState<string | null>(null);
+  const [qaPlayback, setQaPlayback] = useState<{ uri: string; kind: "audio" | "video"; startMs: number; endMs: number } | null>(null);
   const credentialSecretInput = useRef<HTMLInputElement>(null);
   const latestSequence = useRef(new Map<string, number>());
   const projectRequest = useRef(0);
@@ -76,7 +84,7 @@ export function App() {
     setProjectBusy(true); setProjectError(null);
     void bridge.createProject({ name: projectName, targetPlatform }).then((result) => {
       if (request !== projectRequest.current || result.cancelled) return;
-      setProject(result.value); setAssets([]); setJobs([]); setJobEvents({}); jobSequences.current.clear(); void loadJobs(result.value.projectId, request);
+       setProject(result.value); setAssets([]); setQaContext(null); setQaPlayback(null); setJobs([]); setJobEvents({}); jobSequences.current.clear(); void loadJobs(result.value.projectId, request);
     }).catch((error: unknown) => setProjectError(publicErrorMessage(error, "The project could not be created."))).finally(() => { if (request === projectRequest.current) setProjectBusy(false); });
   };
 
@@ -84,7 +92,7 @@ export function App() {
     const bridge = window.supervideo;
     if (!bridge) { setProjectError("Open the desktop app to choose a project folder."); return; }
     const request = ++projectRequest.current;
-    setProjectBusy(true); setProjectError(null); setProject(null); setAssets([]); setJobs([]); setJobEvents({}); jobSequences.current.clear();
+    setProjectBusy(true); setProjectError(null); setProject(null); setAssets([]); setQaContext(null); setQaPlayback(null); setJobs([]); setJobEvents({}); jobSequences.current.clear();
     void bridge.openProject().then(async (result) => {
       if (request !== projectRequest.current || result.cancelled) return;
       setProject(result.value);
@@ -156,6 +164,58 @@ export function App() {
     const request = ++projectRequest.current;
     setProjectBusy(true);
     void bridge.listProjectAssets({ projectId: project.projectId }).then((result) => { if (request === projectRequest.current) setAssets([...result.items]); }).catch((error: unknown) => setProjectError(publicErrorMessage(error, "The asset list could not be loaded."))).finally(() => { if (request === projectRequest.current) setProjectBusy(false); });
+  };
+
+  const inspectSentenceQa = (): void => {
+    const bridge = window.supervideo;
+    const asset = assets[0];
+    const sentenceIndex = Number(qaIndex);
+    if (!bridge || !project || !asset || !/^[0-9a-f]{64}$/.test(qaCacheKey.trim()) || !Number.isSafeInteger(sentenceIndex) || sentenceIndex < 0) {
+      setQaError("Enter a B05 cache key and choose an indexed asset before loading QA context.");
+      return;
+    }
+    setQaBusy(true); setQaError(null);
+    void bridge.inspectSentenceQa({ projectId: project.projectId, assetId: asset.assetId, sentenceCacheKey: qaCacheKey.trim(), sentenceIndex, contextBefore: 1, contextAfter: 1 })
+      .then((result) => {
+        setQaContext(result);
+        const selected = result.items.find((item) => item.relation === "selected");
+        setQaPlayback(selected ? { uri: selected.playback.uri, kind: selected.playback.kind, startMs: selected.playback.startMs, endMs: selected.playback.endMs } : null);
+      })
+      .catch((error: unknown) => setQaError(publicErrorMessage(error, "The sentence QA context could not be loaded.")))
+      .finally(() => setQaBusy(false));
+  };
+
+  const playQaSentence = (item: SentenceQaContextResult["items"][number]): void => {
+    setQaPlayback({ uri: item.playback.uri, kind: item.playback.kind, startMs: item.playback.startMs, endMs: item.playback.endMs });
+  };
+
+  const constrainQaPlayback = (event: SyntheticEvent<HTMLMediaElement>): void => {
+    if (!qaPlayback) return;
+    const media = event.currentTarget;
+    const startSeconds = qaPlayback.startMs / 1000;
+    const endSeconds = qaPlayback.endMs / 1000;
+    if (media.currentTime < startSeconds) media.currentTime = startSeconds;
+    if (media.currentTime >= endSeconds) {
+      media.currentTime = endSeconds;
+      media.pause();
+    }
+  };
+
+  const saveSentenceQaMarker = (issueType: SentenceQaMarkerInput["issueType"]): void => {
+    const bridge = window.supervideo;
+    const asset = assets[0];
+    if (!bridge || !project || !asset || !qaContext) return;
+    const selected = qaContext.items.find((item) => item.relation === "selected");
+    if (!selected) return;
+    const existing = qaContext.markers.find((marker) => marker.sentenceIndex === selected.sentence.index && marker.issueType === issueType);
+    const nextMarkers = existing
+      ? qaContext.markers.filter((marker) => marker.markerId !== existing.markerId).map((marker): SentenceQaMarkerInput => ({ sentenceIndex: marker.sentenceIndex, issueType: marker.issueType, status: marker.status, source: marker.source, note: marker.note, expectedText: marker.expectedText }))
+      : [...qaContext.markers.map((marker): SentenceQaMarkerInput => ({ sentenceIndex: marker.sentenceIndex, issueType: marker.issueType, status: marker.status, source: marker.source, note: marker.note, expectedText: marker.expectedText })), { sentenceIndex: selected.sentence.index, issueType, source: "manual" as const, note: issueType === "missing-text" ? "Check transcript against audio." : "Marked during sentence-boundary QA." }];
+    setQaBusy(true); setQaError(null);
+    void bridge.saveSentenceQa({ projectId: project.projectId, assetId: asset.assetId, sentenceCacheKey: qaContext.sentenceCacheKey, sentenceIndex: qaContext.selectedIndex, markers: nextMarkers })
+      .then(() => inspectSentenceQa())
+      .catch((error: unknown) => setQaError(publicErrorMessage(error, "The QA marker could not be saved.")))
+      .finally(() => setQaBusy(false));
   };
 
   const saveCredential = (): void => {
@@ -281,6 +341,7 @@ export function App() {
       </section>
 
       <dl className="details"><div><dt>Environment</dt><dd>{environment?.mode ?? "development"}</dd></div><div><dt>Platform</dt><dd>{environment?.platform ?? "Windows target"}</dd></div><div><dt>Electron</dt><dd>{environment?.electron ?? "—"}</dd></div></dl>
+      <section className="agent-panel qa-panel" aria-labelledby="qa-title"><div className="panel-heading"><div><div className="eyebrow">B06 SENTENCE QA</div><h2 id="qa-title">Sentence boundary review</h2></div><span className="worker-badge">v1</span></div><p className="hint">Load a B05 SentenceResult cache to review one sentence with bounded context. The fixture set contains 60 privacy-safe regression sentences.</p><div className="qa-form"><label>B05 cache key<input value={qaCacheKey} onChange={(event) => setQaCacheKey(event.target.value)} maxLength={64} placeholder="64-character sentence cache key" /></label><label>Sentence index<input type="number" min="0" max="1999" value={qaIndex} onChange={(event) => setQaIndex(event.target.value)} /></label></div><div className="actions"><button type="button" onClick={inspectSentenceQa} disabled={qaBusy || !project || assets.length === 0}>{qaBusy ? "Loading…" : "Load sentence context"}</button></div>{qaError && <p className="error-text">{qaError}</p>}{qaContext && <><div className="qa-context" aria-live="polite">{qaContext.items.map((item) => <article className={`qa-sentence qa-${item.relation}`} key={item.sentence.index}><div className="qa-sentence-heading"><span>{item.relation === "selected" ? "Selected" : item.relation === "before" ? "Previous" : "Next"} · #{item.sentence.index}</span><span>{item.sentence.quality}</span></div><p>{item.sentence.text}</p><button type="button" className="secondary" onClick={() => playQaSentence(item)}>Play this range</button><code>{item.playback.uri}</code></article>)}</div>{qaPlayback && <div className="qa-player"><span className="output-label">Controlled playback · {qaPlayback.kind}</span>{qaPlayback.kind === "audio" ? <audio key={qaPlayback.uri} src={qaPlayback.uri} controls preload="auto" onLoadedMetadata={(event) => { event.currentTarget.currentTime = qaPlayback.startMs / 1000; void event.currentTarget.play(); }} onPlay={constrainQaPlayback} onSeeking={constrainQaPlayback} onTimeUpdate={constrainQaPlayback} /> : <video key={qaPlayback.uri} src={qaPlayback.uri} controls preload="auto" onLoadedMetadata={(event) => { event.currentTarget.currentTime = qaPlayback.startMs / 1000; void event.currentTarget.play(); }} onPlay={constrainQaPlayback} onSeeking={constrainQaPlayback} onTimeUpdate={constrainQaPlayback} />}</div>}<div className="qa-markers"><span className="output-label">Mark selected sentence</span><div className="actions"><button type="button" className="secondary" onClick={() => saveSentenceQaMarker("missing-text")} disabled={qaBusy}>Missing text</button><button type="button" className="secondary" onClick={() => saveSentenceQaMarker("half-sentence")} disabled={qaBusy}>Half sentence</button><button type="button" className="secondary" onClick={() => saveSentenceQaMarker("low-confidence")} disabled={qaBusy}>Low confidence</button><button type="button" className="secondary" onClick={() => saveSentenceQaMarker("boundary-uncertain")} disabled={qaBusy}>Uncertain boundary</button></div>{qaPlayback && <p className="hint">Addressed range: <code>{qaPlayback.uri}</code></p>}<p className="hint">Saved markers: {qaContext.markers.length}</p></div></>}</section>
       <section className="agent-panel" aria-labelledby="agent-title"><div className="panel-heading"><div><div className="eyebrow">A03 ENGINEERING PANEL</div><h2 id="agent-title">Agent Worker</h2></div><span className={`worker-badge worker-${agentStatus.status}`}>{agentStatus.status}</span></div><dl className="agent-details"><div><dt>Worker version</dt><dd>{agentStatus.workerVersion ?? "—"}</dd></div><div><dt>Generation</dt><dd>{agentStatus.generation}</dd></div><div><dt>Run status</dt><dd>{runStatus}</dd></div><div><dt>Run ID</dt><dd className="run-id">{runId ?? "—"}</dd></div></dl>{workerUnavailable && <p className="hint">The Worker is not available. Check Main diagnostics before retrying.</p>}<div className="actions"><button type="button" onClick={runSmokeTask} disabled={!canRun}>Run smoke task</button><button type="button" className="secondary" onClick={cancelSmokeTask} disabled={!canCancel}>Cancel</button></div><div className="output" aria-live="polite"><div className="output-label">Streaming assistant text</div><p>{assistantText || "Waiting for a smoke run…"}</p><div className="output-label">Tool progress</div>{tools.length === 0 ? <p className="muted">No tool events yet.</p> : tools.map((tool) => <div className="tool-row" key={tool.toolCallId}><span>{tool.toolName}</span><span>{tool.message}</span><progress max="1" value={tool.progress} /><span>{tool.state}</span></div>)}</div></section>
       {project && <section className="agent-panel jobs-panel" aria-labelledby="jobs-title"><div className="panel-heading"><div><div className="eyebrow">A07 PERSISTENT JOBS</div><h2 id="jobs-title">Jobs</h2></div><span className="worker-badge">{jobs.length}</span></div><p className="hint">SQLite-backed smoke jobs survive Worker/Core restart and stream best-effort events.</p><div className="actions"><button type="button" onClick={startSmokeJob} disabled={jobBusy}>Start 8-step smoke job</button></div>{jobError && <p className="error-text">{jobError}</p>}{jobs.length === 0 ? <p className="muted">No persistent jobs yet.</p> : <div className="job-list">{jobs.map((job) => <JobRow key={job.jobId} job={job} events={jobEvents[job.jobId] ?? []} onCancel={cancelJob} onRetry={retryJob} />)}</div>}</section>}
       <section className="agent-panel security-panel" aria-labelledby="credentials-title"><div className="panel-heading"><div><div className="eyebrow">A08 SECURE SETTINGS</div><h2 id="credentials-title">Service credentials</h2></div><span className={`worker-badge ${credentialStatus.state === "available" ? "worker-ready" : "worker-unavailable"}`}>{credentialStatus.state}</span></div><p className="hint">Secrets are encrypted by the Windows secure storage boundary, never returned to this page, and never uploaded.</p><div className="form-grid credential-grid"><label>Service<select value={credentialServiceKind} onChange={(event) => setCredentialServiceKind(event.target.value as CredentialServiceKind)} disabled={credentialBusy || credentialStatus.state !== "available"}><option value="llm">LLM</option><option value="tts">TTS</option><option value="image">Image</option><option value="video">Video</option></select></label><label>Provider ID<input value={credentialProviderId} onChange={(event) => setCredentialProviderId(event.target.value)} maxLength={64} placeholder="example-provider" disabled={credentialBusy || credentialStatus.state !== "available"} /></label><label>Display name<input value={credentialDisplayName} onChange={(event) => setCredentialDisplayName(event.target.value)} maxLength={80} placeholder="Default provider" disabled={credentialBusy || credentialStatus.state !== "available"} /></label><label>Secret<input ref={credentialSecretInput} type="password" maxLength={8192} autoComplete="new-password" placeholder="Enter once; it will be cleared" disabled={credentialBusy || credentialStatus.state !== "available"} /></label></div><div className="actions"><button type="button" onClick={saveCredential} disabled={credentialBusy || credentialStatus.state !== "available"}>Save credential</button>{credentialReplaceRef && <button type="button" className="secondary" onClick={replaceCredential} disabled={credentialBusy || credentialStatus.state !== "available"}>Replace selected</button>}</div>{credentialError && <p className="error-text">{credentialError}</p>}{credentialNotice && <p className="hint" aria-live="polite">{credentialNotice}</p>}<h3>Configured services</h3>{credentials.length === 0 ? <p className="muted">No credentials are configured.</p> : <div className="credential-list">{credentials.map((credential) => <article className="credential-row" key={credential.credentialRef}><div><strong>{credential.displayName}</strong><span>{credential.serviceKind} · {credential.providerId} · configured</span></div><div className="actions"><button type="button" className="secondary" onClick={() => setCredentialReplaceRef(credential.credentialRef)} disabled={credentialBusy}>{credentialReplaceRef === credential.credentialRef ? "Selected" : "Replace"}</button><button type="button" className="secondary" onClick={() => removeCredential(credential.credentialRef)} disabled={credentialBusy}>Delete</button></div></article>)}</div>}</section>

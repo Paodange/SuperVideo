@@ -33,6 +33,8 @@ import {
   isTranscriptionResult,
   isVadResult,
   isSentenceResult,
+  isSentenceQaContextResult,
+  isSentenceQaSaveResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -56,6 +58,10 @@ import {
   type VadResult,
   type SentenceParams,
   type SentenceResult,
+  type SentenceQaParams,
+  type SentenceQaContextResult,
+  type SentenceQaSaveParams,
+  type SentenceQaSaveResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -305,6 +311,18 @@ export class PythonCoreClient {
   async splitSentences(params: SentenceParams, options: CoreRpcRequestOptions = {}): Promise<SentenceResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentences, params, options);
     if (!isSentenceResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async inspectSentenceQa(params: SentenceQaParams, options: CoreRpcRequestOptions = {}): Promise<SentenceQaContextResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentenceQaContext, params, options);
+    if (!isSentenceQaContextResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async saveSentenceQa(params: SentenceQaSaveParams, options: CoreRpcRequestOptions = {}): Promise<SentenceQaSaveResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentenceQaSave, params, options);
+    if (!isSentenceQaSaveResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

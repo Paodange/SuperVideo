@@ -1,17 +1,21 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, utilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session, utilityProcess } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   createDesktopPublicError,
   DESKTOP_IPC_CHANNELS,
   isAssetListResult,
   isAssetReferenceBatchResult,
+  isMediaProxyResult,
   isJobEventPage,
   isJobPage,
   isJobSummary,
   isValidDesktopAgentEvent,
   isProjectSummary,
+  isSentenceQaContextResult,
+  isSentenceQaSaveResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -29,6 +33,8 @@ import {
   type JobReferenceParams,
   type JobSmokeStartParams,
   type JobSummary,
+  type SentenceQaContextResult,
+  type SentenceQaSaveResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -49,6 +55,12 @@ import {
 import { denyWindowOpen, isTrustedRendererUrl, sanitizeUrlForDiagnostics } from "./security/policies";
 import { registerSessionSecurity } from "./security/session";
 import { createAgentWorkerController, type AgentWorkerController, type UtilityProcessLike } from "./agent-worker-controller";
+import { parseSuperVideoPlaybackRequest, resolveProxyOutput } from "./media-playback";
+
+protocol.registerSchemesAsPrivileged([{
+  scheme: "supervideo",
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+}]);
 
 const logger = createSecurityLogger({ getLogDirectory: () => path.join(app.getPath("userData"), "logs") });
 const log = logger;
@@ -58,6 +70,35 @@ let latestCoreState = {
   coreVersion: null as string | null,
   capabilityCount: 0,
 };
+let activePlaybackProject: { projectId: string; projectRoot: string } | undefined;
+
+function registerSuperVideoProtocol(): void {
+  protocol.handle("supervideo", async (request) => {
+    const playback = parseSuperVideoPlaybackRequest(request.url);
+    const project = activePlaybackProject;
+    const controller = activeAgentController;
+    if (!playback || !project || !controller) return new Response(null, { status: 404 });
+    try {
+      const result = await controller.runProjectOperation("media-proxy", { projectId: project.projectId, assetId: playback.assetId }, project.projectId);
+      if (!isMediaProxyResult(result)) return new Response(null, { status: 404 });
+      const output = result.outputs.find((item) => item.kind === playback.kind);
+      if (!output || result.projectId !== project.projectId || result.assetId !== playback.assetId) return new Response(null, { status: 404 });
+      const outputPath = resolveProxyOutput(project.projectRoot, output, playback.kind);
+      if (!outputPath) return new Response(null, { status: 404 });
+      const outputStat = fs.lstatSync(outputPath);
+      if (outputStat.isSymbolicLink()) return new Response(null, { status: 404 });
+      const rootRealPath = fs.realpathSync.native(project.projectRoot);
+      const outputRealPath = fs.realpathSync.native(outputPath);
+      const realRelative = path.relative(rootRealPath, outputRealPath);
+      if (path.isAbsolute(realRelative) || realRelative === ".." || realRelative.startsWith(`..${path.sep}`)) return new Response(null, { status: 404 });
+      const stat = fs.statSync(outputRealPath);
+      if (!stat.isFile() || stat.size <= 0) return new Response(null, { status: 404 });
+      return net.fetch(pathToFileURL(outputRealPath).toString());
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+  });
+}
 
 function getRendererPath(): string {
   // __dirname is the compiled Main directory. Renderer input is not involved in
@@ -194,6 +235,16 @@ function assetListResult(value: Readonly<Record<string, unknown>>): AssetListRes
   if (!isAssetListResult(value)) {
     throw createDesktopPublicError("CORE_UNAVAILABLE");
   }
+  return value;
+}
+
+function sentenceQaContextResult(value: Readonly<Record<string, unknown>>): SentenceQaContextResult {
+  if (!isSentenceQaContextResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+  return value;
+}
+
+function sentenceQaSaveResult(value: Readonly<Record<string, unknown>>): SentenceQaSaveResult {
+  if (!isSentenceQaSaveResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
   return value;
 }
 
@@ -549,6 +600,7 @@ function containsFixture(root: string, fixture: Buffer): boolean {
 
 app.whenReady().then(() => {
   log("app-ready");
+  registerSuperVideoProtocol();
   const runtime = createRuntimeConfig({
     isPackaged: app.isPackaged,
     argv: process.argv,
@@ -620,13 +672,17 @@ app.whenReady().then(() => {
       const result = await withDialogLock("create", () => createProjectDialogHandler(agentController, event, input));
       if (!result.cancelled) {
         diagnosticProject = { open: true, manifestSchemaVersion: result.value.manifestSchemaVersion, databaseSchemaVersion: result.value.databaseSchemaVersion };
+        activePlaybackProject = { projectId: result.value.projectId, projectRoot: result.value.projectRoot };
         diagnosticJobs = [];
       }
       return result;
     },
     openProject: async (event) => {
       const result = await withDialogLock("open", () => openProjectDialogHandler(agentController, event));
-      if (!result.cancelled) diagnosticProject = { open: true, manifestSchemaVersion: result.value.manifestSchemaVersion, databaseSchemaVersion: result.value.databaseSchemaVersion };
+      if (!result.cancelled) {
+        diagnosticProject = { open: true, manifestSchemaVersion: result.value.manifestSchemaVersion, databaseSchemaVersion: result.value.databaseSchemaVersion };
+        activePlaybackProject = { projectId: result.value.projectId, projectRoot: result.value.projectRoot };
+      }
       return result;
     },
     addAssetReferences: (event, input) => withDialogLock("asset", () => addAssetDialogHandler(agentController, event, input)),
@@ -634,6 +690,8 @@ app.whenReady().then(() => {
       const result = await agentController.runProjectOperation("asset-list", { projectId: input.projectId, limit: 100 }, input.projectId);
       return assetListResult(result);
     },
+    inspectSentenceQa: async (_event, input) => sentenceQaContextResult(await agentController.runProjectOperation("media-sentence-qa-context", input, input.projectId)),
+    saveSentenceQa: async (_event, input) => sentenceQaSaveResult(await agentController.runProjectOperation("media-sentence-qa-save", input, input.projectId)),
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(
       "job-smoke-start", input.projectId,
       {

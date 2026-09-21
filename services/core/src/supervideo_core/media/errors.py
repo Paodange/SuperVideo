@@ -26,6 +26,11 @@ MediaErrorCode = Literal[
     "SENTENCE_OUTPUT_INVALID",
     "SENTENCE_TIMEOUT",
     "SENTENCE_CANCELLED",
+    "SENTENCE_QA_RESULT_NOT_FOUND",
+    "SENTENCE_QA_RESULT_INVALID",
+    "SENTENCE_QA_INDEX_INVALID",
+    "SENTENCE_QA_STORAGE_INVALID",
+    "SENTENCE_QA_OUTPUT_INVALID",
 ]
 
 
@@ -55,6 +60,11 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "SENTENCE_OUTPUT_INVALID": MediaErrorDefinition("The sentence segmentation output was invalid."),
     "SENTENCE_TIMEOUT": MediaErrorDefinition("The sentence segmentation timed out."),
     "SENTENCE_CANCELLED": MediaErrorDefinition("The sentence segmentation was cancelled."),
+    "SENTENCE_QA_RESULT_NOT_FOUND": MediaErrorDefinition("The requested B05 sentence result is unavailable."),
+    "SENTENCE_QA_RESULT_INVALID": MediaErrorDefinition("The requested B05 sentence result is invalid."),
+    "SENTENCE_QA_INDEX_INVALID": MediaErrorDefinition("The requested sentence index is invalid."),
+    "SENTENCE_QA_STORAGE_INVALID": MediaErrorDefinition("The saved sentence QA markers are invalid."),
+    "SENTENCE_QA_OUTPUT_INVALID": MediaErrorDefinition("The sentence QA output was invalid."),
 }
 
 
