@@ -11,7 +11,7 @@ import type {
   JobSummary,
   ProjectSummary,
 } from "./core-rpc";
-import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isTranscriptionResult, isVadResult } from "./core-rpc";
+import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isTranscriptionResult, isVadResult, isSentenceResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -36,7 +36,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -53,6 +53,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaProxy: "media-proxy",
   mediaTranscribe: "media-transcribe",
   mediaVad: "media-vad",
+  mediaSentences: "media-sentences",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
   jobList: "job-list",
@@ -87,7 +88,8 @@ export type AgentProjectOperationType =
   | "media-probe"
   | "media-proxy"
   | "media-transcribe"
-  | "media-vad";
+  | "media-vad"
+  | "media-sentences";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -125,7 +127,8 @@ export type ProjectOperationErrorCode =
   | "MEDIA_TOOL_UNAVAILABLE" | "MEDIA_TOOL_TIMEOUT" | "MEDIA_PROBE_PARSE_ERROR"
   | "MEDIA_NOT_MEDIA" | "MEDIA_OUTPUT_INVALID" | "MEDIA_CANCELLED"
   | "TRANSCRIPTION_TOOL_UNAVAILABLE" | "TRANSCRIPTION_MODEL_UNAVAILABLE" | "TRANSCRIPTION_OUTPUT_INVALID" | "TRANSCRIPTION_TIMEOUT" | "TRANSCRIPTION_CANCELLED"
-  | "VAD_TOOL_UNAVAILABLE" | "VAD_OUTPUT_INVALID" | "VAD_TIMEOUT" | "VAD_CANCELLED";
+  | "VAD_TOOL_UNAVAILABLE" | "VAD_OUTPUT_INVALID" | "VAD_TIMEOUT" | "VAD_CANCELLED"
+  | "SENTENCE_PREREQUISITE_UNAVAILABLE" | "SENTENCE_PREREQUISITE_INVALID" | "SENTENCE_OUTPUT_INVALID" | "SENTENCE_TIMEOUT" | "SENTENCE_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -469,6 +472,11 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   VAD_OUTPUT_INVALID: "The local VAD output was invalid.",
   VAD_TIMEOUT: "The local VAD timed out.",
   VAD_CANCELLED: "The local VAD operation was cancelled.",
+  SENTENCE_PREREQUISITE_UNAVAILABLE: "The transcription or speech interval result is unavailable.",
+  SENTENCE_PREREQUISITE_INVALID: "The transcription or speech interval result is invalid.",
+  SENTENCE_OUTPUT_INVALID: "The sentence segmentation output was invalid.",
+  SENTENCE_TIMEOUT: "The sentence segmentation timed out.",
+  SENTENCE_CANCELLED: "The sentence segmentation was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -758,7 +766,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "media-probe"
     || value === "media-proxy"
     || value === "media-transcribe"
-    || value === "media-vad";
+    || value === "media-vad"
+    || value === "media-sentences";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -814,6 +823,17 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
     return hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs"])
       && isUuid(value.projectId) && isUuid(value.assetId)
       && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
+  }
+  if (type === "media-sentences") {
+    if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
+    if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+    if (value.config === undefined) return true;
+    return isPlainRecord(value.config) && hasNoUnexpectedKeys(value.config, ["maxSentenceMs", "pauseBoundaryMs", "minSentenceMs", "preRollMs", "postRollMs"])
+      && (value.config.maxSentenceMs === undefined || isSafeInteger(value.config.maxSentenceMs, 1_000, 30_000))
+      && (value.config.pauseBoundaryMs === undefined || isSafeInteger(value.config.pauseBoundaryMs, 100, 3_000))
+      && (value.config.minSentenceMs === undefined || isSafeInteger(value.config.minSentenceMs, 0, 5_000))
+      && (value.config.preRollMs === undefined || isSafeInteger(value.config.preRollMs, 0, 180))
+      && (value.config.postRollMs === undefined || isSafeInteger(value.config.postRollMs, 0, 250));
   }
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
@@ -908,6 +928,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "MEDIA_NOT_MEDIA", "MEDIA_OUTPUT_INVALID", "MEDIA_CANCELLED",
   "TRANSCRIPTION_TOOL_UNAVAILABLE", "TRANSCRIPTION_MODEL_UNAVAILABLE", "TRANSCRIPTION_OUTPUT_INVALID", "TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_CANCELLED",
   "VAD_TOOL_UNAVAILABLE", "VAD_OUTPUT_INVALID", "VAD_TIMEOUT", "VAD_CANCELLED",
+  "SENTENCE_PREREQUISITE_UNAVAILABLE", "SENTENCE_PREREQUISITE_INVALID", "SENTENCE_OUTPUT_INVALID", "SENTENCE_TIMEOUT", "SENTENCE_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -943,6 +964,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-proxy") return isMediaProxyResult(value);
   if (type === "media-transcribe") return isTranscriptionResult(value);
   if (type === "media-vad") return isVadResult(value);
+  if (type === "media-sentences") return isSentenceResult(value);
   return true;
 }
 

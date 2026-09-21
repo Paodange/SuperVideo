@@ -21,6 +21,11 @@ MediaErrorCode = Literal[
     "VAD_OUTPUT_INVALID",
     "VAD_TIMEOUT",
     "VAD_CANCELLED",
+    "SENTENCE_PREREQUISITE_UNAVAILABLE",
+    "SENTENCE_PREREQUISITE_INVALID",
+    "SENTENCE_OUTPUT_INVALID",
+    "SENTENCE_TIMEOUT",
+    "SENTENCE_CANCELLED",
 ]
 
 
@@ -45,6 +50,11 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "VAD_OUTPUT_INVALID": MediaErrorDefinition("The local VAD output was invalid."),
     "VAD_TIMEOUT": MediaErrorDefinition("The local VAD timed out."),
     "VAD_CANCELLED": MediaErrorDefinition("The local VAD operation was cancelled."),
+    "SENTENCE_PREREQUISITE_UNAVAILABLE": MediaErrorDefinition("The transcription or speech interval result is unavailable."),
+    "SENTENCE_PREREQUISITE_INVALID": MediaErrorDefinition("The transcription or speech interval result is invalid."),
+    "SENTENCE_OUTPUT_INVALID": MediaErrorDefinition("The sentence segmentation output was invalid."),
+    "SENTENCE_TIMEOUT": MediaErrorDefinition("The sentence segmentation timed out."),
+    "SENTENCE_CANCELLED": MediaErrorDefinition("The sentence segmentation was cancelled."),
 }
 
 

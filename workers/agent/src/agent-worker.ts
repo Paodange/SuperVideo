@@ -14,6 +14,7 @@ import {
   isMediaProxyResult,
   isTranscriptionResult,
   isVadResult,
+  isSentenceResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -145,6 +146,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-proxy":
     case "media-transcribe":
     case "media-vad":
+    case "media-sentences":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -188,7 +190,9 @@ async function handleProjectOperation(
               ? isMediaProxyResult(result)
               : operation === "media-transcribe"
                 ? isTranscriptionResult(result)
-                : isVadResult(result);
+                : operation === "media-vad"
+                  ? isVadResult(result)
+                  : isSentenceResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -295,7 +299,8 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-probe") return CORE_RPC_METHODS.mediaProbe;
   if (operation === "media-proxy") return CORE_RPC_METHODS.mediaProxy;
   if (operation === "media-transcribe") return CORE_RPC_METHODS.mediaTranscribe;
-  return CORE_RPC_METHODS.mediaVad;
+  if (operation === "media-vad") return CORE_RPC_METHODS.mediaVad;
+  return CORE_RPC_METHODS.mediaSentences;
 }
 
 function sendProjectError(operationId: string, operation: AgentProjectOperationType, code: ProjectOperationErrorCode): void {
@@ -347,7 +352,12 @@ function isProjectOperationErrorCode(value: string): value is ProjectOperationEr
     || value === "VAD_TOOL_UNAVAILABLE"
     || value === "VAD_OUTPUT_INVALID"
     || value === "VAD_TIMEOUT"
-    || value === "VAD_CANCELLED";
+    || value === "VAD_CANCELLED"
+    || value === "SENTENCE_PREREQUISITE_UNAVAILABLE"
+    || value === "SENTENCE_PREREQUISITE_INVALID"
+    || value === "SENTENCE_OUTPUT_INVALID"
+    || value === "SENTENCE_TIMEOUT"
+    || value === "SENTENCE_CANCELLED";
 }
 
 async function shutdown(): Promise<void> {

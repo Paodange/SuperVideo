@@ -32,6 +32,7 @@ import {
   isMediaProxyResult,
   isTranscriptionResult,
   isVadResult,
+  isSentenceResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -53,6 +54,8 @@ import {
   type TranscriptionResult,
   type VadParams,
   type VadResult,
+  type SentenceParams,
+  type SentenceResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -296,6 +299,12 @@ export class PythonCoreClient {
   async detectVoiceActivity(params: VadParams, options: CoreRpcRequestOptions = {}): Promise<VadResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaVad, params, options);
     if (!isVadResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async splitSentences(params: SentenceParams, options: CoreRpcRequestOptions = {}): Promise<SentenceResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentences, params, options);
+    if (!isSentenceResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

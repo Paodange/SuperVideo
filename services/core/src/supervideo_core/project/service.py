@@ -24,10 +24,11 @@ from supervideo_core.storage import (
     new_id,
     utc_now_ms,
 )
-from supervideo_core.media import MediaService, TranscriptionService, VadService
+from supervideo_core.media import MediaService, SentenceService, TranscriptionService, VadService
 from supervideo_core.media.models import MediaProbeParams, MediaProbeResult, MediaProxyParams, MediaProxyResult
 from supervideo_core.media.transcription_models import TranscriptionParams, TranscriptionResult
 from supervideo_core.media.vad_models import VadParams, VadResult
+from supervideo_core.media.sentence_models import SentenceParams, SentenceResult
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -80,11 +81,12 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
         self.transcription_service = transcription_service or TranscriptionService()
         self.vad_service = vad_service or VadService()
+        self.sentence_service = sentence_service or SentenceService(transcription_service=self.transcription_service, vad_service=self.vad_service)
 
     @property
     def active_project_id(self) -> str | None:
@@ -121,6 +123,13 @@ class ProjectService:
         active = self._require_active(request.project_id)
         self.vad_service.bind_session(active.root, active.database)
         return await self.vad_service.detect(request, cancelled)
+
+    async def split_sentences(self, request: SentenceParams, cancelled: asyncio.Event) -> SentenceResult:
+        active = self._require_active(request.project_id)
+        self.transcription_service.bind_session(active.root, active.database)
+        self.vad_service.bind_session(active.root, active.database)
+        self.sentence_service.bind_session(active.root, active.database)
+        return await self.sentence_service.split(request, cancelled)
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:

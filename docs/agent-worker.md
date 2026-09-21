@@ -52,11 +52,13 @@ A06 adds fixed Main-to-Worker project commands: `project-create`,
 the fixed `asset-scan` command; its payload is still a typed project operation,
 not a generic filesystem request, and the directory is expected to originate
 from a Main-owned native directory dialog.
-B02/B03/B04 add the fixed `media-probe`, `media-proxy`, `media-transcribe`, and
-`media-vad` commands. `media-transcribe` carries only project/asset IDs and a
+B02/B03/B04/B05 add the fixed `media-probe`, `media-proxy`, `media-transcribe`,
+`media-vad`, and `media-sentences` commands. `media-transcribe` carries only project/asset IDs and a
 bounded timeout; its result remains below the Worker message limit.
 `media-vad` additionally carries only a bounded structured VAD configuration;
 it never carries a tool, model, command, or output path.
+`media-sentences` carries only a bounded sentence configuration; it consumes
+strict B03/B04 results and never carries a model, command, or path.
 They carry an operation ID and strict, bounded payload. They are controller
 commands, not Pi tools. The controller permits at most one project operation or
 A03 smoke run at a time, applies a bounded operation timeout, rejects duplicate

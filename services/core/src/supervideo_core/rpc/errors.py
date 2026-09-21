@@ -83,6 +83,11 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "VAD_OUTPUT_INVALID": RpcErrorDefinition(-32312, "The local VAD output was invalid."),
     "VAD_TIMEOUT": RpcErrorDefinition(-32313, "The local VAD timed out."),
     "VAD_CANCELLED": RpcErrorDefinition(-32314, "The local VAD operation was cancelled."),
+    "SENTENCE_PREREQUISITE_UNAVAILABLE": RpcErrorDefinition(-32315, "The transcription or speech interval result is unavailable."),
+    "SENTENCE_PREREQUISITE_INVALID": RpcErrorDefinition(-32316, "The transcription or speech interval result is invalid."),
+    "SENTENCE_OUTPUT_INVALID": RpcErrorDefinition(-32317, "The sentence segmentation output was invalid."),
+    "SENTENCE_TIMEOUT": RpcErrorDefinition(-32318, "The sentence segmentation timed out."),
+    "SENTENCE_CANCELLED": RpcErrorDefinition(-32319, "The sentence segmentation was cancelled."),
 }
 
 
