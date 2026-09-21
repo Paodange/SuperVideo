@@ -19,6 +19,7 @@ from supervideo_core.project.models import (
 from supervideo_core.media.models import MediaProbeParams, MediaProxyParams
 from supervideo_core.media.transcription_models import TranscriptionParams
 from supervideo_core.media.vad_models import VadParams
+from supervideo_core.media.sentence_models import SentenceParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -278,6 +279,8 @@ def validate_request(value: Any) -> RpcRequest:
         TranscriptionParams.model_validate(request.params)
     elif request.method == "media.vad":
         VadParams.model_validate(request.params)
+    elif request.method == "media.sentences":
+        SentenceParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -339,6 +342,7 @@ def health_result() -> dict[str, object]:
             "media.proxy",
             "media.transcribe",
             "media.vad",
+            "media.sentences",
             "job.smoke.start",
             "job.get",
             "job.list",

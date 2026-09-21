@@ -52,6 +52,9 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
 - `media.vad`：只接受当前已验证项目中的 `assetId` 和严格有界的结构化 VAD 配置，
   使用 allowlist FFmpeg `silencedetect` 输出版本化的、非重叠的口播/静音区间；结果
   显式标记 `isSpeech`，不代表完整句子，也不接受命令、模型路径或输出路径。
+- `media.sentences`：只接受当前已验证项目中的 `assetId` 和严格有界的句子配置，
+  消费 B03 转写与 B04 speech intervals，输出带来源、时间码、置信度和
+  `needs_review` 原因的完整句候选；不接受模型、命令、任意路径或自然语言规则。
 
 A06 的 project/asset 方法仍使用 Core RPC protocol v1；它们不是任意路径或
 SQL 转发。Worker 只能通过固定 controller command 调用这些方法。每次

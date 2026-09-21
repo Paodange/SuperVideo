@@ -29,6 +29,7 @@ export const CORE_RPC_METHODS = {
   mediaProxy: "media.proxy",
   mediaTranscribe: "media.transcribe",
   mediaVad: "media.vad",
+  mediaSentences: "media.sentences",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -52,6 +53,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaProxy
   | typeof CORE_RPC_METHODS.mediaTranscribe
   | typeof CORE_RPC_METHODS.mediaVad
+  | typeof CORE_RPC_METHODS.mediaSentences
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -133,6 +135,11 @@ export const CORE_RPC_ERROR_CODES = {
   vadOutputInvalid: "VAD_OUTPUT_INVALID",
   vadTimeout: "VAD_TIMEOUT",
   vadCancelled: "VAD_CANCELLED",
+  sentencePrerequisiteUnavailable: "SENTENCE_PREREQUISITE_UNAVAILABLE",
+  sentencePrerequisiteInvalid: "SENTENCE_PREREQUISITE_INVALID",
+  sentenceOutputInvalid: "SENTENCE_OUTPUT_INVALID",
+  sentenceTimeout: "SENTENCE_TIMEOUT",
+  sentenceCancelled: "SENTENCE_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -210,6 +217,11 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   VAD_OUTPUT_INVALID: -32312,
   VAD_TIMEOUT: -32313,
   VAD_CANCELLED: -32314,
+  SENTENCE_PREREQUISITE_UNAVAILABLE: -32315,
+  SENTENCE_PREREQUISITE_INVALID: -32316,
+  SENTENCE_OUTPUT_INVALID: -32317,
+  SENTENCE_TIMEOUT: -32318,
+  SENTENCE_CANCELLED: -32319,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -285,6 +297,11 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   VAD_OUTPUT_INVALID: "The local VAD output was invalid.",
   VAD_TIMEOUT: "The local VAD timed out.",
   VAD_CANCELLED: "The local VAD operation was cancelled.",
+  SENTENCE_PREREQUISITE_UNAVAILABLE: "The transcription or speech interval result is unavailable.",
+  SENTENCE_PREREQUISITE_INVALID: "The transcription or speech interval result is invalid.",
+  SENTENCE_OUTPUT_INVALID: "The sentence segmentation output was invalid.",
+  SENTENCE_TIMEOUT: "The sentence segmentation timed out.",
+  SENTENCE_CANCELLED: "The sentence segmentation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -366,6 +383,10 @@ export type TranscriptionSegment = Readonly<{ index: number; startMs: number; en
 export type TranscriptionResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; model: TranscriptionModelInfo; language: string | null; languageProbability: number | null; durationMs: number | null; segments: readonly TranscriptionSegment[] }>;
 export type SpeechInterval = Readonly<{ index: number; startMs: number; endMs: number; isSpeech: boolean; confidence: number | null; quality: "detected" | "silence" | "boundary-expanded" | "boundary-clipped" | "merged" }>;
 export type VadResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; adapterVersion: "ffmpeg-silencedetect-v1"; durationMs: number; config: VadConfig; intervals: readonly SpeechInterval[] }>;
+export type SentenceConfig = Readonly<{ maxSentenceMs: number; pauseBoundaryMs: number; minSentenceMs: number; preRollMs: number; postRollMs: number }>;
+export type SentenceParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number; config?: Partial<SentenceConfig> }>;
+export type SentenceCandidate = Readonly<{ index: number; sourceAssetId: string; startMs: number; endMs: number; text: string; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[]; sourceSegmentIndexes: readonly number[] }>;
+export type SentenceResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; adapterVersion: "sentence-segmentation-v1"; durationMs: number; config: SentenceConfig; sentences: readonly SentenceCandidate[] }>;
 export type CoreProgress = Readonly<{
   requestId: CoreRpcId;
   sequence: number;
@@ -502,6 +523,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
     return isMediaParams(value.params);
   }
   if (value.method === CORE_RPC_METHODS.mediaVad) return isVadParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaSentences) return isSentenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -680,6 +702,18 @@ export function isVadResult(value: unknown): value is VadResult {
     && isBoundedCoreJsonValue(value, 48 * 1024);
 }
 
+export function isSentenceResult(value: unknown): value is SentenceResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "projectId", "assetId", "cacheStatus", "cacheKey", "adapterVersion", "durationMs", "config", "sentences"])
+    && value.schemaVersion === 1 && isUuid(value.projectId) && isUuid(value.assetId)
+    && isMediaCacheStatus(value.cacheStatus) && isSafeString(value.cacheKey, 128)
+    && value.adapterVersion === "sentence-segmentation-v1"
+    && isSafeInteger(value.durationMs, 0, 86_400_000)
+    && isSentenceConfig(value.config)
+    && Array.isArray(value.sentences) && value.sentences.length <= 2_000
+    && value.sentences.every((item, index) => isSentenceCandidate(item, index, value.assetId as string, value.durationMs as number))
+    && isBoundedCoreJsonValue(value, 48 * 1024);
+}
+
 function isVadIntervals(value: unknown, durationMs: number): value is readonly SpeechInterval[] {
   if (!Array.isArray(value) || value.length > 4_000) return false;
   let cursor = 0;
@@ -846,6 +880,18 @@ function isVadParams(value: unknown): value is VadParams {
     && (value.config.mergeGapMs === undefined || isSafeInteger(value.config.mergeGapMs, 0, 1_000));
 }
 
+function isSentenceParams(value: unknown): value is SentenceParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"])) return false;
+  if (!isUuid(value.projectId) || !isUuid(value.assetId) || (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000))) return false;
+  if (value.config === undefined) return true;
+  return isPlainRecord(value.config) && hasNoUnexpectedKeys(value.config, ["maxSentenceMs", "pauseBoundaryMs", "minSentenceMs", "preRollMs", "postRollMs"])
+    && (value.config.maxSentenceMs === undefined || isSafeInteger(value.config.maxSentenceMs, 1_000, 30_000))
+    && (value.config.pauseBoundaryMs === undefined || isSafeInteger(value.config.pauseBoundaryMs, 100, 3_000))
+    && (value.config.minSentenceMs === undefined || isSafeInteger(value.config.minSentenceMs, 0, 5_000))
+    && (value.config.preRollMs === undefined || isSafeInteger(value.config.preRollMs, 0, 180))
+    && (value.config.postRollMs === undefined || isSafeInteger(value.config.postRollMs, 0, 250));
+}
+
 function isVadConfig(value: unknown): value is VadConfig {
   return isPlainRecord(value) && hasOnlyKeys(value, ["thresholdDb", "minSpeechMs", "minSilenceMs", "preRollMs", "postRollMs", "mergeGapMs"])
     && isFiniteInRange(value.thresholdDb, -60, -5)
@@ -854,6 +900,27 @@ function isVadConfig(value: unknown): value is VadConfig {
     && isSafeInteger(value.preRollMs, 0, 180)
     && isSafeInteger(value.postRollMs, 0, 250)
     && isSafeInteger(value.mergeGapMs, 0, 1_000);
+}
+
+function isSentenceConfig(value: unknown): value is SentenceConfig {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["maxSentenceMs", "pauseBoundaryMs", "minSentenceMs", "preRollMs", "postRollMs"])
+    && isSafeInteger(value.maxSentenceMs, 1_000, 30_000)
+    && isSafeInteger(value.pauseBoundaryMs, 100, 3_000)
+    && isSafeInteger(value.minSentenceMs, 0, 5_000)
+    && isSafeInteger(value.preRollMs, 0, 180)
+    && isSafeInteger(value.postRollMs, 0, 250);
+}
+
+function isSentenceCandidate(value: unknown, index: number, assetId: string, durationMs: number): value is SentenceCandidate {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["index", "sourceAssetId", "startMs", "endMs", "text", "confidence", "quality", "qualityReasons", "sourceSegmentIndexes"])
+    && value.index === index && value.sourceAssetId === assetId
+    && isSafeInteger(value.startMs, 0, durationMs) && isSafeInteger(value.endMs, value.startMs + 1, durationMs)
+    && isSafeString(value.text, 2_048)
+    && (value.confidence === null || isFiniteInRange(value.confidence, 0, 1))
+    && (value.quality === "complete" && Array.isArray(value.qualityReasons) && value.qualityReasons.length === 0 || value.quality === "needs_review" && Array.isArray(value.qualityReasons) && value.qualityReasons.length > 0)
+    && Array.isArray(value.qualityReasons) && value.qualityReasons.length <= 8 && value.qualityReasons.every((reason) => isSafeString(reason, 64))
+    && Array.isArray(value.sourceSegmentIndexes) && value.sourceSegmentIndexes.length <= 2_000
+    && value.sourceSegmentIndexes.every((sourceIndex) => isSafeInteger(sourceIndex, 0, 1_999));
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {
