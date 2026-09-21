@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from supervideo_core.media.errors import MediaError
 from supervideo_core.media.sentence_models import SentenceParams
 from supervideo_core.media.sentences import SentenceService
@@ -77,6 +79,24 @@ class SentenceServiceTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         shutil.rmtree(self.temp_root, ignore_errors=True)
+
+    def test_partial_sentence_config_uses_defaults_and_rejects_extra_fields(self) -> None:
+        params = SentenceParams.model_validate({
+            "projectId": PROJECT_ID,
+            "assetId": ASSET_ID,
+            "config": {"maxSentenceMs": 12_000},
+        })
+        self.assertEqual(params.config.max_sentence_ms, 12_000)
+        self.assertEqual(params.config.pause_boundary_ms, 650)
+        self.assertEqual(params.config.min_sentence_ms, 300)
+        self.assertEqual(params.config.pre_roll_ms, 120)
+        self.assertEqual(params.config.post_roll_ms, 180)
+        with self.assertRaises(ValidationError):
+            SentenceParams.model_validate({
+                "projectId": PROJECT_ID,
+                "assetId": ASSET_ID,
+                "config": {"maxSentenceMs": 12_000, "unexpected": 1},
+            })
 
     def test_punctuation_boundaries_vad_padding_and_review_reasons(self) -> None:
         transcription = FakeTranscription()

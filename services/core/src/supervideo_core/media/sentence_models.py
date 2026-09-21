@@ -36,6 +36,16 @@ class SentenceParams(SentenceModel):
     timeout_ms: int = Field(default=120_000, alias="timeoutMs", strict=True, ge=1_000, le=120_000)
     config: SentenceConfig = Field(default_factory=SentenceConfig)
 
+    @field_validator("config", mode="before")
+    @classmethod
+    def normalize_config(cls, value: object) -> object:
+        """Accept a bounded partial patch, then normalize through the strict full model."""
+        if not isinstance(value, dict):
+            return value
+        defaults = SentenceConfig().model_dump(by_alias=True)
+        defaults.update(value)
+        return SentenceConfig.model_validate(defaults)
+
     @field_validator("project_id", "asset_id")
     @classmethod
     def validate_id(cls, value: str) -> str:
