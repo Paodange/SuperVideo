@@ -1308,9 +1308,12 @@ function isInformationSlot(value: unknown, order: number): value is InformationS
   if (value.slotId !== `slot-${order}` || value.order !== order || !["hook", "context", "claim", "evidence", "benefit", "requirement", "process", "cta", "closing", "other"].includes(value.kind as string)) return false;
   if (!isBoundedText(value.sourceText, 512) || !isBoundedText(value.query, 512)) return false;
   if (!Array.isArray(value.keyFacts) || value.keyFacts.length > 8 || !value.keyFacts.every((item) => isBoundedText(item, 64))) return false;
-  if (!Array.isArray(value.candidates) || value.candidates.length > 8 || !value.candidates.every((candidate, index) => isSlotAlignmentCandidate(candidate, index + 1, value.keyFacts as readonly string[]))) return false;
+  const keyFacts = value.keyFacts as readonly string[];
+  if (!Array.isArray(value.candidates) || value.candidates.length > 8 || !value.candidates.every((candidate, index) => isSlotAlignmentCandidate(candidate, index + 1, keyFacts))) return false;
   if (value.status === "matched") {
-    return value.candidates.length > 0 && value.selectedCandidateRank === 1 && isBoundedText(value.selectionReason, 128) && value.gapReason === null;
+    return value.candidates.length > 0
+      && value.candidates.every((candidate) => candidate.preservedFacts.length === keyFacts.length && keyFacts.every((fact) => candidate.preservedFacts.includes(fact)))
+      && value.selectedCandidateRank === 1 && isBoundedText(value.selectionReason, 128) && value.gapReason === null;
   }
   return value.status === "gap" && value.candidates.length === 0 && value.selectedCandidateRank === null && value.selectionReason === null && isBoundedText(value.gapReason, 128);
 }

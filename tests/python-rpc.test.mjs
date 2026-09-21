@@ -93,6 +93,12 @@ test("B10 slot alignment validators enforce bounded input, order, and source bin
     slots: [{ ...result.slots[0], sourceText: "工资 7000 元。", query: "工资 7000 元。", keyFacts: ["7000 元"], candidates: [{ ...candidate, text: "工资 17000 元", preservedFacts: ["7000 元"] }] }],
   };
   assert.equal(shared.isSlotAlignmentResult(unsafe), false, "preserved facts must be extracted whole tokens, not substrings");
+  const incomplete = {
+    ...result,
+    inputText: "工资 7000 元，地点上海。",
+    slots: [{ ...result.slots[0], sourceText: "工资 7000 元，地点上海。", query: "工资 7000 元，地点上海。", keyFacts: ["7000 元", "上海"], candidates: [{ ...candidate, text: "工资 7000 元，地点上海。", preservedFacts: ["7000 元"] }] }],
+  };
+  assert.equal(shared.isSlotAlignmentResult(incomplete), false, "matched candidates must cover every slot fact");
 });
 
 test("VAD runtime validator rejects a gap between otherwise valid intervals", () => {
