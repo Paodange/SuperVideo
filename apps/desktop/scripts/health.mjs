@@ -35,4 +35,20 @@ if (!rendererHtml.includes("SuperVideo") || !rendererHtml.includes("<script")) {
   process.exit(1);
 }
 
+const rendererDirectory = path.dirname(rendererEntry);
+const rendererAssetReferences = [...rendererHtml.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
+  .map((match) => match[1])
+  .filter((reference) => reference && !reference.startsWith("data:"));
+for (const reference of rendererAssetReferences) {
+  if (path.isAbsolute(reference) || reference.startsWith("/") || reference.startsWith("\\")) {
+    console.error(`Renderer asset reference must be relative for file:// loading: ${reference}`);
+    process.exit(1);
+  }
+  const resolvedAsset = path.resolve(rendererDirectory, reference);
+  if (!resolvedAsset.startsWith(`${rendererDirectory}${path.sep}`) || !existsSync(resolvedAsset)) {
+    console.error(`Missing renderer asset referenced by index.html: ${reference}`);
+    process.exit(1);
+  }
+}
+
 console.log(JSON.stringify({ service: "desktop", status: "ok" }));

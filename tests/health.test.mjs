@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -53,4 +53,20 @@ test("desktop build keeps the renderer outside the Node boundary", () => {
   assert.ok(existsSync(path.join(root, "apps", "desktop", "dist", "renderer", "index.html")));
   assert.ok(existsSync(path.join(root, "apps", "desktop", "dist", "main", "main.js")));
   assert.ok(existsSync(path.join(root, "apps", "desktop", "dist", "preload", "preload.js")));
+});
+
+test("desktop renderer assets are relative and exist for file loading", () => {
+  const rendererDirectory = path.join(root, "apps", "desktop", "dist", "renderer");
+  const rendererHtml = readFileSync(path.join(rendererDirectory, "index.html"), "utf8");
+  const references = [...rendererHtml.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
+    .map((match) => match[1])
+    .filter((reference) => reference && !reference.startsWith("data:"));
+
+  assert.ok(references.length > 0);
+  for (const reference of references) {
+    assert.equal(path.isAbsolute(reference) || reference.startsWith("/") || reference.startsWith("\\"), false);
+    const resolved = path.resolve(rendererDirectory, reference);
+    assert.equal(resolved.startsWith(`${rendererDirectory}${path.sep}`), true);
+    assert.equal(existsSync(resolved), true, reference);
+  }
 });
