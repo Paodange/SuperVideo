@@ -67,6 +67,28 @@ test("golden fixtures are checked by the TypeScript runtime validator", () => {
   }
 });
 
+test("VAD runtime validator rejects a gap between otherwise valid intervals", () => {
+  const base = {
+    schemaVersion: 1,
+    projectId: "11111111-1111-4111-8111-111111111111",
+    assetId: "22222222-2222-4222-8222-222222222222",
+    cacheStatus: "created",
+    cacheKey: "a".repeat(64),
+    adapterVersion: "ffmpeg-silencedetect-v1",
+    durationMs: 1_000,
+    config: { thresholdDb: -35, minSpeechMs: 120, minSilenceMs: 120, preRollMs: 120, postRollMs: 180, mergeGapMs: 120 },
+    intervals: [
+      { index: 0, startMs: 0, endMs: 300, isSpeech: true, confidence: null, quality: "detected" },
+      { index: 1, startMs: 400, endMs: 1_000, isSpeech: false, confidence: null, quality: "silence" },
+    ],
+  };
+  assert.equal(shared.isVadResult(base), false);
+  assert.equal(shared.isVadResult({ ...base, intervals: [
+    { ...base.intervals[0], endMs: 400 },
+    { ...base.intervals[1], startMs: 400 },
+  ] }), true);
+});
+
 test("client frames CRLF/chunked messages and ignores stale progress or responses", async () => {
   const progress = [];
   const fake = fakeLaunch((child, request) => {

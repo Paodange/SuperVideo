@@ -685,7 +685,7 @@ function isVadIntervals(value: unknown, durationMs: number): value is readonly S
   let cursor = 0;
   for (let index = 0; index < value.length; index += 1) {
     const interval = value[index];
-    if (!isSpeechInterval(interval) || interval.index !== index || interval.startMs < cursor || interval.endMs > durationMs) return false;
+    if (!isSpeechInterval(interval) || interval.index !== index || interval.startMs !== cursor || interval.endMs > durationMs) return false;
     cursor = interval.endMs;
   }
   return durationMs === 0 ? value.length === 0 : cursor === durationMs;

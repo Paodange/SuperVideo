@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import tempfile
 import unittest
@@ -92,7 +93,9 @@ class VadServiceTests(unittest.TestCase):
                 cached = await project.detect_voice_activity(params, asyncio.Event())
                 self.assertEqual(cached.cache_status, "cache-hit")
                 cache_file = self.temp_root / "project-a" / "cache" / "vad-cache-v1" / "intervals" / f"{created.cache_key}.json"
-                cache_file.write_text('{"schemaVersion":999}', encoding="utf-8")
+                payload = json.loads(cache_file.read_text(encoding="utf-8"))
+                payload["result"]["intervals"][1]["startMs"] += 120
+                cache_file.write_text(json.dumps(payload), encoding="utf-8")
                 rebuilt = await project.detect_voice_activity(params, asyncio.Event())
                 self.assertEqual(rebuilt.cache_status, "created")
 

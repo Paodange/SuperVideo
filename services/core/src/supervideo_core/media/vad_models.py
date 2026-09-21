@@ -72,7 +72,7 @@ class VadResult(VadModel):
     def validate_intervals(self) -> "VadResult":
         cursor = 0
         for index, interval in enumerate(self.intervals):
-            if interval.index != index or interval.start_ms < cursor or interval.end_ms > self.duration_ms:
+            if interval.index != index or interval.start_ms != cursor or interval.end_ms > self.duration_ms:
                 raise ValueError("VAD intervals must be ordered, bounded, and non-overlapping")
             cursor = interval.end_ms
         if self.duration_ms > 0 and cursor != self.duration_ms:
