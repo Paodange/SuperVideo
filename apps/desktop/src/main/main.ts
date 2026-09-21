@@ -12,6 +12,8 @@ import {
   isJobSummary,
   isValidDesktopAgentEvent,
   isProjectSummary,
+  isSentenceQaContextResult,
+  isSentenceQaSaveResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -29,6 +31,8 @@ import {
   type JobReferenceParams,
   type JobSmokeStartParams,
   type JobSummary,
+  type SentenceQaContextResult,
+  type SentenceQaSaveResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -194,6 +198,16 @@ function assetListResult(value: Readonly<Record<string, unknown>>): AssetListRes
   if (!isAssetListResult(value)) {
     throw createDesktopPublicError("CORE_UNAVAILABLE");
   }
+  return value;
+}
+
+function sentenceQaContextResult(value: Readonly<Record<string, unknown>>): SentenceQaContextResult {
+  if (!isSentenceQaContextResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+  return value;
+}
+
+function sentenceQaSaveResult(value: Readonly<Record<string, unknown>>): SentenceQaSaveResult {
+  if (!isSentenceQaSaveResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
   return value;
 }
 
@@ -634,6 +648,8 @@ app.whenReady().then(() => {
       const result = await agentController.runProjectOperation("asset-list", { projectId: input.projectId, limit: 100 }, input.projectId);
       return assetListResult(result);
     },
+    inspectSentenceQa: async (_event, input) => sentenceQaContextResult(await agentController.runProjectOperation("media-sentence-qa-context", input, input.projectId)),
+    saveSentenceQa: async (_event, input) => sentenceQaSaveResult(await agentController.runProjectOperation("media-sentence-qa-save", input, input.projectId)),
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(
       "job-smoke-start", input.projectId,
       {

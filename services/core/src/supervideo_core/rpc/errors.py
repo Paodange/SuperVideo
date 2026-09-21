@@ -88,6 +88,11 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "SENTENCE_OUTPUT_INVALID": RpcErrorDefinition(-32317, "The sentence segmentation output was invalid."),
     "SENTENCE_TIMEOUT": RpcErrorDefinition(-32318, "The sentence segmentation timed out."),
     "SENTENCE_CANCELLED": RpcErrorDefinition(-32319, "The sentence segmentation was cancelled."),
+    "SENTENCE_QA_RESULT_NOT_FOUND": RpcErrorDefinition(-32320, "The requested B05 sentence result is unavailable."),
+    "SENTENCE_QA_RESULT_INVALID": RpcErrorDefinition(-32321, "The requested B05 sentence result is invalid."),
+    "SENTENCE_QA_INDEX_INVALID": RpcErrorDefinition(-32322, "The requested sentence index is invalid."),
+    "SENTENCE_QA_STORAGE_INVALID": RpcErrorDefinition(-32323, "The saved sentence QA markers are invalid."),
+    "SENTENCE_QA_OUTPUT_INVALID": RpcErrorDefinition(-32324, "The sentence QA output was invalid."),
 }
 
 

@@ -1,0 +1,488 @@
+{
+  "schemaVersion": 1,
+  "fixtureVersion": "sentence-qa-regression-v1",
+  "purpose": "Deterministic, privacy-safe B06 sentence-boundary QA regression fixture.",
+  "sentenceCount": 60,
+  "samples": [
+    {
+      "id": "b06-001",
+      "text": "这是用于句界质检的确定性回归样本第1句。",
+      "startMs": 0,
+      "endMs": 700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-002",
+      "text": "这是用于句界质检的确定性回归样本第2句。",
+      "startMs": 1000,
+      "endMs": 1700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-003",
+      "text": "这是用于句界质检的确定性回归样本第3句。",
+      "startMs": 2000,
+      "endMs": 2700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-004",
+      "text": "这是用于句界质检的确定性回归样本第4句。",
+      "startMs": 3000,
+      "endMs": 3700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-005",
+      "text": "这是用于句界质检的确定性回归样本第5句。",
+      "startMs": 4000,
+      "endMs": 4700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["boundary-uncertain"]
+    },
+    {
+      "id": "b06-006",
+      "text": "这是用于句界质检的确定性回归样本第6句。",
+      "startMs": 5000,
+      "endMs": 5700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-007",
+      "text": "这是用于句界质检的确定性回归样本第7句。",
+      "startMs": 6000,
+      "endMs": 6700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-008",
+      "text": "这是用于句界质检的确定性回归样本第8句。",
+      "startMs": 7000,
+      "endMs": 7700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-009",
+      "text": "这是用于句界质检的确定性回归样本第9句。",
+      "startMs": 8000,
+      "endMs": 8700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-010",
+      "text": "这是用于句界质检的确定性回归样本第10句。",
+      "startMs": 9000,
+      "endMs": 9700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["low-confidence","missing-text"]
+    },
+    {
+      "id": "b06-011",
+      "text": "这是用于句界质检的确定性回归样本第11句。",
+      "startMs": 10000,
+      "endMs": 10700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-012",
+      "text": "这是用于句界质检的确定性回归样本第12句。",
+      "startMs": 11000,
+      "endMs": 11700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-013",
+      "text": "这是用于句界质检的确定性回归样本第13句。",
+      "startMs": 12000,
+      "endMs": 12700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-014",
+      "text": "这是用于句界质检的确定性回归样本第14句。",
+      "startMs": 13000,
+      "endMs": 13700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-015",
+      "text": "这是用于句界质检的确定性回归样本第15句。",
+      "startMs": 14000,
+      "endMs": 14700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["boundary-uncertain"]
+    },
+    {
+      "id": "b06-016",
+      "text": "这是用于句界质检的确定性回归样本第16句。",
+      "startMs": 15000,
+      "endMs": 15700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-017",
+      "text": "这是用于句界质检的确定性回归样本第17句。",
+      "startMs": 16000,
+      "endMs": 16700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-018",
+      "text": "这是用于句界质检的确定性回归样本第18句。",
+      "startMs": 17000,
+      "endMs": 17700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-019",
+      "text": "这是用于句界质检的确定性回归样本第19句。",
+      "startMs": 18000,
+      "endMs": 18700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-020",
+      "text": "这是用于句界质检的确定性回归样本第20句。",
+      "startMs": 19000,
+      "endMs": 19700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["low-confidence","missing-text"]
+    },
+    {
+      "id": "b06-021",
+      "text": "这是用于句界质检的确定性回归样本第21句。",
+      "startMs": 20000,
+      "endMs": 20700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-022",
+      "text": "这是用于句界质检的确定性回归样本第22句。",
+      "startMs": 21000,
+      "endMs": 21700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-023",
+      "text": "这是用于句界质检的确定性回归样本第23句。",
+      "startMs": 22000,
+      "endMs": 22700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-024",
+      "text": "这是用于句界质检的确定性回归样本第24句。",
+      "startMs": 23000,
+      "endMs": 23700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-025",
+      "text": "这是用于句界质检的确定性回归样本第25句。",
+      "startMs": 24000,
+      "endMs": 24700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["boundary-uncertain"]
+    },
+    {
+      "id": "b06-026",
+      "text": "这是用于句界质检的确定性回归样本第26句。",
+      "startMs": 25000,
+      "endMs": 25700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-027",
+      "text": "这是用于句界质检的确定性回归样本第27句。",
+      "startMs": 26000,
+      "endMs": 26700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-028",
+      "text": "这是用于句界质检的确定性回归样本第28句。",
+      "startMs": 27000,
+      "endMs": 27700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-029",
+      "text": "这是用于句界质检的确定性回归样本第29句。",
+      "startMs": 28000,
+      "endMs": 28700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-030",
+      "text": "这是用于句界质检的确定性回归样本第30句。",
+      "startMs": 29000,
+      "endMs": 29700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["low-confidence","missing-text"]
+    },
+    {
+      "id": "b06-031",
+      "text": "这是用于句界质检的确定性回归样本第31句。",
+      "startMs": 30000,
+      "endMs": 30700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-032",
+      "text": "这是用于句界质检的确定性回归样本第32句。",
+      "startMs": 31000,
+      "endMs": 31700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-033",
+      "text": "这是用于句界质检的确定性回归样本第33句。",
+      "startMs": 32000,
+      "endMs": 32700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-034",
+      "text": "这是用于句界质检的确定性回归样本第34句。",
+      "startMs": 33000,
+      "endMs": 33700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-035",
+      "text": "这是用于句界质检的确定性回归样本第35句。",
+      "startMs": 34000,
+      "endMs": 34700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-036",
+      "text": "这是用于句界质检的确定性回归样本第36句。",
+      "startMs": 35000,
+      "endMs": 35700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-037",
+      "text": "这是用于句界质检的确定性回归样本第37句。",
+      "startMs": 36000,
+      "endMs": 36700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-038",
+      "text": "这是用于句界质检的确定性回归样本第38句。",
+      "startMs": 37000,
+      "endMs": 37700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-039",
+      "text": "这是用于句界质检的确定性回归样本第39句。",
+      "startMs": 38000,
+      "endMs": 38700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-040",
+      "text": "这是用于句界质检的确定性回归样本第40句。",
+      "startMs": 39000,
+      "endMs": 39700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["low-confidence","missing-text"]
+    },
+    {
+      "id": "b06-041",
+      "text": "这是用于句界质检的确定性回归样本第41句。",
+      "startMs": 40000,
+      "endMs": 40700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-042",
+      "text": "这是用于句界质检的确定性回归样本第42句。",
+      "startMs": 41000,
+      "endMs": 41700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-043",
+      "text": "这是用于句界质检的确定性回归样本第43句。",
+      "startMs": 42000,
+      "endMs": 42700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-044",
+      "text": "这是用于句界质检的确定性回归样本第44句。",
+      "startMs": 43000,
+      "endMs": 43700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-045",
+      "text": "这是用于句界质检的确定性回归样本第45句。",
+      "startMs": 44000,
+      "endMs": 44700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["boundary-uncertain"]
+    },
+    {
+      "id": "b06-046",
+      "text": "这是用于句界质检的确定性回归样本第46句。",
+      "startMs": 45000,
+      "endMs": 45700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-047",
+      "text": "这是用于句界质检的确定性回归样本第47句。",
+      "startMs": 46000,
+      "endMs": 46700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-048",
+      "text": "这是用于句界质检的确定性回归样本第48句。",
+      "startMs": 47000,
+      "endMs": 47700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-049",
+      "text": "这是用于句界质检的确定性回归样本第49句。",
+      "startMs": 48000,
+      "endMs": 48700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-050",
+      "text": "这是用于句界质检的确定性回归样本第50句。",
+      "startMs": 49000,
+      "endMs": 49700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["low-confidence","missing-text"]
+    },
+    {
+      "id": "b06-051",
+      "text": "这是用于句界质检的确定性回归样本第51句。",
+      "startMs": 50000,
+      "endMs": 50700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-052",
+      "text": "这是用于句界质检的确定性回归样本第52句。",
+      "startMs": 51000,
+      "endMs": 51700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-053",
+      "text": "这是用于句界质检的确定性回归样本第53句。",
+      "startMs": 52000,
+      "endMs": 52700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-054",
+      "text": "这是用于句界质检的确定性回归样本第54句。",
+      "startMs": 53000,
+      "endMs": 53700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-055",
+      "text": "这是用于句界质检的确定性回归样本第55句。",
+      "startMs": 54000,
+      "endMs": 54700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["boundary-uncertain"]
+    },
+    {
+      "id": "b06-056",
+      "text": "这是用于句界质检的确定性回归样本第56句。",
+      "startMs": 55000,
+      "endMs": 55700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["half-sentence"]
+    },
+    {
+      "id": "b06-057",
+      "text": "这是用于句界质检的确定性回归样本第57句。",
+      "startMs": 56000,
+      "endMs": 56700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-058",
+      "text": "这是用于句界质检的确定性回归样本第58句。",
+      "startMs": 57000,
+      "endMs": 57700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-059",
+      "text": "这是用于句界质检的确定性回归样本第59句。",
+      "startMs": 58000,
+      "endMs": 58700,
+      "expectedQuality": "complete",
+      "expectedIssues": []
+    },
+    {
+      "id": "b06-060",
+      "text": "这是用于句界质检的确定性回归样本第60句。",
+      "startMs": 59000,
+      "endMs": 59700,
+      "expectedQuality": "needs_review",
+      "expectedIssues": ["low-confidence","missing-text"]
+    }
+  ]
+}

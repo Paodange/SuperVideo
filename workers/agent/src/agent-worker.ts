@@ -15,6 +15,8 @@ import {
   isTranscriptionResult,
   isVadResult,
   isSentenceResult,
+  isSentenceQaContextResult,
+  isSentenceQaSaveResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -147,6 +149,8 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-transcribe":
     case "media-vad":
     case "media-sentences":
+    case "media-sentence-qa-context":
+    case "media-sentence-qa-save":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -192,7 +196,11 @@ async function handleProjectOperation(
                 ? isTranscriptionResult(result)
                 : operation === "media-vad"
                   ? isVadResult(result)
-                  : isSentenceResult(result);
+              : operation === "media-sentences"
+                ? isSentenceResult(result)
+                : operation === "media-sentence-qa-context"
+                  ? isSentenceQaContextResult(result)
+                  : isSentenceQaSaveResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -300,7 +308,9 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-proxy") return CORE_RPC_METHODS.mediaProxy;
   if (operation === "media-transcribe") return CORE_RPC_METHODS.mediaTranscribe;
   if (operation === "media-vad") return CORE_RPC_METHODS.mediaVad;
-  return CORE_RPC_METHODS.mediaSentences;
+  if (operation === "media-sentences") return CORE_RPC_METHODS.mediaSentences;
+  if (operation === "media-sentence-qa-context") return CORE_RPC_METHODS.mediaSentenceQaContext;
+  return CORE_RPC_METHODS.mediaSentenceQaSave;
 }
 
 function sendProjectError(operationId: string, operation: AgentProjectOperationType, code: ProjectOperationErrorCode): void {
@@ -357,7 +367,12 @@ function isProjectOperationErrorCode(value: string): value is ProjectOperationEr
     || value === "SENTENCE_PREREQUISITE_INVALID"
     || value === "SENTENCE_OUTPUT_INVALID"
     || value === "SENTENCE_TIMEOUT"
-    || value === "SENTENCE_CANCELLED";
+    || value === "SENTENCE_CANCELLED"
+    || value === "SENTENCE_QA_RESULT_NOT_FOUND"
+    || value === "SENTENCE_QA_RESULT_INVALID"
+    || value === "SENTENCE_QA_INDEX_INVALID"
+    || value === "SENTENCE_QA_STORAGE_INVALID"
+    || value === "SENTENCE_QA_OUTPUT_INVALID";
 }
 
 async function shutdown(): Promise<void> {

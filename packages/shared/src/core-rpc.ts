@@ -30,6 +30,8 @@ export const CORE_RPC_METHODS = {
   mediaTranscribe: "media.transcribe",
   mediaVad: "media.vad",
   mediaSentences: "media.sentences",
+  mediaSentenceQaContext: "media.sentences.qa.context",
+  mediaSentenceQaSave: "media.sentences.qa.save",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -54,6 +56,8 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaTranscribe
   | typeof CORE_RPC_METHODS.mediaVad
   | typeof CORE_RPC_METHODS.mediaSentences
+  | typeof CORE_RPC_METHODS.mediaSentenceQaContext
+  | typeof CORE_RPC_METHODS.mediaSentenceQaSave
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -140,6 +144,11 @@ export const CORE_RPC_ERROR_CODES = {
   sentenceOutputInvalid: "SENTENCE_OUTPUT_INVALID",
   sentenceTimeout: "SENTENCE_TIMEOUT",
   sentenceCancelled: "SENTENCE_CANCELLED",
+  sentenceQaResultNotFound: "SENTENCE_QA_RESULT_NOT_FOUND",
+  sentenceQaResultInvalid: "SENTENCE_QA_RESULT_INVALID",
+  sentenceQaIndexInvalid: "SENTENCE_QA_INDEX_INVALID",
+  sentenceQaStorageInvalid: "SENTENCE_QA_STORAGE_INVALID",
+  sentenceQaOutputInvalid: "SENTENCE_QA_OUTPUT_INVALID",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -222,6 +231,11 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   SENTENCE_OUTPUT_INVALID: -32317,
   SENTENCE_TIMEOUT: -32318,
   SENTENCE_CANCELLED: -32319,
+  SENTENCE_QA_RESULT_NOT_FOUND: -32320,
+  SENTENCE_QA_RESULT_INVALID: -32321,
+  SENTENCE_QA_INDEX_INVALID: -32322,
+  SENTENCE_QA_STORAGE_INVALID: -32323,
+  SENTENCE_QA_OUTPUT_INVALID: -32324,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -302,6 +316,11 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   SENTENCE_OUTPUT_INVALID: "The sentence segmentation output was invalid.",
   SENTENCE_TIMEOUT: "The sentence segmentation timed out.",
   SENTENCE_CANCELLED: "The sentence segmentation was cancelled.",
+  SENTENCE_QA_RESULT_NOT_FOUND: "The requested B05 sentence result is unavailable.",
+  SENTENCE_QA_RESULT_INVALID: "The requested B05 sentence result is invalid.",
+  SENTENCE_QA_INDEX_INVALID: "The requested sentence index is invalid.",
+  SENTENCE_QA_STORAGE_INVALID: "The saved sentence QA markers are invalid.",
+  SENTENCE_QA_OUTPUT_INVALID: "The sentence QA output was invalid.",
 };
 
 export type CoreRpcId = string;
@@ -387,6 +406,14 @@ export type SentenceConfig = Readonly<{ maxSentenceMs: number; pauseBoundaryMs: 
 export type SentenceParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number; config?: Partial<SentenceConfig> }>;
 export type SentenceCandidate = Readonly<{ index: number; sourceAssetId: string; startMs: number; endMs: number; text: string; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[]; sourceSegmentIndexes: readonly number[] }>;
 export type SentenceResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; adapterVersion: "sentence-segmentation-v1"; durationMs: number; config: SentenceConfig; sentences: readonly SentenceCandidate[] }>;
+export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
+export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
+export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
+export type SentencePlaybackAddress = Readonly<{ scheme: "supervideo"; assetId: string; startMs: number; endMs: number; uri: string }>;
+export type SentenceQaContextItem = Readonly<{ relation: "before" | "selected" | "after"; sentence: SentenceCandidate; playback: SentencePlaybackAddress }>;
+export type SentenceQaContextResult = Readonly<{ schemaVersion: 1; qaVersion: "sentence-qa-v1"; projectId: string; assetId: string; sentenceCacheKey: string; selectedIndex: number; items: readonly SentenceQaContextItem[]; markers: readonly SentenceQaMarker[] }>;
+export type SentenceQaSaveParams = SentenceQaParams & Readonly<{ markers?: readonly SentenceQaMarkerInput[] }>;
+export type SentenceQaSaveResult = Readonly<{ schemaVersion: 1; qaVersion: "sentence-qa-v1"; projectId: string; assetId: string; sentenceCacheKey: string; revision: number; markers: readonly SentenceQaMarker[] }>;
 export type CoreProgress = Readonly<{
   requestId: CoreRpcId;
   sequence: number;
@@ -524,6 +551,8 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   }
   if (value.method === CORE_RPC_METHODS.mediaVad) return isVadParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentences) return isSentenceParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaSentenceQaContext) return isSentenceQaParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaSentenceQaSave) return isSentenceQaSaveParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -714,6 +743,23 @@ export function isSentenceResult(value: unknown): value is SentenceResult {
     && isBoundedCoreJsonValue(value, 48 * 1024);
 }
 
+export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "selectedIndex", "items", "markers"])
+    && value.schemaVersion === 1 && value.qaVersion === "sentence-qa-v1" && isUuid(value.projectId) && isUuid(value.assetId)
+    && isSafeString(value.sentenceCacheKey, 64) && isSafeInteger(value.selectedIndex, 0, 1_999)
+    && Array.isArray(value.items) && value.items.length <= 7 && value.items.every((item) => isSentenceQaContextItem(item, value.assetId as string))
+    && Array.isArray(value.markers) && value.markers.length <= 500 && value.markers.every(isSentenceQaMarker)
+    && isBoundedCoreJsonValue(value, 64 * 1024);
+}
+
+export function isSentenceQaSaveResult(value: unknown): value is SentenceQaSaveResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "revision", "markers"])
+    && value.schemaVersion === 1 && value.qaVersion === "sentence-qa-v1" && isUuid(value.projectId) && isUuid(value.assetId)
+    && isSafeString(value.sentenceCacheKey, 64) && isSafeInteger(value.revision, 1, 2_000_000_000)
+    && Array.isArray(value.markers) && value.markers.length <= 500 && value.markers.every(isSentenceQaMarker)
+    && isBoundedCoreJsonValue(value, 64 * 1024);
+}
+
 function isVadIntervals(value: unknown, durationMs: number): value is readonly SpeechInterval[] {
   if (!Array.isArray(value) || value.length > 4_000) return false;
   let cursor = 0;
@@ -890,6 +936,53 @@ function isSentenceParams(value: unknown): value is SentenceParams {
     && (value.config.minSentenceMs === undefined || isSafeInteger(value.config.minSentenceMs, 0, 5_000))
     && (value.config.preRollMs === undefined || isSafeInteger(value.config.preRollMs, 0, 180))
     && (value.config.postRollMs === undefined || isSafeInteger(value.config.postRollMs, 0, 250));
+}
+
+export function isSentenceQaParams(value: unknown): value is SentenceQaParams {
+  return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter"])
+    && isUuid(value.projectId) && isUuid(value.assetId) && isSafeString(value.sentenceCacheKey, 64)
+    && isSafeInteger(value.sentenceIndex, 0, 1_999)
+    && (value.contextBefore === undefined || isSafeInteger(value.contextBefore, 0, 3))
+    && (value.contextAfter === undefined || isSafeInteger(value.contextAfter, 0, 3));
+}
+
+export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
+  const base = { ...value };
+  delete base.markers;
+  if (!isSentenceQaParams(base)) return false;
+  const markers = (value as SentenceQaSaveParams).markers;
+  return markers === undefined || Array.isArray(markers) && markers.length <= 500 && markers.every(isSentenceQaMarkerInput);
+}
+
+function isSentenceQaMarkerInput(value: unknown): value is SentenceQaMarkerInput {
+  return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["sentenceIndex", "issueType", "status", "source", "note", "expectedText"])
+    && isSafeInteger(value.sentenceIndex, 0, 1_999)
+    && ["missing-text", "half-sentence", "low-confidence", "boundary-uncertain", "other"].includes(value.issueType as string)
+    && (value.status === undefined || value.status === "open" || value.status === "resolved")
+    && (value.source === undefined || value.source === "manual" || value.source === "automatic")
+    && (value.note === undefined || isSafeString(value.note, 256))
+    && (value.expectedText === undefined || value.expectedText === null || isSafeString(value.expectedText, 2_048));
+}
+
+function isSentenceQaMarker(value: unknown): value is SentenceQaMarker {
+  if (!isSentenceQaMarkerInput(value) || !isPlainRecord(value)) return false;
+  const marker = value as SentenceQaMarker;
+  return hasOnlyKeys(value, ["sentenceIndex", "issueType", "status", "source", "note", "expectedText", "markerId", "createdAtMs", "updatedAtMs"])
+    && isUuid(marker.markerId) && marker.status !== undefined && marker.source !== undefined && marker.note !== undefined
+    && marker.expectedText !== undefined && isTimestamp(marker.createdAtMs) && isTimestamp(marker.updatedAtMs)
+    && marker.updatedAtMs >= marker.createdAtMs;
+}
+
+function isSentenceQaContextItem(value: unknown, assetId: string): value is SentenceQaContextItem {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["relation", "sentence", "playback"])
+    && (value.relation === "before" || value.relation === "selected" || value.relation === "after")
+    && isPlainRecord(value.sentence) && isSentenceCandidate(value.sentence, value.sentence.index as number, assetId, 86_400_000)
+    && isPlainRecord(value.playback) && hasOnlyKeys(value.playback, ["scheme", "assetId", "startMs", "endMs", "uri"])
+    && value.playback.scheme === "supervideo" && value.playback.assetId === assetId
+    && isSafeInteger(value.playback.startMs, 0, 86_400_000) && isSafeInteger(value.playback.endMs, 1, 86_400_000)
+    && value.playback.endMs > value.playback.startMs
+    && value.playback.uri === `supervideo://asset/${assetId}?startMs=${value.playback.startMs}&endMs=${value.playback.endMs}`;
 }
 
 function isVadConfig(value: unknown): value is VadConfig {

@@ -137,6 +137,17 @@ dd {
 .job-events span { border-radius: 999px; background: #eef3f1; color: #51625e; padding: 3px 7px; font-size: 0.72rem; }
 .error-text { color: #a33a3a; }
 .security-panel, .diagnostics-panel { border-color: rgba(255, 190, 74, 0.28); }
+.qa-panel { border-color: rgba(137, 164, 255, 0.42); }
+.qa-form { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 12px; margin-top: 18px; }
+.qa-context { display: grid; gap: 9px; margin-top: 18px; }
+.qa-sentence { display: grid; gap: 7px; padding: 12px; border: 1px solid rgba(167, 190, 238, 0.12); border-radius: 12px; background: rgba(7, 13, 29, 0.32); }
+.qa-selected { border-color: rgba(56, 214, 165, 0.48); background: rgba(56, 214, 165, 0.08); }
+.qa-sentence-heading { display: flex; justify-content: space-between; gap: 10px; color: #aebbd5; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.qa-sentence p { margin: 0; color: #f5f8ff; line-height: 1.5; }
+.qa-sentence code, .qa-markers code { overflow-wrap: anywhere; color: #8bf1cf; font-family: "Cascadia Code", Consolas, monospace; font-size: 11px; }
+.qa-sentence .secondary { justify-self: start; padding: 7px 9px; font-size: 11px; }
+.qa-markers { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(167, 190, 238, 0.1); }
+.qa-markers .actions { flex-wrap: wrap; margin-top: 10px; }
 .credential-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .credential-list { display: grid; gap: 8px; }
 .credential-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid rgba(167, 190, 238, 0.1); border-radius: 10px; color: #d8e3ff; font-size: 12px; }
@@ -408,6 +419,7 @@ progress {
   }
 
   .form-grid,
+  .qa-form,
   .asset-row,
   .credential-grid {
     grid-template-columns: 1fr;

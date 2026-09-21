@@ -20,6 +20,10 @@ import {
   isCredentialSaveRequest,
   isCredentialStorageStatus,
   isDiagnosticExportResult,
+  isSentenceQaParams,
+  isSentenceQaSaveParams,
+  isSentenceQaContextResult,
+  isSentenceQaSaveResult,
   type AgentRunHandle,
   type AgentWorkerStatusSnapshot,
   type DesktopAgentEvent,
@@ -50,6 +54,10 @@ import {
   type CredentialSaveRequest,
   type CredentialStorageStatus,
   type DiagnosticExportResult,
+  type SentenceQaParams,
+  type SentenceQaSaveParams,
+  type SentenceQaContextResult,
+  type SentenceQaSaveResult,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -63,6 +71,8 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.openProject
     | typeof DESKTOP_IPC_CHANNELS.addAssetReferences
     | typeof DESKTOP_IPC_CHANNELS.listProjectAssets
+    | typeof DESKTOP_IPC_CHANNELS.inspectSentenceQa
+    | typeof DESKTOP_IPC_CHANNELS.saveSentenceQa
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.listJobs
@@ -142,6 +152,14 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
       invoke,
       isAssetListResult,
     ),
+    inspectSentenceQa: (input: SentenceQaParams) => {
+      if (!isSentenceQaParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.inspectSentenceQa, input, invoke, isSentenceQaContextResult);
+    },
+    saveSentenceQa: (input: SentenceQaSaveParams) => {
+      if (!isSentenceQaSaveParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.saveSentenceQa, input, invoke, isSentenceQaSaveResult);
+    },
     startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),
     listJobs: (input) => invokeValue(DESKTOP_IPC_CHANNELS.listJobs, input, invoke, isJobPage),
