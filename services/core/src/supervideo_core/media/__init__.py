@@ -7,7 +7,8 @@ from .vad_models import VadParams, VadResult
 from .sentence_models import SentenceConfig, SentenceParams, SentenceResult
 from .qa_models import SentenceQaParams, SentenceQaSaveParams, SentenceQaContextResult, SentenceQaSaveResult
 from .index_models import SentenceIndexParams, SentenceIndexResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService"]
+from .retrieval_models import RetrievalFilters, RetrievalParams, RetrievalResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService"]
 
 
 def __getattr__(name: str):
@@ -35,4 +36,8 @@ def __getattr__(name: str):
         from .index import SentenceIndexService
 
         return SentenceIndexService
+    if name == "SentenceRetrievalService":
+        from .retrieval import SentenceRetrievalService
+
+        return SentenceRetrievalService
     raise AttributeError(name)

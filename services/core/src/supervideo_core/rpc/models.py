@@ -22,6 +22,7 @@ from supervideo_core.media.vad_models import VadParams
 from supervideo_core.media.sentence_models import SentenceParams
 from supervideo_core.media.qa_models import SentenceQaParams, SentenceQaSaveParams
 from supervideo_core.media.index_models import SentenceIndexParams
+from supervideo_core.media.retrieval_models import RetrievalParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -289,6 +290,8 @@ def validate_request(value: Any) -> RpcRequest:
         SentenceQaSaveParams.model_validate(request.params)
     elif request.method == "media.sentences.index":
         SentenceIndexParams.model_validate(request.params)
+    elif request.method == "media.sentences.retrieve":
+        RetrievalParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -354,6 +357,7 @@ def health_result() -> dict[str, object]:
             "media.sentences.qa.context",
             "media.sentences.qa.save",
             "media.sentences.index",
+            "media.sentences.retrieve",
             "job.smoke.start",
             "job.get",
             "job.list",

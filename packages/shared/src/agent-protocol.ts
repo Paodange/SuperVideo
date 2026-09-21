@@ -12,8 +12,10 @@ import type {
   ProjectSummary,
   SentenceQaParams,
   SentenceQaSaveParams,
+  RetrievalParams,
+  RetrievalResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -38,7 +40,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -59,6 +61,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaSentenceQaContext: "media-sentence-qa-context",
   mediaSentenceQaSave: "media-sentence-qa-save",
   mediaSentenceIndex: "media-sentence-index",
+  mediaSentenceRetrieve: "media-sentence-retrieve",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
   jobList: "job-list",
@@ -97,7 +100,8 @@ export type AgentProjectOperationType =
   | "media-sentences"
   | "media-sentence-qa-context"
   | "media-sentence-qa-save"
-  | "media-sentence-index";
+  | "media-sentence-index"
+  | "media-sentence-retrieve";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -138,7 +142,8 @@ export type ProjectOperationErrorCode =
   | "VAD_TOOL_UNAVAILABLE" | "VAD_OUTPUT_INVALID" | "VAD_TIMEOUT" | "VAD_CANCELLED"
   | "SENTENCE_PREREQUISITE_UNAVAILABLE" | "SENTENCE_PREREQUISITE_INVALID" | "SENTENCE_OUTPUT_INVALID" | "SENTENCE_TIMEOUT" | "SENTENCE_CANCELLED"
   | "SENTENCE_QA_RESULT_NOT_FOUND" | "SENTENCE_QA_RESULT_INVALID" | "SENTENCE_QA_INDEX_INVALID" | "SENTENCE_QA_STORAGE_INVALID" | "SENTENCE_QA_OUTPUT_INVALID"
-  | "SENTENCE_INDEX_SOURCE_NOT_FOUND" | "SENTENCE_INDEX_SOURCE_INVALID" | "SENTENCE_INDEX_SOURCE_STALE" | "SENTENCE_INDEX_STORAGE_INVALID" | "SENTENCE_INDEX_OUTPUT_INVALID" | "SENTENCE_INDEX_TIMEOUT" | "SENTENCE_INDEX_CANCELLED";
+  | "SENTENCE_INDEX_SOURCE_NOT_FOUND" | "SENTENCE_INDEX_SOURCE_INVALID" | "SENTENCE_INDEX_SOURCE_STALE" | "SENTENCE_INDEX_STORAGE_INVALID" | "SENTENCE_INDEX_OUTPUT_INVALID" | "SENTENCE_INDEX_TIMEOUT" | "SENTENCE_INDEX_CANCELLED"
+  | "RETRIEVAL_INDEX_NOT_FOUND" | "RETRIEVAL_INDEX_INVALID" | "RETRIEVAL_INDEX_STALE" | "RETRIEVAL_STORAGE_INVALID" | "RETRIEVAL_OUTPUT_INVALID" | "RETRIEVAL_TIMEOUT" | "RETRIEVAL_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -332,6 +337,7 @@ export const DESKTOP_IPC_CHANNELS = {
   listProjectAssets: "desktop:v2:list-project-assets",
   inspectSentenceQa: "desktop:v2:inspect-sentence-qa",
   saveSentenceQa: "desktop:v2:save-sentence-qa",
+  retrieveSentences: "desktop:v2:retrieve-sentences",
   startSmokeJob: "desktop:v2:start-smoke-job",
   getJob: "desktop:v2:get-job",
   listJobs: "desktop:v2:list-jobs",
@@ -398,6 +404,7 @@ export type DesktopApi = Readonly<{
   listProjectAssets: (input: ListProjectAssetsRequest) => Promise<AssetListResult>;
   inspectSentenceQa: (input: SentenceQaParams) => Promise<import("./core-rpc").SentenceQaContextResult>;
   saveSentenceQa: (input: SentenceQaSaveParams) => Promise<import("./core-rpc").SentenceQaSaveResult>;
+  retrieveSentences: (input: RetrievalParams) => Promise<RetrievalResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -503,6 +510,13 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   SENTENCE_INDEX_OUTPUT_INVALID: "The sentence index output was invalid.",
   SENTENCE_INDEX_TIMEOUT: "The sentence index operation timed out.",
   SENTENCE_INDEX_CANCELLED: "The sentence index operation was cancelled.",
+  RETRIEVAL_INDEX_NOT_FOUND: "A valid sentence index is unavailable for retrieval.",
+  RETRIEVAL_INDEX_INVALID: "The sentence index is invalid for retrieval.",
+  RETRIEVAL_INDEX_STALE: "The sentence index is stale for the referenced asset.",
+  RETRIEVAL_STORAGE_INVALID: "The sentence retrieval storage is invalid.",
+  RETRIEVAL_OUTPUT_INVALID: "The sentence retrieval output was invalid.",
+  RETRIEVAL_TIMEOUT: "The sentence retrieval operation timed out.",
+  RETRIEVAL_CANCELLED: "The sentence retrieval operation was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -795,7 +809,9 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "media-vad"
     || value === "media-sentences"
     || value === "media-sentence-qa-context"
-    || value === "media-sentence-qa-save";
+    || value === "media-sentence-qa-save"
+    || value === "media-sentence-index"
+    || value === "media-sentence-retrieve";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -871,6 +887,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
     return value.markers === undefined || Array.isArray(value.markers) && value.markers.length <= 500 && value.markers.every(isSentenceQaMarkerInput);
   }
   if (type === "media-sentence-index") return isSentenceIndexParams(value);
+  if (type === "media-sentence-retrieve") return isRetrievalParams(value);
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
     if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
@@ -967,6 +984,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "SENTENCE_PREREQUISITE_UNAVAILABLE", "SENTENCE_PREREQUISITE_INVALID", "SENTENCE_OUTPUT_INVALID", "SENTENCE_TIMEOUT", "SENTENCE_CANCELLED",
   "SENTENCE_QA_RESULT_NOT_FOUND", "SENTENCE_QA_RESULT_INVALID", "SENTENCE_QA_INDEX_INVALID", "SENTENCE_QA_STORAGE_INVALID", "SENTENCE_QA_OUTPUT_INVALID",
   "SENTENCE_INDEX_SOURCE_NOT_FOUND", "SENTENCE_INDEX_SOURCE_INVALID", "SENTENCE_INDEX_SOURCE_STALE", "SENTENCE_INDEX_STORAGE_INVALID", "SENTENCE_INDEX_OUTPUT_INVALID", "SENTENCE_INDEX_TIMEOUT", "SENTENCE_INDEX_CANCELLED",
+  "RETRIEVAL_INDEX_NOT_FOUND", "RETRIEVAL_INDEX_INVALID", "RETRIEVAL_INDEX_STALE", "RETRIEVAL_STORAGE_INVALID", "RETRIEVAL_OUTPUT_INVALID", "RETRIEVAL_TIMEOUT", "RETRIEVAL_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -1004,6 +1022,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-vad") return isVadResult(value);
   if (type === "media-sentences") return isSentenceResult(value);
   if (type === "media-sentence-index") return isSentenceIndexResult(value);
+  if (type === "media-sentence-retrieve") return isRetrievalResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;

@@ -24,13 +24,14 @@ from supervideo_core.storage import (
     new_id,
     utc_now_ms,
 )
-from supervideo_core.media import MediaService, SentenceIndexService, SentenceQaService, SentenceService, TranscriptionService, VadService
+from supervideo_core.media import MediaService, SentenceIndexService, SentenceQaService, SentenceRetrievalService, SentenceService, TranscriptionService, VadService
 from supervideo_core.media.models import MediaProbeParams, MediaProbeResult, MediaProxyParams, MediaProxyResult
 from supervideo_core.media.transcription_models import TranscriptionParams, TranscriptionResult
 from supervideo_core.media.vad_models import VadParams, VadResult
 from supervideo_core.media.sentence_models import SentenceParams, SentenceResult
 from supervideo_core.media.qa_models import SentenceQaContextResult, SentenceQaParams, SentenceQaSaveParams, SentenceQaSaveResult
 from supervideo_core.media.index_models import SentenceIndexParams, SentenceIndexResult
+from supervideo_core.media.retrieval_models import RetrievalParams, RetrievalResult
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -83,7 +84,7 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
         self.transcription_service = transcription_service or TranscriptionService()
@@ -91,6 +92,7 @@ class ProjectService:
         self.sentence_service = sentence_service or SentenceService(transcription_service=self.transcription_service, vad_service=self.vad_service)
         self.sentence_qa_service = sentence_qa_service or SentenceQaService()
         self.sentence_index_service = sentence_index_service or SentenceIndexService()
+        self.sentence_retrieval_service = sentence_retrieval_service or SentenceRetrievalService()
 
     @property
     def active_project_id(self) -> str | None:
@@ -149,6 +151,11 @@ class ProjectService:
         active = self._require_active(request.project_id)
         self.sentence_index_service.bind_session(active.root, active.database)
         return await self.sentence_index_service.build(request, cancelled)
+
+    async def retrieve_sentences(self, request: RetrievalParams, cancelled: asyncio.Event) -> RetrievalResult:
+        active = self._require_active(request.project_id)
+        self.sentence_retrieval_service.bind_session(active.root, active.database)
+        return await self.sentence_retrieval_service.search(request, cancelled)
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:

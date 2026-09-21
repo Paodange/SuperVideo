@@ -100,6 +100,13 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "SENTENCE_INDEX_OUTPUT_INVALID": RpcErrorDefinition(-32329, "The sentence index output was invalid."),
     "SENTENCE_INDEX_TIMEOUT": RpcErrorDefinition(-32330, "The sentence index operation timed out."),
     "SENTENCE_INDEX_CANCELLED": RpcErrorDefinition(-32331, "The sentence index operation was cancelled."),
+    "RETRIEVAL_INDEX_NOT_FOUND": RpcErrorDefinition(-32332, "A valid sentence index is unavailable for retrieval."),
+    "RETRIEVAL_INDEX_INVALID": RpcErrorDefinition(-32333, "The sentence index is invalid for retrieval."),
+    "RETRIEVAL_INDEX_STALE": RpcErrorDefinition(-32334, "The sentence index is stale for the referenced asset."),
+    "RETRIEVAL_STORAGE_INVALID": RpcErrorDefinition(-32335, "The sentence retrieval storage is invalid."),
+    "RETRIEVAL_OUTPUT_INVALID": RpcErrorDefinition(-32336, "The sentence retrieval output was invalid."),
+    "RETRIEVAL_TIMEOUT": RpcErrorDefinition(-32337, "The sentence retrieval operation timed out."),
+    "RETRIEVAL_CANCELLED": RpcErrorDefinition(-32338, "The sentence retrieval operation was cancelled."),
 }
 
 

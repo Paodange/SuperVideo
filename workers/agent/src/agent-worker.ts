@@ -18,6 +18,7 @@ import {
   isSentenceQaContextResult,
   isSentenceQaSaveResult,
   isSentenceIndexResult,
+  isRetrievalResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -153,6 +154,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-sentence-qa-context":
     case "media-sentence-qa-save":
     case "media-sentence-index":
+    case "media-sentence-retrieve":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -202,9 +204,11 @@ async function handleProjectOperation(
                 ? isSentenceResult(result)
               : operation === "media-sentence-qa-context"
                 ? isSentenceQaContextResult(result)
-                : operation === "media-sentence-qa-save"
-                  ? isSentenceQaSaveResult(result)
-                  : isSentenceIndexResult(result);
+              : operation === "media-sentence-qa-save"
+                ? isSentenceQaSaveResult(result)
+                : operation === "media-sentence-index"
+                  ? isSentenceIndexResult(result)
+                  : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -315,6 +319,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-sentences") return CORE_RPC_METHODS.mediaSentences;
   if (operation === "media-sentence-qa-context") return CORE_RPC_METHODS.mediaSentenceQaContext;
   if (operation === "media-sentence-qa-save") return CORE_RPC_METHODS.mediaSentenceQaSave;
+  if (operation === "media-sentence-retrieve") return CORE_RPC_METHODS.mediaSentenceRetrieve;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 

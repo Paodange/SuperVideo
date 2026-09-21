@@ -1,5 +1,37 @@
 [
   {
+    "name": "valid-sentence-retrieval-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-sentence-retrieval-1",
+      "method": "media.sentences.retrieve",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "query": "工厂招聘薪资",
+        "mode": "hybrid",
+        "assetIds": ["22222222-2222-4222-8222-222222222222"],
+        "limit": 20,
+        "filters": {"topics": ["招聘就业"], "quality": "complete", "minConfidence": 0.8, "startMs": 0, "endMs": 60000},
+        "timeoutMs": 120000
+      }
+    }
+  },
+  {
+    "name": "invalid-sentence-retrieval-path-param",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-sentence-retrieval-2",
+      "method": "media.sentences.retrieve",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "query": "招聘",
+        "path": "C:\\secret\\source.mp4"
+      }
+    }
+  },
+  {
     "name": "valid-sentence-index-request",
     "valid": true,
     "message": {

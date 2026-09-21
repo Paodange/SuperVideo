@@ -24,6 +24,8 @@ import {
   isSentenceQaSaveParams,
   isSentenceQaContextResult,
   isSentenceQaSaveResult,
+  isRetrievalParams,
+  isRetrievalResult,
   type AgentRunHandle,
   type AgentWorkerStatusSnapshot,
   type DesktopAgentEvent,
@@ -58,6 +60,8 @@ import {
   type SentenceQaSaveParams,
   type SentenceQaContextResult,
   type SentenceQaSaveResult,
+  type RetrievalParams,
+  type RetrievalResult,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -73,6 +77,7 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.listProjectAssets
     | typeof DESKTOP_IPC_CHANNELS.inspectSentenceQa
     | typeof DESKTOP_IPC_CHANNELS.saveSentenceQa
+    | typeof DESKTOP_IPC_CHANNELS.retrieveSentences
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.listJobs
@@ -159,6 +164,10 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
     saveSentenceQa: (input: SentenceQaSaveParams) => {
       if (!isSentenceQaSaveParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.saveSentenceQa, input, invoke, isSentenceQaSaveResult);
+    },
+    retrieveSentences: (input: RetrievalParams) => {
+      if (!isRetrievalParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.retrieveSentences, input, invoke, isRetrievalResult);
     },
     startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),
