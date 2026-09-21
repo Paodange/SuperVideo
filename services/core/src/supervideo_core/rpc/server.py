@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from supervideo_core.project.errors import ProjectError
 from supervideo_core.jobs.errors import JobError
+from supervideo_core.media.errors import MediaError
 from supervideo_core.observability import StructuredDiagnosticLogger
 
 from .errors import RpcServiceError, error_response
@@ -117,7 +118,7 @@ class RpcServer:
 
     async def dispatch(self, request: RpcRequest) -> None:
         self.logger.emit("core-request-started", request_id=request.id, details={"method": request.method})
-        if request.method == "core.smoke.countdown":
+        if request.method in {"core.smoke.countdown", "media.probe", "media.proxy"}:
             if self.active_request_id == request.id:
                 await self.send_error(request.id, "DUPLICATE_REQUEST_ID")
                 return
@@ -126,7 +127,7 @@ class RpcServer:
                 return
             self.active_request_id = request.id
             self.active_cancel = asyncio.Event()
-            self.active_task = asyncio.create_task(self.execute_countdown(request))
+            self.active_task = asyncio.create_task(self.execute_active(request))
             return
         try:
             result = await self.registry.invoke(request.method, request.params, self.emit_progress, asyncio.Event())
@@ -139,6 +140,9 @@ class RpcServer:
         except JobError as error:
             self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
             await self.send_error(request.id, error.code)
+        except MediaError as error:
+            self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
+            await self.send_error(request.id, error.code)
         except Exception:
             self.logger.emit("core-request-failed", request_id=request.id, error_code="INTERNAL_ERROR", level="error")
             await self.send_error(request.id, "INTERNAL_ERROR")
@@ -148,7 +152,7 @@ class RpcServer:
             self.logger.emit("core-request-finished", request_id=request.id)
             await self.send_result(request.id, result)
 
-    async def execute_countdown(self, request: RpcRequest) -> None:
+    async def execute_active(self, request: RpcRequest) -> None:
         cancelled = self.active_cancel or asyncio.Event()
         try:
             result = await self.registry.invoke(request.method, request.params, self.emit_progress, cancelled)
@@ -156,6 +160,14 @@ class RpcServer:
             if not self.closing:
                 self.logger.emit("core-request-failed", request_id=request.id, error_code=error.error_code, level="warn")
                 await self.send_error(request.id, error.error_code)
+        except MediaError as error:
+            if not self.closing:
+                self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
+                await self.send_error(request.id, error.code)
+        except ProjectError as error:
+            if not self.closing:
+                self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
+                await self.send_error(request.id, error.code)
         except asyncio.CancelledError:
             if not self.closing:
                 self.logger.emit("core-request-failed", request_id=request.id, error_code="REQUEST_CANCELLED", level="warn")

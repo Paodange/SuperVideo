@@ -25,6 +25,8 @@ export const CORE_RPC_METHODS = {
   assetReference: "asset.reference",
   assetScan: "asset.scan",
   assetList: "asset.list",
+  mediaProbe: "media.probe",
+  mediaProxy: "media.proxy",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -44,6 +46,8 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.assetReference
   | typeof CORE_RPC_METHODS.assetScan
   | typeof CORE_RPC_METHODS.assetList
+  | typeof CORE_RPC_METHODS.mediaProbe
+  | typeof CORE_RPC_METHODS.mediaProxy
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -110,6 +114,12 @@ export const CORE_RPC_ERROR_CODES = {
   idempotencyConflict: "IDEMPOTENCY_CONFLICT",
   jobShuttingDown: "JOB_SHUTTING_DOWN",
   jobExecutionFailed: "JOB_EXECUTION_FAILED",
+  mediaToolUnavailable: "MEDIA_TOOL_UNAVAILABLE",
+  mediaToolTimeout: "MEDIA_TOOL_TIMEOUT",
+  mediaProbeParseError: "MEDIA_PROBE_PARSE_ERROR",
+  mediaNotMedia: "MEDIA_NOT_MEDIA",
+  mediaOutputInvalid: "MEDIA_OUTPUT_INVALID",
+  mediaCancelled: "MEDIA_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -172,6 +182,12 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   IDEMPOTENCY_CONFLICT: -32209,
   JOB_SHUTTING_DOWN: -32210,
   JOB_EXECUTION_FAILED: -32211,
+  MEDIA_TOOL_UNAVAILABLE: -32300,
+  MEDIA_TOOL_TIMEOUT: -32301,
+  MEDIA_PROBE_PARSE_ERROR: -32302,
+  MEDIA_NOT_MEDIA: -32303,
+  MEDIA_OUTPUT_INVALID: -32304,
+  MEDIA_CANCELLED: -32305,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -232,6 +248,12 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   IDEMPOTENCY_CONFLICT: "The idempotency key conflicts with another job.",
   JOB_SHUTTING_DOWN: "The job service is shutting down.",
   JOB_EXECUTION_FAILED: "The simulated job failed.",
+  MEDIA_TOOL_UNAVAILABLE: "The configured media tool is unavailable.",
+  MEDIA_TOOL_TIMEOUT: "The media tool timed out.",
+  MEDIA_PROBE_PARSE_ERROR: "The media probe output was invalid.",
+  MEDIA_NOT_MEDIA: "The selected asset is not a valid media file.",
+  MEDIA_OUTPUT_INVALID: "The generated media output was invalid.",
+  MEDIA_CANCELLED: "The media operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -291,6 +313,12 @@ export type AssetSummary = Readonly<{
 export type AssetReferenceBatchResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
 export type AssetScanResult = Readonly<{ projectId: string; directory: string; items: readonly AssetSummary[] }>;
 export type AssetListResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
+export type MediaParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number }>;
+export type MediaStream = Readonly<{ index: number; codecType: "video" | "audio" | "data" | "subtitle" | "attachment" | "unknown"; codecName: string | null; width: number | null; height: number | null; frameRate: number | null; sampleRate: number | null; channels: number | null; channelLayout: string | null; language: string | null }>;
+export type MediaMetadata = Readonly<{ schemaVersion: 1; formatName: string | null; formatLongName: string | null; durationMs: number | null; bitRate: number | null; streams: readonly MediaStream[] }>;
+export type MediaProbeResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; metadata: MediaMetadata }>;
+export type MediaOutput = Readonly<{ kind: "audio" | "video" | "thumbnail"; relativePath: string; sizeBytes: number }>;
+export type MediaProxyResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; outputs: readonly MediaOutput[] }>;
 export type CoreProgress = Readonly<{
   requestId: CoreRpcId;
   sequence: number;
@@ -423,6 +451,9 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.assetList) {
     return isAssetListParams(value.params);
   }
+  if (value.method === CORE_RPC_METHODS.mediaProbe || value.method === CORE_RPC_METHODS.mediaProxy) {
+    return isMediaParams(value.params);
+  }
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -496,7 +527,7 @@ export function isCoreHealth(value: unknown): value is CoreHealth {
     && value.coreVersion.length > 0
     && value.coreVersion.length <= 32
     && Array.isArray(value.capabilities)
-    && value.capabilities.length <= 16
+    && value.capabilities.length <= 32
     && value.capabilities.every((capability) => typeof capability === "string" && capability.length > 0 && capability.length <= 64);
 }
 
@@ -563,6 +594,19 @@ export function isAssetScanResult(value: unknown): value is AssetScanResult {
     && Array.isArray(value.items)
     && value.items.length <= 100
     && value.items.every(isAssetSummary);
+}
+
+export function isMediaProbeResult(value: unknown): value is MediaProbeResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "projectId", "assetId", "cacheStatus", "cacheKey", "metadata"])
+    && value.schemaVersion === 1 && isUuid(value.projectId) && isUuid(value.assetId)
+    && isMediaCacheStatus(value.cacheStatus) && isSafeString(value.cacheKey, 128) && isMediaMetadata(value.metadata);
+}
+
+export function isMediaProxyResult(value: unknown): value is MediaProxyResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "projectId", "assetId", "cacheStatus", "cacheKey", "outputs"])
+    && value.schemaVersion === 1 && isUuid(value.projectId) && isUuid(value.assetId)
+    && isMediaCacheStatus(value.cacheStatus) && isSafeString(value.cacheKey, 128)
+    && Array.isArray(value.outputs) && value.outputs.length === 3 && value.outputs.every(isMediaOutput);
 }
 
 export function isCoreProgress(value: unknown): value is CoreProgress {
@@ -698,6 +742,47 @@ function isAssetScanParams(value: unknown): value is AssetScanParams {
     && hasOnlyKeys(value, ["projectId", "directory"])
     && isUuid(value.projectId)
     && isAbsolutePath(value.directory);
+}
+
+function isMediaParams(value: unknown): value is MediaParams {
+  return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs"])
+    && isUuid(value.projectId) && isUuid(value.assetId)
+    && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
+}
+
+function isMediaMetadata(value: unknown): value is MediaMetadata {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "formatName", "formatLongName", "durationMs", "bitRate", "streams"])
+    && value.schemaVersion === 1
+    && (value.formatName === null || isSafeString(value.formatName, 128))
+    && (value.formatLongName === null || isSafeString(value.formatLongName, 256))
+    && (value.durationMs === null || isSafeInteger(value.durationMs, 0, 86_400_000_000))
+    && (value.bitRate === null || isSafeInteger(value.bitRate, 0, 10_000_000_000))
+    && Array.isArray(value.streams) && value.streams.length <= 64 && value.streams.every(isMediaStream);
+}
+
+function isMediaStream(value: unknown): value is MediaStream {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["index", "codecType", "codecName", "width", "height", "frameRate", "sampleRate", "channels", "channelLayout", "language"])
+    && isSafeInteger(value.index, 0, 100_000)
+    && ["video", "audio", "data", "subtitle", "attachment", "unknown"].includes(value.codecType as string)
+    && (value.codecName === null || isSafeString(value.codecName, 64))
+    && (value.width === null || isSafeInteger(value.width, 1, 100_000))
+    && (value.height === null || isSafeInteger(value.height, 1, 100_000))
+    && (value.frameRate === null || typeof value.frameRate === "number" && Number.isFinite(value.frameRate) && value.frameRate >= 0 && value.frameRate <= 1_000)
+    && (value.sampleRate === null || isSafeInteger(value.sampleRate, 1, 1_000_000))
+    && (value.channels === null || isSafeInteger(value.channels, 1, 256))
+    && (value.channelLayout === null || isSafeString(value.channelLayout, 64))
+    && (value.language === null || isSafeString(value.language, 32));
+}
+
+function isMediaOutput(value: unknown): value is MediaOutput {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["kind", "relativePath", "sizeBytes"])
+    && (value.kind === "audio" || value.kind === "video" || value.kind === "thumbnail")
+    && isSafeString(value.relativePath, 512) && value.relativePath.startsWith("cache/media-cache-v1/")
+    && isSafeInteger(value.sizeBytes, 1, Number.MAX_SAFE_INTEGER);
+}
+
+function isMediaCacheStatus(value: unknown): value is "created" | "cache-hit" {
+  return value === "created" || value === "cache-hit";
 }
 
 function hasNoUnexpectedKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
