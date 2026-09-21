@@ -23,6 +23,7 @@ from supervideo_core.media.transcription_models import TranscriptionParams
 from supervideo_core.media.vad_models import VadParams
 from supervideo_core.media.sentence_models import SentenceParams
 from supervideo_core.media.qa_models import SentenceQaParams, SentenceQaSaveParams
+from supervideo_core.media.index_models import SentenceIndexParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -181,6 +182,15 @@ async def media_sentence_qa_save_handler(
     return service.save_sentence_qa(params).model_dump(by_alias=True)
 
 
+async def media_sentence_index_handler(
+    params: SentenceIndexParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.index_sentences(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -276,6 +286,10 @@ class RpcRegistry:
             "media.sentences.qa.save": (
                 SentenceQaSaveParams,
                 lambda params, emit, cancelled: media_sentence_qa_save_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.sentences.index": (
+                SentenceIndexParams,
+                lambda params, emit, cancelled: media_sentence_index_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

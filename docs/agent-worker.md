@@ -59,6 +59,9 @@ bounded timeout; its result remains below the Worker message limit.
 it never carries a tool, model, command, or output path.
 `media-sentences` carries only a bounded sentence configuration; it consumes
 strict B03/B04 results and never carries a model, command, or path.
+`media-sentence-index` carries only project/asset identity and a B05 cache key;
+the local deterministic adapter returns bounded keywords, topics, vectors,
+timecodes and quality provenance without network or credentials.
 They carry an operation ID and strict, bounded payload. They are controller
 commands, not Pi tools. The controller permits at most one project operation or
 A03 smoke run at a time, applies a bounded operation timeout, rejects duplicate

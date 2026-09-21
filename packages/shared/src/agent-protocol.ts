@@ -13,7 +13,7 @@ import type {
   SentenceQaParams,
   SentenceQaSaveParams,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -38,7 +38,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -58,6 +58,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaSentences: "media-sentences",
   mediaSentenceQaContext: "media-sentence-qa-context",
   mediaSentenceQaSave: "media-sentence-qa-save",
+  mediaSentenceIndex: "media-sentence-index",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
   jobList: "job-list",
@@ -95,7 +96,8 @@ export type AgentProjectOperationType =
   | "media-vad"
   | "media-sentences"
   | "media-sentence-qa-context"
-  | "media-sentence-qa-save";
+  | "media-sentence-qa-save"
+  | "media-sentence-index";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -135,7 +137,8 @@ export type ProjectOperationErrorCode =
   | "TRANSCRIPTION_TOOL_UNAVAILABLE" | "TRANSCRIPTION_MODEL_UNAVAILABLE" | "TRANSCRIPTION_OUTPUT_INVALID" | "TRANSCRIPTION_TIMEOUT" | "TRANSCRIPTION_CANCELLED"
   | "VAD_TOOL_UNAVAILABLE" | "VAD_OUTPUT_INVALID" | "VAD_TIMEOUT" | "VAD_CANCELLED"
   | "SENTENCE_PREREQUISITE_UNAVAILABLE" | "SENTENCE_PREREQUISITE_INVALID" | "SENTENCE_OUTPUT_INVALID" | "SENTENCE_TIMEOUT" | "SENTENCE_CANCELLED"
-  | "SENTENCE_QA_RESULT_NOT_FOUND" | "SENTENCE_QA_RESULT_INVALID" | "SENTENCE_QA_INDEX_INVALID" | "SENTENCE_QA_STORAGE_INVALID" | "SENTENCE_QA_OUTPUT_INVALID";
+  | "SENTENCE_QA_RESULT_NOT_FOUND" | "SENTENCE_QA_RESULT_INVALID" | "SENTENCE_QA_INDEX_INVALID" | "SENTENCE_QA_STORAGE_INVALID" | "SENTENCE_QA_OUTPUT_INVALID"
+  | "SENTENCE_INDEX_SOURCE_NOT_FOUND" | "SENTENCE_INDEX_SOURCE_INVALID" | "SENTENCE_INDEX_SOURCE_STALE" | "SENTENCE_INDEX_STORAGE_INVALID" | "SENTENCE_INDEX_OUTPUT_INVALID" | "SENTENCE_INDEX_TIMEOUT" | "SENTENCE_INDEX_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -493,6 +496,13 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   SENTENCE_QA_INDEX_INVALID: "The requested sentence index is invalid.",
   SENTENCE_QA_STORAGE_INVALID: "The saved sentence QA markers are invalid.",
   SENTENCE_QA_OUTPUT_INVALID: "The sentence QA output was invalid.",
+  SENTENCE_INDEX_SOURCE_NOT_FOUND: "The requested B05 sentence result is unavailable for indexing.",
+  SENTENCE_INDEX_SOURCE_INVALID: "The requested B05 sentence result is invalid for indexing.",
+  SENTENCE_INDEX_SOURCE_STALE: "The requested B05 sentence result is stale for the referenced asset.",
+  SENTENCE_INDEX_STORAGE_INVALID: "The sentence index storage is invalid.",
+  SENTENCE_INDEX_OUTPUT_INVALID: "The sentence index output was invalid.",
+  SENTENCE_INDEX_TIMEOUT: "The sentence index operation timed out.",
+  SENTENCE_INDEX_CANCELLED: "The sentence index operation was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -860,6 +870,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
     if (type === "media-sentence-qa-context") return value.markers === undefined;
     return value.markers === undefined || Array.isArray(value.markers) && value.markers.length <= 500 && value.markers.every(isSentenceQaMarkerInput);
   }
+  if (type === "media-sentence-index") return isSentenceIndexParams(value);
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
     if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
@@ -955,6 +966,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "VAD_TOOL_UNAVAILABLE", "VAD_OUTPUT_INVALID", "VAD_TIMEOUT", "VAD_CANCELLED",
   "SENTENCE_PREREQUISITE_UNAVAILABLE", "SENTENCE_PREREQUISITE_INVALID", "SENTENCE_OUTPUT_INVALID", "SENTENCE_TIMEOUT", "SENTENCE_CANCELLED",
   "SENTENCE_QA_RESULT_NOT_FOUND", "SENTENCE_QA_RESULT_INVALID", "SENTENCE_QA_INDEX_INVALID", "SENTENCE_QA_STORAGE_INVALID", "SENTENCE_QA_OUTPUT_INVALID",
+  "SENTENCE_INDEX_SOURCE_NOT_FOUND", "SENTENCE_INDEX_SOURCE_INVALID", "SENTENCE_INDEX_SOURCE_STALE", "SENTENCE_INDEX_STORAGE_INVALID", "SENTENCE_INDEX_OUTPUT_INVALID", "SENTENCE_INDEX_TIMEOUT", "SENTENCE_INDEX_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -991,6 +1003,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-transcribe") return isTranscriptionResult(value);
   if (type === "media-vad") return isVadResult(value);
   if (type === "media-sentences") return isSentenceResult(value);
+  if (type === "media-sentence-index") return isSentenceIndexResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;

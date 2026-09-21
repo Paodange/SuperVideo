@@ -31,6 +31,13 @@ MediaErrorCode = Literal[
     "SENTENCE_QA_INDEX_INVALID",
     "SENTENCE_QA_STORAGE_INVALID",
     "SENTENCE_QA_OUTPUT_INVALID",
+    "SENTENCE_INDEX_SOURCE_NOT_FOUND",
+    "SENTENCE_INDEX_SOURCE_INVALID",
+    "SENTENCE_INDEX_SOURCE_STALE",
+    "SENTENCE_INDEX_STORAGE_INVALID",
+    "SENTENCE_INDEX_OUTPUT_INVALID",
+    "SENTENCE_INDEX_TIMEOUT",
+    "SENTENCE_INDEX_CANCELLED",
 ]
 
 
@@ -65,6 +72,13 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "SENTENCE_QA_INDEX_INVALID": MediaErrorDefinition("The requested sentence index is invalid."),
     "SENTENCE_QA_STORAGE_INVALID": MediaErrorDefinition("The saved sentence QA markers are invalid."),
     "SENTENCE_QA_OUTPUT_INVALID": MediaErrorDefinition("The sentence QA output was invalid."),
+    "SENTENCE_INDEX_SOURCE_NOT_FOUND": MediaErrorDefinition("The requested B05 sentence result is unavailable for indexing."),
+    "SENTENCE_INDEX_SOURCE_INVALID": MediaErrorDefinition("The requested B05 sentence result is invalid for indexing."),
+    "SENTENCE_INDEX_SOURCE_STALE": MediaErrorDefinition("The requested B05 sentence result is stale for the referenced asset."),
+    "SENTENCE_INDEX_STORAGE_INVALID": MediaErrorDefinition("The sentence index storage is invalid."),
+    "SENTENCE_INDEX_OUTPUT_INVALID": MediaErrorDefinition("The sentence index output was invalid."),
+    "SENTENCE_INDEX_TIMEOUT": MediaErrorDefinition("The sentence index operation timed out."),
+    "SENTENCE_INDEX_CANCELLED": MediaErrorDefinition("The sentence index operation was cancelled."),
 }
 
 

@@ -93,6 +93,13 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "SENTENCE_QA_INDEX_INVALID": RpcErrorDefinition(-32322, "The requested sentence index is invalid."),
     "SENTENCE_QA_STORAGE_INVALID": RpcErrorDefinition(-32323, "The saved sentence QA markers are invalid."),
     "SENTENCE_QA_OUTPUT_INVALID": RpcErrorDefinition(-32324, "The sentence QA output was invalid."),
+    "SENTENCE_INDEX_SOURCE_NOT_FOUND": RpcErrorDefinition(-32325, "The requested B05 sentence result is unavailable for indexing."),
+    "SENTENCE_INDEX_SOURCE_INVALID": RpcErrorDefinition(-32326, "The requested B05 sentence result is invalid for indexing."),
+    "SENTENCE_INDEX_SOURCE_STALE": RpcErrorDefinition(-32327, "The requested B05 sentence result is stale for the referenced asset."),
+    "SENTENCE_INDEX_STORAGE_INVALID": RpcErrorDefinition(-32328, "The sentence index storage is invalid."),
+    "SENTENCE_INDEX_OUTPUT_INVALID": RpcErrorDefinition(-32329, "The sentence index output was invalid."),
+    "SENTENCE_INDEX_TIMEOUT": RpcErrorDefinition(-32330, "The sentence index operation timed out."),
+    "SENTENCE_INDEX_CANCELLED": RpcErrorDefinition(-32331, "The sentence index operation was cancelled."),
 }
 
 
