@@ -54,6 +54,8 @@ export function App() {
   const latestSequence = useRef(new Map<string, number>());
   const projectRequest = useRef(0);
   const jobSequences = useRef(new Map<string, number>());
+  const projectRef = useRef<ProjectSummary | null>(null);
+  projectRef.current = project;
 
   useEffect(() => {
     const bridge = window.supervideo;
@@ -235,7 +237,8 @@ export function App() {
   }
 
   function applyJobEvent(event: JobEvent): void {
-    if (!project || event.projectId !== project.projectId) return;
+    const activeProject = projectRef.current;
+    if (!activeProject || event.projectId !== activeProject.projectId) return;
     const previous = jobSequences.current.get(event.jobId) ?? 0;
     if (event.sequence <= previous) return;
     jobSequences.current.set(event.jobId, event.sequence);
@@ -243,13 +246,14 @@ export function App() {
     if (!bridge) return;
     setJobEvents((current) => ({ ...current, [event.jobId]: mergeJobEvents(current[event.jobId] ?? [], [event]) }));
     const hydrate = (afterSequence: number): void => {
-      void bridge.getJob({ projectId: project.projectId, jobId: event.jobId })
-        .then((job) => { if (project && job.projectId === project.projectId) { jobSequences.current.set(job.jobId, Math.max(jobSequences.current.get(job.jobId) ?? 0, job.lastEventSequence)); setJobs((current) => mergeJobs(current, [job])); } })
+      void bridge.getJob({ projectId: activeProject.projectId, jobId: event.jobId })
+        .then((job) => { const currentProject = projectRef.current; if (currentProject && job.projectId === currentProject.projectId) { jobSequences.current.set(job.jobId, Math.max(jobSequences.current.get(job.jobId) ?? 0, job.lastEventSequence)); setJobs((current) => mergeJobs(current, [job])); } })
         .catch(() => undefined);
       if (afterSequence < event.sequence - 1) {
-        void bridge.listJobEvents({ projectId: project.projectId, jobId: event.jobId, afterSequence, limit: 100 })
+        void bridge.listJobEvents({ projectId: activeProject.projectId, jobId: event.jobId, afterSequence, limit: 100 })
           .then((page) => {
-            if (!project || page.projectId !== project.projectId || page.jobId !== event.jobId) return;
+            const currentProject = projectRef.current;
+            if (!currentProject || page.projectId !== currentProject.projectId || page.jobId !== event.jobId) return;
             setJobEvents((current) => ({ ...current, [event.jobId]: mergeJobEvents(current[event.jobId] ?? [], page.items) }));
             for (const persisted of page.items) {
               if (persisted.sequence > (jobSequences.current.get(event.jobId) ?? 0)) jobSequences.current.set(event.jobId, persisted.sequence);
