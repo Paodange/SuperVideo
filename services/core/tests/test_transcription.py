@@ -165,6 +165,33 @@ class TranscriptionServiceTests(unittest.TestCase):
             transcription_config_from_env({"SUPERVIDEO_WHISPER_MODEL": r"C:\\models\\secret"})
         self.assertEqual(error.exception.code, "TRANSCRIPTION_MODEL_UNAVAILABLE")
 
+    def test_timestamp_boundary_is_exactly_24_hours(self) -> None:
+        config = TranscriptionConfig(model_name="tiny", device="cpu", compute_type="int8")
+        service = TranscriptionService(
+            runner=FakeRunner(),
+            config=config,
+        )
+        request = TranscriptionParams(
+            projectId="11111111-1111-4111-8111-111111111111",
+            assetId="22222222-2222-4222-8222-222222222222",
+        )
+        raw = RawTranscription(
+            language="zh",
+            language_probability=1,
+            duration=86_400,
+            segments=(RawSegment(start=86_399, end=86_400, text="边界", avg_logprob=0, no_speech_probability=0, compression_ratio=1),),
+        )
+        result = service._build_result(request, "a" * 64, config, raw)
+        self.assertEqual(result.duration_ms, 86_400_000)
+        with self.assertRaises(MediaError) as error:
+            service._build_result(
+                request,
+                "a" * 64,
+                config,
+                raw.__class__(language="zh", language_probability=1, duration=86_400.001, segments=raw.segments),
+            )
+        self.assertEqual(error.exception.code, "TRANSCRIPTION_OUTPUT_INVALID")
+
 
 if __name__ == "__main__":
     unittest.main()

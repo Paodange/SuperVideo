@@ -638,7 +638,7 @@ export function isTranscriptionResult(value: unknown): value is TranscriptionRes
     && isTranscriptionModelInfo(value.model)
     && (value.language === null || isSafeString(value.language, 64))
     && (value.languageProbability === null || isFiniteInRange(value.languageProbability, 0, 1))
-    && (value.durationMs === null || isSafeInteger(value.durationMs, 0, 86_400_000_000))
+    && (value.durationMs === null || isSafeInteger(value.durationMs, 0, 86_400_000))
     && Array.isArray(value.segments) && value.segments.length <= 2_000 && value.segments.every(isTranscriptionSegment)
     && isBoundedCoreJsonValue(value, 48 * 1024);
 }
@@ -795,8 +795,8 @@ function isTranscriptionModelInfo(value: unknown): value is TranscriptionModelIn
 function isTranscriptionSegment(value: unknown): value is TranscriptionSegment {
   return isPlainRecord(value) && hasOnlyKeys(value, ["index", "startMs", "endMs", "text", "confidence", "avgLogprob", "noSpeechProbability", "compressionRatio", "words"])
     && isSafeInteger(value.index, 0, 1_999)
-    && isSafeInteger(value.startMs, 0, 86_400_000_000)
-    && isSafeInteger(value.endMs, value.startMs, 86_400_000_000)
+    && isSafeInteger(value.startMs, 0, 86_400_000)
+    && isSafeInteger(value.endMs, value.startMs, 86_400_000)
     && isSafeString(value.text, 2_048)
     && (value.confidence === null || isFiniteInRange(value.confidence, 0, 1))
     && (value.avgLogprob === null || isFiniteInRange(value.avgLogprob, -100, 100))
@@ -807,8 +807,8 @@ function isTranscriptionSegment(value: unknown): value is TranscriptionSegment {
 
 function isTranscriptionWord(value: unknown): value is TranscriptionWord {
   return isPlainRecord(value) && hasOnlyKeys(value, ["startMs", "endMs", "text", "probability"])
-    && isSafeInteger(value.startMs, 0, 86_400_000_000)
-    && isSafeInteger(value.endMs, value.startMs, 86_400_000_000)
+    && isSafeInteger(value.startMs, 0, 86_400_000)
+    && isSafeInteger(value.endMs, value.startMs, 86_400_000)
     && isSafeString(value.text, 2_048)
     && (value.probability === null || isFiniteInRange(value.probability, 0, 1));
 }

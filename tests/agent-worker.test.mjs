@@ -86,6 +86,20 @@ async function waitFor(predicate, timeoutMs = 2_000) {
 }
 
 test("Agent Worker protocol accepts valid messages and rejects malformed wire data", () => {
+  const boundaryTranscription = {
+    schemaVersion: 1,
+    projectId: "11111111-1111-4111-8111-111111111111",
+    assetId: "22222222-2222-4222-8222-222222222222",
+    cacheStatus: "created",
+    cacheKey: "a".repeat(64),
+    model: { adapterVersion: "faster-whisper-v1", provider: "faster-whisper", modelName: "tiny", device: "cpu", computeType: "int8" },
+    language: "zh",
+    languageProbability: 1,
+    durationMs: 86_400_000,
+    segments: [{ index: 0, startMs: 86_399_000, endMs: 86_400_000, text: "边界", confidence: null, avgLogprob: 0, noSpeechProbability: 0, compressionRatio: 1, words: [] }],
+  };
+  assert.equal(shared.isTranscriptionResult(boundaryTranscription), true);
+  assert.equal(shared.isTranscriptionResult({ ...boundaryTranscription, durationMs: 86_400_001 }), false);
   const valid = [
     { protocolVersion: 1, type: "run-smoke-task", runId: "run-1", steps: 4 },
     { protocolVersion: 1, type: "cancel-run", runId: "run-1" },

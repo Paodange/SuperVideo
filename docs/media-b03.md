@@ -30,7 +30,8 @@ language and probability, duration, bounded segment timestamps/text/quality
 fields (`confidence`, `avgLogprob`, `noSpeechProbability`, and
 `compressionRatio`), and bounded word timestamps/probabilities. Results are
 limited to 2,000 segments, 128 words per segment, and 48 KiB serialized so
-they remain inside both the Core JSONL and Worker message limits.
+they remain inside both the Core JSONL and Worker message limits; every
+duration and timestamp is bounded to 24 hours (`86,400,000` milliseconds).
 cached under `cache/transcription-cache-v1/transcripts/` with a SHA-256 key
 covering the project, canonical path, asset signature/fingerprint, adapter
 version, and controlled model configuration. Cache files are strict manifests
