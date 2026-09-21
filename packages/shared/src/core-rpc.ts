@@ -23,6 +23,7 @@ export const CORE_RPC_METHODS = {
   projectOpen: "project.open",
   projectInspect: "project.inspect",
   assetReference: "asset.reference",
+  assetScan: "asset.scan",
   assetList: "asset.list",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
@@ -41,6 +42,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.projectOpen
   | typeof CORE_RPC_METHODS.projectInspect
   | typeof CORE_RPC_METHODS.assetReference
+  | typeof CORE_RPC_METHODS.assetScan
   | typeof CORE_RPC_METHODS.assetList
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
@@ -258,6 +260,7 @@ export type ProjectSummary = Readonly<{
   updatedAtMs: number;
 }>;
 export type AssetReferenceParams = Readonly<{ projectId: string; paths: readonly string[] }>;
+export type AssetScanParams = Readonly<{ projectId: string; directory: string }>;
 export type AssetListParams = Readonly<{ projectId: string; limit: number }>;
 export type JobSmokeStartParams = Readonly<{ projectId: string; idempotencyKey: string; steps?: number; delayMs?: number; failAttempts?: number }>;
 export type JobReferenceParams = Readonly<{ projectId: string; jobId: string }>;
@@ -286,6 +289,7 @@ export type AssetSummary = Readonly<{
   referenceStatus: "added" | "existing";
 }>;
 export type AssetReferenceBatchResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
+export type AssetScanResult = Readonly<{ projectId: string; directory: string; items: readonly AssetSummary[] }>;
 export type AssetListResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
 export type CoreProgress = Readonly<{
   requestId: CoreRpcId;
@@ -412,6 +416,9 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   }
   if (value.method === CORE_RPC_METHODS.assetReference) {
     return isAssetReferenceParams(value.params);
+  }
+  if (value.method === CORE_RPC_METHODS.assetScan) {
+    return isAssetScanParams(value.params);
   }
   if (value.method === CORE_RPC_METHODS.assetList) {
     return isAssetListParams(value.params);
@@ -548,6 +555,16 @@ export function isAssetListResult(value: unknown): value is AssetListResult {
   return isAssetReferenceBatchResult(value);
 }
 
+export function isAssetScanResult(value: unknown): value is AssetScanResult {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["projectId", "directory", "items"])
+    && isUuid(value.projectId)
+    && isAbsolutePath(value.directory)
+    && Array.isArray(value.items)
+    && value.items.length <= 100
+    && value.items.every(isAssetSummary);
+}
+
 export function isCoreProgress(value: unknown): value is CoreProgress {
   if (!isPlainRecord(value) || !isCoreJsonValue(value) || !hasOnlyKeys(value, ["requestId", "sequence", "progress", "message"])) {
     return false;
@@ -674,6 +691,13 @@ function isAssetListParams(value: unknown): value is AssetListParams {
     && hasOnlyKeys(value, ["projectId", "limit"])
     && isUuid(value.projectId)
     && isSafeInteger(value.limit, 1, 1_000);
+}
+
+function isAssetScanParams(value: unknown): value is AssetScanParams {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ["projectId", "directory"])
+    && isUuid(value.projectId)
+    && isAbsolutePath(value.directory);
 }
 
 function hasNoUnexpectedKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {

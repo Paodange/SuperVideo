@@ -36,6 +36,8 @@ from .models import (
     AssetListResult,
     AssetReferenceBatchResult,
     AssetReferenceRequest,
+    AssetScanRequest,
+    AssetScanResult,
     AssetSummary,
     ProjectCreateRequest,
     ProjectOpenRequest,
@@ -48,8 +50,10 @@ from .paths import (
     database_path_for,
     ensure_project_directories,
     normalize_project_root,
+    canonical_asset_directory,
     sampled_fingerprint,
     stat_signature,
+    SUPPORTED_ASSET_EXTENSIONS,
 )
 
 
@@ -266,7 +270,59 @@ class ProjectService:
                     fingerprint=fingerprint,
                 )
             )
+        return AssetReferenceBatchResult(
+            projectId=active.project.id,
+            items=self._register_scanned_assets(active, scanned),
+        )
 
+    def scan_assets(self, request: AssetScanRequest) -> AssetScanResult:
+        active = self._require_active(request.project_id)
+        directory, _directory_stat = canonical_asset_directory(request.directory)
+        try:
+            entries = sorted(directory.iterdir(), key=lambda item: str(item).casefold())
+        except OSError as error:
+            raise ProjectError("FILE_ACCESS_DENIED", cause=error) from error
+
+        scanned: list[_ScannedAsset] = []
+        seen_paths: set[str] = set()
+        for entry in entries:
+            # Directory scans are intentionally shallow and ignore unrelated
+            # files. A matching extension that is not a regular file is an
+            # actionable path error rather than a silent partial result.
+            if entry.suffix.lower() not in SUPPORTED_ASSET_EXTENSIONS:
+                continue
+            path, before = canonical_asset_path(str(entry))
+            kind = asset_kind_for(path)
+            key = str(path)
+            if key in seen_paths:
+                continue
+            seen_paths.add(key)
+            fingerprint = sampled_fingerprint(path, before)
+            try:
+                after = path.stat()
+            except OSError as error:
+                raise ProjectError("FILE_ACCESS_DENIED", cause=error) from error
+            if stat_signature(before) != stat_signature(after):
+                raise ProjectError("ASSET_CHANGED_DURING_REFERENCE")
+            scanned.append(
+                _ScannedAsset(
+                    path=path,
+                    kind=kind,
+                    size_bytes=int(after.st_size),
+                    modified_at_ms=int(after.st_mtime_ns // 1_000_000),
+                    fingerprint=fingerprint,
+                )
+            )
+            if len(scanned) > 100:
+                raise ProjectError("TOO_MANY_ASSETS")
+
+        return AssetScanResult(
+            projectId=active.project.id,
+            directory=str(directory),
+            items=self._register_scanned_assets(active, scanned),
+        )
+
+    def _register_scanned_assets(self, active: _ActiveSession, scanned: list[_ScannedAsset]) -> list[AssetSummary]:
         repository = AssetRepository(active.database)
         new_records: list[AssetCreate] = []
         results: list[tuple[str, str, AssetCreate | object]] = []
@@ -314,7 +370,7 @@ class ProjectService:
         for key, status, record in results:
             selected = by_path.get(key, record)
             output.append(self._asset_summary(selected, status))  # type: ignore[arg-type]
-        return AssetReferenceBatchResult(projectId=active.project.id, items=output)
+        return output
 
     def _require_active(self, project_id: str) -> _ActiveSession:
         active = self._active

@@ -42,12 +42,18 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
 - `core.progress`：Python Core 发出的进度通知，不是可调用方法。
 - `project.create`、`project.open`、`project.inspect`：严格项目参数和
   manifest/SQLite 一致性检查。
-- `asset.reference`、`asset.list`：只在当前已验证 project session 中登记或
+- `asset.reference`、`asset.scan`、`asset.list`：只在当前已验证 project session 中登记或
   查询有界的外部素材摘要。
 
 A06 的 project/asset 方法仍使用 Core RPC protocol v1；它们不是任意路径或
 SQL 转发。Worker 只能通过固定 controller command 调用这些方法。每次
 Worker 重启都要重新 `project.open`，Core 不保存跨进程 session。
+
+`asset.scan` 的参数只包含当前已验证 `projectId` 和由 Main 原生目录选择器产生的
+`directory`。Core 对目录做 canonical 化后只扫描第一层的显式视频/音频扩展名白名单，
+复用 A06 的只读 stat、`sampled-sha256-v1` 指纹和事务式 asset repository。它不引入
+通用目录枚举、任意文件读取或任意 SQL；未知扩展名跳过，路径/访问/文件变化错误使用
+现有稳定错误码。
 
 Python registry 是显式字典，未知方法永远返回 `METHOD_NOT_FOUND`；禁止任意方法
 转发、动态 import、Shell、网络、FFmpeg、SQLite 或剪映调用。新增方法必须在
@@ -154,7 +160,7 @@ A07 已在此边界之上增加固定 job methods 和 `core.job.event`，继续�
 protocol v1，因为只增加了向后兼容的方法/通知。公共契约发生不兼容变化时必须
 升级协议版本，并提供兼容说明；实时通知丢失时必须使用 `job.events.list` 补漏。
 
-A04/A07 不包含媒体分析、FFmpeg、Whisper、Remotion、真实模型/TTS、网络下载、
+A04/A07/B01 不包含 ffprobe/FFmpeg、Whisper、Remotion、真实模型/TTS、网络下载、
 正式 Pi tool 注册、真实媒体 executor、跨机器恢复、后台服务或打包 Python。原始 spike 保持独立，
 正式模块不依赖 spike 路径或其运行时文件。
 A08 的 stderr 诊断是独立的版本化 JSON 事件，每行有固定 schema 和 4 KiB

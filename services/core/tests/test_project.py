@@ -10,6 +10,7 @@ from pathlib import Path
 from supervideo_core.project import (
     AssetListRequest,
     AssetReferenceRequest,
+    AssetScanRequest,
     ProjectCreateRequest,
     ProjectError,
     ProjectOpenRequest,
@@ -130,6 +131,67 @@ class ProjectServiceTests(unittest.TestCase):
         self.assertNotEqual(first, sampled_fingerprint(path, path.stat()))
         path.write_bytes(path.read_bytes()[:-1] + b"d")
         self.assertNotEqual(first, sampled_fingerprint(path, path.stat()))
+
+    def test_scan_directory_indexes_shallow_video_and_audio_without_copying(self) -> None:
+        summary = self.service.create(
+            ProjectCreateRequest(name="scan", targetPlatform="douyin", projectRoot=str(self.project_root))
+        )
+        source_directory = self.temp_root / "素材目录"
+        source_directory.mkdir()
+        video = source_directory / "01口播.MP4"
+        audio = source_directory / "配乐.wav"
+        ignored = source_directory / "notes.txt"
+        nested = source_directory / "nested"
+        nested.mkdir()
+        nested_video = nested / "not-scanned.mp4"
+        video_bytes = b"video fixture"
+        audio_bytes = b"audio fixture"
+        video.write_bytes(video_bytes)
+        audio.write_bytes(audio_bytes)
+        ignored.write_text("ignore", encoding="utf-8")
+        nested_video.write_bytes(b"nested fixture")
+
+        first = self.service.scan_assets(AssetScanRequest(projectId=summary.project_id, directory=str(source_directory)))
+        self.assertEqual([item.kind for item in first.items], ["video", "audio"])
+        self.assertEqual([item.reference_status for item in first.items], ["added", "added"])
+        self.assertEqual(first.directory, os.path.normcase(str(source_directory.resolve())))
+        self.assertEqual(video.read_bytes(), video_bytes)
+        self.assertEqual(audio.read_bytes(), audio_bytes)
+
+        second = self.service.scan_assets(AssetScanRequest(projectId=summary.project_id, directory=str(source_directory)))
+        self.assertEqual([item.reference_status for item in second.items], ["existing", "existing"])
+        self.assertEqual([item.asset_id for item in second.items], [item.asset_id for item in first.items])
+        listed = self.service.list_assets(AssetListRequest(projectId=summary.project_id, limit=10))
+        self.assertEqual(len(listed.items), 2)
+
+    def test_scan_changed_existing_file_fails_without_partial_insert(self) -> None:
+        summary = self.service.create(
+            ProjectCreateRequest(name="scan change", targetPlatform="douyin", projectRoot=str(self.project_root))
+        )
+        source_directory = self.temp_root / "scan-change"
+        source_directory.mkdir()
+        changed = source_directory / "changed.mp4"
+        new_file = source_directory / "new.mp3"
+        changed.write_bytes(b"before")
+        new_file.write_bytes(b"new")
+        self.service.scan_assets(AssetScanRequest(projectId=summary.project_id, directory=str(source_directory)))
+
+        changed.write_bytes(b"after and different")
+        with self.assertRaises(ProjectError) as error:
+            self.service.scan_assets(AssetScanRequest(projectId=summary.project_id, directory=str(source_directory)))
+        self.assertEqual(error.exception.code, "ASSET_CHANGED")
+        listed = self.service.list_assets(AssetListRequest(projectId=summary.project_id, limit=10))
+        self.assertEqual(len(listed.items), 2)
+
+    def test_scan_directory_path_errors_are_stable(self) -> None:
+        summary = self.service.create(
+            ProjectCreateRequest(name="scan errors", targetPlatform="douyin", projectRoot=str(self.project_root))
+        )
+        not_a_directory = self.temp_root / "one.mp4"
+        not_a_directory.write_bytes(b"fixture")
+        with self.assertRaises(ProjectError) as error:
+            self.service.scan_assets(AssetScanRequest(projectId=summary.project_id, directory=str(not_a_directory)))
+        self.assertEqual(error.exception.code, "FILE_ACCESS_DENIED")
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   projectOpen: "project-open",
   projectInspect: "project-inspect",
   assetReference: "asset-reference",
+  assetScan: "asset-scan",
   assetList: "asset-list",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
@@ -77,6 +78,7 @@ export type AgentProjectOperationType =
   | "project-open"
   | "project-inspect"
   | "asset-reference"
+  | "asset-scan"
   | "asset-list";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
@@ -723,6 +725,7 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "project-open"
     || value === "project-inspect"
     || value === "asset-reference"
+    || value === "asset-scan"
     || value === "asset-list";
 }
 
@@ -769,6 +772,11 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
       && value.paths.length > 0
       && value.paths.length <= 100
       && value.paths.every((item) => isAbsolutePath(item));
+  }
+  if (type === "asset-scan") {
+    return hasOnlyKeys(value, ["projectId", "directory"])
+      && isUuid(value.projectId)
+      && isAbsolutePath(value.directory);
   }
   return hasOnlyKeys(value, ["projectId", "limit"])
     && isUuid(value.projectId)

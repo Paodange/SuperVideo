@@ -21,7 +21,9 @@ STANDARD_PROJECT_DIRECTORIES = (
     "exports/jianying",
     "logs",
 )
-SUPPORTED_ASSET_EXTENSIONS = frozenset({".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm"})
+SUPPORTED_VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm"})
+SUPPORTED_AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"})
+SUPPORTED_ASSET_EXTENSIONS = SUPPORTED_VIDEO_EXTENSIONS | SUPPORTED_AUDIO_EXTENSIONS
 MAX_ASSET_PATH_LENGTH = 32_767
 MAX_ASSET_BASENAME_LENGTH = 255
 FINGERPRINT_ALGORITHM = "sampled-sha256-v1"
@@ -94,10 +96,30 @@ def canonical_asset_path(value: str) -> tuple[Path, os.stat_result]:
     return target, file_stat
 
 
+def canonical_asset_directory(value: str) -> tuple[Path, os.stat_result]:
+    """Resolve a user-selected scan directory to an accessible real directory."""
+
+    if not isinstance(value, str) or not value or "\x00" in value or len(value) > MAX_ASSET_PATH_LENGTH:
+        raise ProjectError("FILE_ACCESS_DENIED")
+    if not os.path.isabs(value):
+        raise ProjectError("FILE_ACCESS_DENIED")
+    try:
+        target = Path(os.path.normcase(os.path.realpath(value)))
+        directory_stat = target.stat()
+    except OSError as error:
+        raise ProjectError("FILE_ACCESS_DENIED", cause=error) from error
+    if not stat.S_ISDIR(directory_stat.st_mode) or _is_volume_root(target):
+        raise ProjectError("FILE_ACCESS_DENIED")
+    return target, directory_stat
+
+
 def asset_kind_for(path: Path) -> str:
-    if path.suffix.lower() not in SUPPORTED_ASSET_EXTENSIONS:
-        raise ProjectError("UNSUPPORTED_ASSET_TYPE")
-    return "video"
+    extension = path.suffix.lower()
+    if extension in SUPPORTED_VIDEO_EXTENSIONS:
+        return "video"
+    if extension in SUPPORTED_AUDIO_EXTENSIONS:
+        return "audio"
+    raise ProjectError("UNSUPPORTED_ASSET_TYPE")
 
 
 def sampled_fingerprint(path: Path, file_stat: os.stat_result) -> str:
