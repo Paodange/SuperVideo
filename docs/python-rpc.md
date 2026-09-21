@@ -48,7 +48,10 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
   的受控 ffprobe/FFmpeg 参数处理媒体；不得传入命令、可执行文件或任意路径。
 - `media.transcribe`：只接受当前已验证项目中的 `assetId`，由 Core 使用受控的
   faster-whisper 适配器和版本化项目缓存输出段级/字词级时间戳；不得传入模型路径、
-  命令、可执行文件或输出路径。模型配置只来自 allowlist 环境变量。
+命令、可执行文件或输出路径。模型配置只来自 allowlist 环境变量。
+- `media.vad`：只接受当前已验证项目中的 `assetId` 和严格有界的结构化 VAD 配置，
+  使用 allowlist FFmpeg `silencedetect` 输出版本化的、非重叠的口播/静音区间；结果
+  显式标记 `isSpeech`，不代表完整句子，也不接受命令、模型路径或输出路径。
 
 A06 的 project/asset 方法仍使用 Core RPC protocol v1；它们不是任意路径或
 SQL 转发。Worker 只能通过固定 controller command 调用这些方法。每次

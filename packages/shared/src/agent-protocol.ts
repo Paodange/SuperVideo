@@ -11,7 +11,7 @@ import type {
   JobSummary,
   ProjectSummary,
 } from "./core-rpc";
-import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isTranscriptionResult } from "./core-rpc";
+import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isTranscriptionResult, isVadResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -36,7 +36,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -52,6 +52,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaProbe: "media-probe",
   mediaProxy: "media-proxy",
   mediaTranscribe: "media-transcribe",
+  mediaVad: "media-vad",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
   jobList: "job-list",
@@ -85,7 +86,8 @@ export type AgentProjectOperationType =
   | "asset-list"
   | "media-probe"
   | "media-proxy"
-  | "media-transcribe";
+  | "media-transcribe"
+  | "media-vad";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -122,7 +124,8 @@ export type ProjectOperationErrorCode =
   | "INVALID_RECORD"
   | "MEDIA_TOOL_UNAVAILABLE" | "MEDIA_TOOL_TIMEOUT" | "MEDIA_PROBE_PARSE_ERROR"
   | "MEDIA_NOT_MEDIA" | "MEDIA_OUTPUT_INVALID" | "MEDIA_CANCELLED"
-  | "TRANSCRIPTION_TOOL_UNAVAILABLE" | "TRANSCRIPTION_MODEL_UNAVAILABLE" | "TRANSCRIPTION_OUTPUT_INVALID" | "TRANSCRIPTION_TIMEOUT" | "TRANSCRIPTION_CANCELLED";
+  | "TRANSCRIPTION_TOOL_UNAVAILABLE" | "TRANSCRIPTION_MODEL_UNAVAILABLE" | "TRANSCRIPTION_OUTPUT_INVALID" | "TRANSCRIPTION_TIMEOUT" | "TRANSCRIPTION_CANCELLED"
+  | "VAD_TOOL_UNAVAILABLE" | "VAD_OUTPUT_INVALID" | "VAD_TIMEOUT" | "VAD_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -462,6 +465,10 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   TRANSCRIPTION_OUTPUT_INVALID: "The local transcription output was invalid.",
   TRANSCRIPTION_TIMEOUT: "The local transcription timed out.",
   TRANSCRIPTION_CANCELLED: "The local transcription was cancelled.",
+  VAD_TOOL_UNAVAILABLE: "The local VAD backend is unavailable.",
+  VAD_OUTPUT_INVALID: "The local VAD output was invalid.",
+  VAD_TIMEOUT: "The local VAD timed out.",
+  VAD_CANCELLED: "The local VAD operation was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -750,7 +757,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "asset-list"
     || value === "media-probe"
     || value === "media-proxy"
-    || value === "media-transcribe";
+    || value === "media-transcribe"
+    || value === "media-vad";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -806,6 +814,19 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
     return hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs"])
       && isUuid(value.projectId) && isUuid(value.assetId)
       && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
+  }
+  if (type === "media-vad") {
+    if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
+    if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+    if (value.config === undefined) return true;
+    if (!isPlainRecord(value.config)) return false;
+    return hasNoUnexpectedKeys(value.config, ["thresholdDb", "minSpeechMs", "minSilenceMs", "preRollMs", "postRollMs", "mergeGapMs"])
+      && (value.config.thresholdDb === undefined || isFiniteInRange(value.config.thresholdDb, -60, -5))
+      && (value.config.minSpeechMs === undefined || isSafeInteger(value.config.minSpeechMs, 20, 5_000))
+      && (value.config.minSilenceMs === undefined || isSafeInteger(value.config.minSilenceMs, 20, 5_000))
+      && (value.config.preRollMs === undefined || isSafeInteger(value.config.preRollMs, 0, 180))
+      && (value.config.postRollMs === undefined || isSafeInteger(value.config.postRollMs, 0, 250))
+      && (value.config.mergeGapMs === undefined || isSafeInteger(value.config.mergeGapMs, 0, 1_000));
   }
   return hasOnlyKeys(value, ["projectId", "limit"])
     && isUuid(value.projectId)
@@ -886,6 +907,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "MEDIA_TOOL_UNAVAILABLE", "MEDIA_TOOL_TIMEOUT", "MEDIA_PROBE_PARSE_ERROR",
   "MEDIA_NOT_MEDIA", "MEDIA_OUTPUT_INVALID", "MEDIA_CANCELLED",
   "TRANSCRIPTION_TOOL_UNAVAILABLE", "TRANSCRIPTION_MODEL_UNAVAILABLE", "TRANSCRIPTION_OUTPUT_INVALID", "TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_CANCELLED",
+  "VAD_TOOL_UNAVAILABLE", "VAD_OUTPUT_INVALID", "VAD_TIMEOUT", "VAD_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -920,6 +942,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-probe") return isMediaProbeResult(value);
   if (type === "media-proxy") return isMediaProxyResult(value);
   if (type === "media-transcribe") return isTranscriptionResult(value);
+  if (type === "media-vad") return isVadResult(value);
   return true;
 }
 
@@ -938,4 +961,8 @@ function isTimestamp(value: unknown): value is number {
 
 function isSafeString(value: unknown, maximumLength: number): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= maximumLength;
+}
+
+function isFiniteInRange(value: unknown, minimum: number, maximum: number): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
 }

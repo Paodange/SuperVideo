@@ -31,6 +31,7 @@ import {
   isMediaProbeResult,
   isMediaProxyResult,
   isTranscriptionResult,
+  isVadResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -50,6 +51,8 @@ import {
   type MediaProxyResult,
   type TranscriptionParams,
   type TranscriptionResult,
+  type VadParams,
+  type VadResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -287,6 +290,12 @@ export class PythonCoreClient {
   async transcribeMedia(params: TranscriptionParams, options: CoreRpcRequestOptions = {}): Promise<TranscriptionResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaTranscribe, params, options);
     if (!isTranscriptionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async detectVoiceActivity(params: VadParams, options: CoreRpcRequestOptions = {}): Promise<VadResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaVad, params, options);
+    if (!isVadResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

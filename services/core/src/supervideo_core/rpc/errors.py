@@ -79,6 +79,10 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "TRANSCRIPTION_OUTPUT_INVALID": RpcErrorDefinition(-32308, "The local transcription output was invalid."),
     "TRANSCRIPTION_TIMEOUT": RpcErrorDefinition(-32309, "The local transcription timed out."),
     "TRANSCRIPTION_CANCELLED": RpcErrorDefinition(-32310, "The local transcription was cancelled."),
+    "VAD_TOOL_UNAVAILABLE": RpcErrorDefinition(-32311, "The local VAD backend is unavailable."),
+    "VAD_OUTPUT_INVALID": RpcErrorDefinition(-32312, "The local VAD output was invalid."),
+    "VAD_TIMEOUT": RpcErrorDefinition(-32313, "The local VAD timed out."),
+    "VAD_CANCELLED": RpcErrorDefinition(-32314, "The local VAD operation was cancelled."),
 }
 
 

@@ -13,6 +13,7 @@ import {
   isMediaProbeResult,
   isMediaProxyResult,
   isTranscriptionResult,
+  isVadResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -143,6 +144,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-probe":
     case "media-proxy":
     case "media-transcribe":
+    case "media-vad":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -184,7 +186,9 @@ async function handleProjectOperation(
             ? isMediaProbeResult(result)
             : operation === "media-proxy"
               ? isMediaProxyResult(result)
-              : isTranscriptionResult(result);
+              : operation === "media-transcribe"
+                ? isTranscriptionResult(result)
+                : isVadResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -290,7 +294,8 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "asset-list") return CORE_RPC_METHODS.assetList;
   if (operation === "media-probe") return CORE_RPC_METHODS.mediaProbe;
   if (operation === "media-proxy") return CORE_RPC_METHODS.mediaProxy;
-  return CORE_RPC_METHODS.mediaTranscribe;
+  if (operation === "media-transcribe") return CORE_RPC_METHODS.mediaTranscribe;
+  return CORE_RPC_METHODS.mediaVad;
 }
 
 function sendProjectError(operationId: string, operation: AgentProjectOperationType, code: ProjectOperationErrorCode): void {
@@ -338,7 +343,11 @@ function isProjectOperationErrorCode(value: string): value is ProjectOperationEr
     || value === "TRANSCRIPTION_MODEL_UNAVAILABLE"
     || value === "TRANSCRIPTION_OUTPUT_INVALID"
     || value === "TRANSCRIPTION_TIMEOUT"
-    || value === "TRANSCRIPTION_CANCELLED";
+    || value === "TRANSCRIPTION_CANCELLED"
+    || value === "VAD_TOOL_UNAVAILABLE"
+    || value === "VAD_OUTPUT_INVALID"
+    || value === "VAD_TIMEOUT"
+    || value === "VAD_CANCELLED";
 }
 
 async function shutdown(): Promise<void> {
