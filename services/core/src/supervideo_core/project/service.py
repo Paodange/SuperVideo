@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import stat
 import sqlite3
@@ -23,6 +24,8 @@ from supervideo_core.storage import (
     new_id,
     utc_now_ms,
 )
+from supervideo_core.media import MediaService
+from supervideo_core.media.models import MediaProbeParams, MediaProbeResult, MediaProxyParams, MediaProxyResult
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -75,8 +78,9 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self) -> None:
+    def __init__(self, media_service: MediaService | None = None) -> None:
         self._active: _ActiveSession | None = None
+        self.media_service = media_service or MediaService()
 
     @property
     def active_project_id(self) -> str | None:
@@ -93,6 +97,16 @@ class ProjectService:
         self._active = None
         if active is not None:
             active.database.close()
+
+    async def probe_media(self, request: MediaProbeParams, cancelled: asyncio.Event) -> MediaProbeResult:
+        active = self._require_active(request.project_id)
+        self.media_service.bind_session(active.root, active.database)
+        return await self.media_service.probe(request, cancelled)
+
+    async def proxy_media(self, request: MediaProxyParams, cancelled: asyncio.Event) -> MediaProxyResult:
+        active = self._require_active(request.project_id)
+        self.media_service.bind_session(active.root, active.database)
+        return await self.media_service.proxy(request, cancelled)
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:
@@ -142,6 +156,7 @@ class ProjectService:
             atomic_write_manifest(root, manifest, must_not_exist=True)
             self.close()
             self._active = _ActiveSession(root=root, manifest=manifest, project=project, database=database)
+            self.media_service.bind_session(root, database)
             database = None
             return self._summary(self._active, migration_report.current_version)
         except ProjectError:
@@ -218,6 +233,7 @@ class ProjectService:
             created_directories = ensure_project_directories(root)
             self.close()
             self._active = _ActiveSession(root=root, manifest=manifest, project=project, database=database)
+            self.media_service.bind_session(root, database)
             database = None
             return self._summary(self._active, migration_report.current_version)
         except ProjectError:

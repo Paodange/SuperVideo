@@ -16,6 +16,7 @@ from supervideo_core.project.models import (
     ProjectInspectRequest,
     ProjectOpenRequest,
 )
+from supervideo_core.media.models import MediaProbeParams, MediaProxyParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -124,7 +125,7 @@ class CoreHealth(StrictModel):
     status: Literal["ok"]
     protocol_version: Literal[1] = Field(alias="protocolVersion")
     core_version: str = Field(alias="coreVersion", min_length=1, max_length=32)
-    capabilities: list[str] = Field(max_length=16)
+    capabilities: list[str] = Field(max_length=32)
 
     @field_validator("capabilities")
     @classmethod
@@ -267,6 +268,10 @@ def validate_request(value: Any) -> RpcRequest:
         AssetScanRequest.model_validate(request.params)
     elif request.method == "asset.list":
         AssetListRequest.model_validate(request.params)
+    elif request.method == "media.probe":
+        MediaProbeParams.model_validate(request.params)
+    elif request.method == "media.proxy":
+        MediaProxyParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -324,6 +329,8 @@ def health_result() -> dict[str, object]:
             "asset.reference",
             "asset.scan",
             "asset.list",
+            "media.probe",
+            "media.proxy",
             "job.smoke.start",
             "job.get",
             "job.list",

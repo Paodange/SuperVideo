@@ -18,6 +18,7 @@ from supervideo_core.project.models import (
     ProjectOpenRequest,
 )
 from supervideo_core.jobs import JobManager, JobSmokeInput
+from supervideo_core.media import MediaProbeParams, MediaProxyParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -113,6 +114,24 @@ async def asset_scan_handler(
     return result.model_dump(by_alias=True)
 
 
+async def media_probe_handler(
+    params: MediaProbeParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.probe_media(params, cancelled)).model_dump(by_alias=True)
+
+
+async def media_proxy_handler(
+    params: MediaProxyParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.proxy_media(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -180,6 +199,14 @@ class RpcRegistry:
             "asset.scan": (
                 AssetScanRequest,
                 lambda params, emit, cancelled: asset_scan_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.probe": (
+                MediaProbeParams,
+                lambda params, emit, cancelled: media_probe_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.proxy": (
+                MediaProxyParams,
+                lambda params, emit, cancelled: media_proxy_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

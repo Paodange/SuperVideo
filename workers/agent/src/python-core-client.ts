@@ -28,6 +28,8 @@ import {
   isAssetListResult,
   isAssetReferenceBatchResult,
   isAssetScanResult,
+  isMediaProbeResult,
+  isMediaProxyResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -42,6 +44,9 @@ import {
   type AssetReferenceParams,
   type AssetScanParams,
   type AssetScanResult,
+  type MediaParams,
+  type MediaProbeResult,
+  type MediaProxyResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -261,6 +266,18 @@ export class PythonCoreClient {
   async scanAssets(params: AssetScanParams, options: CoreRpcRequestOptions = {}): Promise<AssetScanResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.assetScan, params, options);
     if (!isAssetScanResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async probeMedia(params: MediaParams, options: CoreRpcRequestOptions = {}): Promise<MediaProbeResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaProbe, params, options);
+    if (!isMediaProbeResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async proxyMedia(params: MediaParams, options: CoreRpcRequestOptions = {}): Promise<MediaProxyResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaProxy, params, options);
+    if (!isMediaProxyResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

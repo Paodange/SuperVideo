@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -222,6 +224,39 @@ class RpcServerTests(unittest.TestCase):
             )
             listed = self.read_line()["result"]
             self.assertEqual(len(listed["items"]), 3)
+        finally:
+            shutil.rmtree(temp_root, ignore_errors=True)
+
+    def test_media_probe_and_proxy_are_scoped_and_cacheable(self) -> None:
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None or shutil.which("ffprobe") is None:
+            self.skipTest("B02 RPC integration requires allowlisted ffprobe and FFmpeg")
+        temp_root = Path(tempfile.mkdtemp(prefix="supervideo rpc media "))
+        project_root = temp_root / "project"
+        project_root.mkdir()
+        asset_path = temp_root / "fixture.mp4"
+        subprocess.run(
+            [ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=red:s=160x90:d=0.3", "-f", "lavfi", "-i", "sine=frequency=800:duration=0.3", "-shortest", "-c:v", "libx264", "-c:a", "aac", str(asset_path)],
+            check=True,
+            capture_output=True,
+        )
+        original = asset_path.read_bytes()
+        try:
+            self.send({"jsonrpc": "2.0", "id": "media-project", "method": "project.create", "params": {"name": "Media RPC", "targetPlatform": "douyin", "projectRoot": str(project_root)}})
+            project = self.read_line()["result"]
+            self.send({"jsonrpc": "2.0", "id": "media-asset", "method": "asset.reference", "params": {"projectId": project["projectId"], "paths": [str(asset_path)]}})
+            asset = self.read_line()["result"]["items"][0]
+            params = {"projectId": project["projectId"], "assetId": asset["assetId"], "timeoutMs": 120000}
+            self.send({"jsonrpc": "2.0", "id": "media-probe", "method": "media.probe", "params": params})
+            probe = self.read_line()["result"]
+            self.assertEqual(probe["cacheStatus"], "created")
+            self.assertTrue(probe["metadata"]["streams"])
+            self.send({"jsonrpc": "2.0", "id": "media-probe-hit", "method": "media.probe", "params": params})
+            self.assertEqual(self.read_line()["result"]["cacheStatus"], "cache-hit")
+            self.send({"jsonrpc": "2.0", "id": "media-proxy", "method": "media.proxy", "params": params})
+            proxy = self.read_line()["result"]
+            self.assertEqual(len(proxy["outputs"]), 3)
+            self.assertEqual(asset_path.read_bytes(), original)
         finally:
             shutil.rmtree(temp_root, ignore_errors=True)
 

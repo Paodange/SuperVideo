@@ -68,6 +68,12 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "IDEMPOTENCY_CONFLICT": RpcErrorDefinition(-32209, "The idempotency key conflicts with another job."),
     "JOB_SHUTTING_DOWN": RpcErrorDefinition(-32210, "The job service is shutting down."),
     "JOB_EXECUTION_FAILED": RpcErrorDefinition(-32211, "The simulated job failed."),
+    "MEDIA_TOOL_UNAVAILABLE": RpcErrorDefinition(-32300, "The configured media tool is unavailable."),
+    "MEDIA_TOOL_TIMEOUT": RpcErrorDefinition(-32301, "The media tool timed out."),
+    "MEDIA_PROBE_PARSE_ERROR": RpcErrorDefinition(-32302, "The media probe output was invalid."),
+    "MEDIA_NOT_MEDIA": RpcErrorDefinition(-32303, "The selected asset is not a valid media file."),
+    "MEDIA_OUTPUT_INVALID": RpcErrorDefinition(-32304, "The generated media output was invalid."),
+    "MEDIA_CANCELLED": RpcErrorDefinition(-32305, "The media operation was cancelled."),
 }
 
 

@@ -10,6 +10,8 @@ import {
   isAssetListResult,
   isAssetReferenceBatchResult,
   isAssetScanResult,
+  isMediaProbeResult,
+  isMediaProxyResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -137,6 +139,8 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "asset-reference":
     case "asset-scan":
     case "asset-list":
+    case "media-probe":
+    case "media-proxy":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -170,9 +174,13 @@ async function handleProjectOperation(
       ? isProjectSummary(result)
       : operation === "asset-reference"
         ? isAssetReferenceBatchResult(result)
-        : operation === "asset-scan"
-          ? isAssetScanResult(result)
-          : isAssetListResult(result);
+      : operation === "asset-scan"
+        ? isAssetScanResult(result)
+        : operation === "asset-list"
+          ? isAssetListResult(result)
+          : operation === "media-probe"
+            ? isMediaProbeResult(result)
+            : isMediaProxyResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -275,7 +283,9 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "project-inspect") return CORE_RPC_METHODS.projectInspect;
   if (operation === "asset-reference") return CORE_RPC_METHODS.assetReference;
   if (operation === "asset-scan") return CORE_RPC_METHODS.assetScan;
-  return CORE_RPC_METHODS.assetList;
+  if (operation === "asset-list") return CORE_RPC_METHODS.assetList;
+  if (operation === "media-probe") return CORE_RPC_METHODS.mediaProbe;
+  return CORE_RPC_METHODS.mediaProxy;
 }
 
 function sendProjectError(operationId: string, operation: AgentProjectOperationType, code: ProjectOperationErrorCode): void {
@@ -312,7 +322,13 @@ function isProjectOperationErrorCode(value: string): value is ProjectOperationEr
     || value === "SCHEMA_TOO_NEW"
     || value === "CONSTRAINT_VIOLATION"
     || value === "RECORD_NOT_FOUND"
-    || value === "INVALID_RECORD";
+    || value === "INVALID_RECORD"
+    || value === "MEDIA_TOOL_UNAVAILABLE"
+    || value === "MEDIA_TOOL_TIMEOUT"
+    || value === "MEDIA_PROBE_PARSE_ERROR"
+    || value === "MEDIA_NOT_MEDIA"
+    || value === "MEDIA_OUTPUT_INVALID"
+    || value === "MEDIA_CANCELLED";
 }
 
 async function shutdown(): Promise<void> {
