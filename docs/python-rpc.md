@@ -58,6 +58,9 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
 - `media.sentences.index`：只接受当前已验证项目中的 `assetId` 和 B05
   `sentenceCacheKey`，复核 B05 摘要/资产指纹后生成版本化关键词、主题和
   32 维确定性向量索引；不接受模型、命令、任意路径，也不负责检索排序。
+- `media.sentences.retrieve`：只接受当前项目、查询文本和有界资产/模式/过滤器，
+  复核 B07 索引、B05 来源摘要及资产指纹后执行本地关键词、确定性向量或混合排序；
+  结果不包含内部路径，不接受模型、命令或网络参数。
 
 A06 的 project/asset 方法仍使用 Core RPC protocol v1；它们不是任意路径或
 SQL 转发。Worker 只能通过固定 controller command 调用这些方法。每次

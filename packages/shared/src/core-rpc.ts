@@ -33,6 +33,7 @@ export const CORE_RPC_METHODS = {
   mediaSentenceQaContext: "media.sentences.qa.context",
   mediaSentenceQaSave: "media.sentences.qa.save",
   mediaSentenceIndex: "media.sentences.index",
+  mediaSentenceRetrieve: "media.sentences.retrieve",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -60,6 +61,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaSentenceQaContext
   | typeof CORE_RPC_METHODS.mediaSentenceQaSave
   | typeof CORE_RPC_METHODS.mediaSentenceIndex
+  | typeof CORE_RPC_METHODS.mediaSentenceRetrieve
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -158,6 +160,13 @@ export const CORE_RPC_ERROR_CODES = {
   sentenceIndexOutputInvalid: "SENTENCE_INDEX_OUTPUT_INVALID",
   sentenceIndexTimeout: "SENTENCE_INDEX_TIMEOUT",
   sentenceIndexCancelled: "SENTENCE_INDEX_CANCELLED",
+  retrievalIndexNotFound: "RETRIEVAL_INDEX_NOT_FOUND",
+  retrievalIndexInvalid: "RETRIEVAL_INDEX_INVALID",
+  retrievalIndexStale: "RETRIEVAL_INDEX_STALE",
+  retrievalStorageInvalid: "RETRIEVAL_STORAGE_INVALID",
+  retrievalOutputInvalid: "RETRIEVAL_OUTPUT_INVALID",
+  retrievalTimeout: "RETRIEVAL_TIMEOUT",
+  retrievalCancelled: "RETRIEVAL_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -252,6 +261,13 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   SENTENCE_INDEX_OUTPUT_INVALID: -32329,
   SENTENCE_INDEX_TIMEOUT: -32330,
   SENTENCE_INDEX_CANCELLED: -32331,
+  RETRIEVAL_INDEX_NOT_FOUND: -32332,
+  RETRIEVAL_INDEX_INVALID: -32333,
+  RETRIEVAL_INDEX_STALE: -32334,
+  RETRIEVAL_STORAGE_INVALID: -32335,
+  RETRIEVAL_OUTPUT_INVALID: -32336,
+  RETRIEVAL_TIMEOUT: -32337,
+  RETRIEVAL_CANCELLED: -32338,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -344,6 +360,13 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   SENTENCE_INDEX_OUTPUT_INVALID: "The sentence index output was invalid.",
   SENTENCE_INDEX_TIMEOUT: "The sentence index operation timed out.",
   SENTENCE_INDEX_CANCELLED: "The sentence index operation was cancelled.",
+  RETRIEVAL_INDEX_NOT_FOUND: "A valid sentence index is unavailable for retrieval.",
+  RETRIEVAL_INDEX_INVALID: "The sentence index is invalid for retrieval.",
+  RETRIEVAL_INDEX_STALE: "The sentence index is stale for the referenced asset.",
+  RETRIEVAL_STORAGE_INVALID: "The sentence retrieval storage is invalid.",
+  RETRIEVAL_OUTPUT_INVALID: "The sentence retrieval output was invalid.",
+  RETRIEVAL_TIMEOUT: "The sentence retrieval operation timed out.",
+  RETRIEVAL_CANCELLED: "The sentence retrieval operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -432,6 +455,12 @@ export type SentenceResult = Readonly<{ schemaVersion: 1; projectId: string; ass
 export type SentenceIndexParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; timeoutMs?: number }>;
 export type SentenceIndexEntry = Readonly<{ sentenceId: string; sourceAssetId: string; sentenceIndex: number; sourceSentenceCacheKey: string; startMs: number; endMs: number; text: string; keywords: readonly string[]; topics: readonly string[]; vector: readonly number[]; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[] }>;
 export type SentenceIndexResult = Readonly<{ schemaVersion: 1; indexVersion: "sentence-index-v1"; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; sourceSentenceCacheKey: string; sourceSentenceResultDigest: string; adapterVersion: "deterministic-keyword-topic-vector-v1"; vectorProvider: "sha256-hash-v1"; vectorDimension: 32; reusedCount: number; rebuiltCount: number; entries: readonly SentenceIndexEntry[] }>;
+export type RetrievalFilters = Readonly<{ topics?: readonly string[]; quality?: "complete" | "needs_review"; minConfidence?: number; startMs?: number; endMs?: number }>;
+export type RetrievalParams = Readonly<{ projectId: string; query: string; mode?: "lexical" | "vector" | "hybrid"; assetIds?: readonly string[]; limit?: number; filters?: RetrievalFilters; timeoutMs?: number }>;
+export type RetrievalTimecode = Readonly<{ startMs: number; endMs: number }>;
+export type RetrievalExplanation = Readonly<{ queryKeywords: readonly string[]; matchedKeywords: readonly string[]; matchedTopics: readonly string[]; vectorProvider: "sha256-hash-v1"; scoreFormula: "lexical-keyword-overlap-v1" | "vector-cosine-v1" | "hybrid-0.6-0.4-v1" }>;
+export type RetrievalCandidate = Readonly<{ rank: number; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: RetrievalTimecode; text: string; lexicalScore: number; vectorScore: number; hybridScore: number; score: number; explanation: RetrievalExplanation; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[]; previewUri: string }>;
+export type RetrievalResult = Readonly<{ schemaVersion: 1; retrievalVersion: "hybrid-retrieval-v1"; projectId: string; query: string; mode: "lexical" | "vector" | "hybrid"; limit: number; candidateCount: number; candidates: readonly RetrievalCandidate[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -580,6 +609,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaSentenceQaContext) return isSentenceQaParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceQaSave) return isSentenceQaSaveParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceIndex) return isSentenceIndexParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaSentenceRetrieve) return isRetrievalParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -778,6 +808,16 @@ export function isSentenceIndexResult(value: unknown): value is SentenceIndexRes
     && isSafeInteger(value.reusedCount, 0, 2_000) && isSafeInteger(value.rebuiltCount, 0, 2_000)
     && Array.isArray(value.entries) && value.entries.length <= 2_000 && value.reusedCount + value.rebuiltCount === value.entries.length
     && value.entries.every((entry, index) => isSentenceIndexEntry(entry, index, value.assetId as string, value.sourceSentenceCacheKey as string))
+    && isBoundedCoreJsonValue(value, 60 * 1024);
+}
+
+export function isRetrievalResult(value: unknown): value is RetrievalResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "retrievalVersion", "projectId", "query", "mode", "limit", "candidateCount", "candidates"])
+    && value.schemaVersion === 1 && value.retrievalVersion === "hybrid-retrieval-v1" && isUuid(value.projectId)
+    && isBoundedText(value.query, 512) && ["lexical", "vector", "hybrid"].includes(value.mode as string)
+    && isSafeInteger(value.limit, 1, 50) && isSafeInteger(value.candidateCount, 0, 50)
+    && Array.isArray(value.candidates) && value.candidates.length === value.candidateCount
+    && value.candidates.every((item, index) => isRetrievalCandidate(item, index + 1))
     && isBoundedCoreJsonValue(value, 60 * 1024);
 }
 
@@ -990,6 +1030,24 @@ export function isSentenceIndexParams(value: unknown): value is SentenceIndexPar
     && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
 }
 
+export function isRetrievalParams(value: unknown): value is RetrievalParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "query", "mode", "assetIds", "limit", "filters", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isBoundedText(value.query, 512) || !(value.query as string).trim()) return false;
+  if (value.mode !== undefined && !["lexical", "vector", "hybrid"].includes(value.mode as string)) return false;
+  if (value.limit !== undefined && !isSafeInteger(value.limit, 1, 50)) return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  if (value.assetIds !== undefined && (!Array.isArray(value.assetIds) || value.assetIds.length > 100 || value.assetIds.length !== new Set(value.assetIds).size || !value.assetIds.every(isUuid))) return false;
+  if (value.filters === undefined) return true;
+  const filters = value.filters;
+  if (!isPlainRecord(filters) || !hasNoUnexpectedKeys(filters, ["topics", "quality", "minConfidence", "startMs", "endMs"])) return false;
+  if (filters.topics !== undefined && (!Array.isArray(filters.topics) || filters.topics.length > 8 || filters.topics.length !== new Set(filters.topics).size || !filters.topics.every((item) => isBoundedText(item, 64)))) return false;
+  if (filters.quality !== undefined && filters.quality !== "complete" && filters.quality !== "needs_review") return false;
+  if (filters.minConfidence !== undefined && !isFiniteInRange(filters.minConfidence, 0, 1)) return false;
+  if (filters.startMs !== undefined && !isSafeInteger(filters.startMs, 0, 86_400_000)) return false;
+  if (filters.endMs !== undefined && !isSafeInteger(filters.endMs, 1, 86_400_000)) return false;
+  return filters.startMs === undefined || filters.endMs === undefined || filters.endMs > filters.startMs;
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1082,6 +1140,23 @@ function isSentenceIndexEntry(value: unknown, index: number, assetId: string, so
     && (value.confidence === null || isFiniteInRange(value.confidence, 0, 1))
     && (value.quality === "complete" && Array.isArray(value.qualityReasons) && value.qualityReasons.length === 0 || value.quality === "needs_review" && Array.isArray(value.qualityReasons) && value.qualityReasons.length > 0)
     && Array.isArray(value.qualityReasons) && value.qualityReasons.length <= 8 && value.qualityReasons.every((reason) => isSafeString(reason, 64));
+}
+
+function isRetrievalCandidate(value: unknown, rank: number): value is RetrievalCandidate {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["rank", "sentenceId", "sourceAssetId", "sourceSentenceCacheKey", "sentenceIndex", "timecode", "text", "lexicalScore", "vectorScore", "hybridScore", "score", "explanation", "confidence", "quality", "qualityReasons", "previewUri"])) return false;
+  if (value.rank !== rank || !isSentenceCacheKey(value.sentenceId) || !isUuid(value.sourceAssetId) || !isSentenceCacheKey(value.sourceSentenceCacheKey)) return false;
+  if (!isSafeInteger(value.sentenceIndex, 0, 1_999) || !isSafeString(value.text, 2_048)) return false;
+  if (!isPlainRecord(value.timecode) || !hasOnlyKeys(value.timecode, ["startMs", "endMs"]) || !isSafeInteger(value.timecode.startMs, 0, 86_400_000) || !isSafeInteger(value.timecode.endMs, 1, 86_400_000) || value.timecode.endMs <= value.timecode.startMs) return false;
+  if (!isFiniteInRange(value.lexicalScore, 0, 1) || !isFiniteInRange(value.vectorScore, 0, 1) || !isFiniteInRange(value.hybridScore, 0, 1) || !isFiniteInRange(value.score, 0, 1)) return false;
+  if (!isPlainRecord(value.explanation) || !hasOnlyKeys(value.explanation, ["queryKeywords", "matchedKeywords", "matchedTopics", "vectorProvider", "scoreFormula"])) return false;
+  if (!Array.isArray(value.explanation.queryKeywords) || value.explanation.queryKeywords.length > 32 || !value.explanation.queryKeywords.every((item) => isSafeString(item, 64))) return false;
+  if (!Array.isArray(value.explanation.matchedKeywords) || value.explanation.matchedKeywords.length > 32 || !value.explanation.matchedKeywords.every((item) => isSafeString(item, 64))) return false;
+  if (!Array.isArray(value.explanation.matchedTopics) || value.explanation.matchedTopics.length > 8 || !value.explanation.matchedTopics.every((item) => isSafeString(item, 64))) return false;
+  if (value.explanation.vectorProvider !== "sha256-hash-v1" || !["lexical-keyword-overlap-v1", "vector-cosine-v1", "hybrid-0.6-0.4-v1"].includes(value.explanation.scoreFormula as string)) return false;
+  if (value.confidence !== null && !isFiniteInRange(value.confidence, 0, 1)) return false;
+  if (value.quality !== "complete" && value.quality !== "needs_review") return false;
+  if (!Array.isArray(value.qualityReasons) || value.qualityReasons.length > 8 || !value.qualityReasons.every((item) => isSafeString(item, 256))) return false;
+  return value.previewUri === `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`;
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {

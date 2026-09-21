@@ -38,6 +38,13 @@ MediaErrorCode = Literal[
     "SENTENCE_INDEX_OUTPUT_INVALID",
     "SENTENCE_INDEX_TIMEOUT",
     "SENTENCE_INDEX_CANCELLED",
+    "RETRIEVAL_INDEX_NOT_FOUND",
+    "RETRIEVAL_INDEX_INVALID",
+    "RETRIEVAL_INDEX_STALE",
+    "RETRIEVAL_STORAGE_INVALID",
+    "RETRIEVAL_OUTPUT_INVALID",
+    "RETRIEVAL_TIMEOUT",
+    "RETRIEVAL_CANCELLED",
 ]
 
 
@@ -79,6 +86,13 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "SENTENCE_INDEX_OUTPUT_INVALID": MediaErrorDefinition("The sentence index output was invalid."),
     "SENTENCE_INDEX_TIMEOUT": MediaErrorDefinition("The sentence index operation timed out."),
     "SENTENCE_INDEX_CANCELLED": MediaErrorDefinition("The sentence index operation was cancelled."),
+    "RETRIEVAL_INDEX_NOT_FOUND": MediaErrorDefinition("A valid sentence index is unavailable for retrieval."),
+    "RETRIEVAL_INDEX_INVALID": MediaErrorDefinition("The sentence index is invalid for retrieval."),
+    "RETRIEVAL_INDEX_STALE": MediaErrorDefinition("The sentence index is stale for the referenced asset."),
+    "RETRIEVAL_STORAGE_INVALID": MediaErrorDefinition("The sentence retrieval storage is invalid."),
+    "RETRIEVAL_OUTPUT_INVALID": MediaErrorDefinition("The sentence retrieval output was invalid."),
+    "RETRIEVAL_TIMEOUT": MediaErrorDefinition("The sentence retrieval operation timed out."),
+    "RETRIEVAL_CANCELLED": MediaErrorDefinition("The sentence retrieval operation was cancelled."),
 }
 
 

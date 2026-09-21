@@ -103,6 +103,48 @@ test("sentence QA validators enforce the Python cache/text contract", () => {
   assert.equal(shared.isSentenceQaSaveParams({ ...base, markers: [{ sentenceIndex: 0, issueType: "half-sentence", note: "\u0000" }] }), false);
 });
 
+test("retrieval validator binds preview URI to the source asset and timecode", () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const assetId = "22222222-2222-4222-8222-222222222222";
+  const candidate = {
+    rank: 1,
+    sentenceId: "a".repeat(64),
+    sourceAssetId: assetId,
+    sourceSentenceCacheKey: "b".repeat(64),
+    sentenceIndex: 0,
+    timecode: { startMs: 100, endMs: 500 },
+    text: "招聘岗位",
+    lexicalScore: 1,
+    vectorScore: 0.5,
+    hybridScore: 0.8,
+    score: 0.8,
+    explanation: {
+      queryKeywords: ["招聘"],
+      matchedKeywords: ["招聘"],
+      matchedTopics: ["招聘就业"],
+      vectorProvider: "sha256-hash-v1",
+      scoreFormula: "hybrid-0.6-0.4-v1",
+    },
+    confidence: 0.9,
+    quality: "complete",
+    qualityReasons: [],
+    previewUri: `supervideo://asset/${assetId}?kind=audio&startMs=100&endMs=500`,
+  };
+  const result = {
+    schemaVersion: 1,
+    retrievalVersion: "hybrid-retrieval-v1",
+    projectId,
+    query: "招聘",
+    mode: "hybrid",
+    limit: 1,
+    candidateCount: 1,
+    candidates: [candidate],
+  };
+  assert.equal(shared.isRetrievalResult(result), true);
+  assert.equal(shared.isRetrievalResult({ ...result, candidates: [{ ...candidate, previewUri: `supervideo://asset/${assetId}?kind=audio&startMs=101&endMs=500` }] }), false);
+  assert.equal(shared.isRetrievalResult({ ...result, candidates: [{ ...candidate, previewUri: `supervideo://asset/33333333-3333-4333-8333-333333333333?kind=audio&startMs=100&endMs=500` }] }), false);
+});
+
 test("desktop playback protocol parser keeps asset and range inputs bounded", () => {
   const assetId = "22222222-2222-4222-8222-222222222222";
   assert.deepEqual(playback.parseSuperVideoPlaybackRequest(`supervideo://asset/${assetId}?kind=video&startMs=100&endMs=500`), { assetId, kind: "video", startMs: 100, endMs: 500 });

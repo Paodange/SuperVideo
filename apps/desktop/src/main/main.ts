@@ -16,6 +16,7 @@ import {
   isProjectSummary,
   isSentenceQaContextResult,
   isSentenceQaSaveResult,
+  isRetrievalResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -35,6 +36,8 @@ import {
   type JobSummary,
   type SentenceQaContextResult,
   type SentenceQaSaveResult,
+  type RetrievalParams,
+  type RetrievalResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -692,6 +695,11 @@ app.whenReady().then(() => {
     },
     inspectSentenceQa: async (_event, input) => sentenceQaContextResult(await agentController.runProjectOperation("media-sentence-qa-context", input, input.projectId)),
     saveSentenceQa: async (_event, input) => sentenceQaSaveResult(await agentController.runProjectOperation("media-sentence-qa-save", input, input.projectId)),
+    retrieveSentences: async (_event, input: RetrievalParams): Promise<RetrievalResult> => {
+      const result = await agentController.runProjectOperation("media-sentence-retrieve", input, input.projectId);
+      if (!isRetrievalResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(
       "job-smoke-start", input.projectId,
       {
