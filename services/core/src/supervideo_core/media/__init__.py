@@ -1,4 +1,4 @@
-"""Controlled media analysis adapters for B02 through B06."""
+"""Controlled media analysis adapters for B02 through B07."""
 
 from .errors import MediaError
 from .models import MediaProbeParams, MediaProxyParams
@@ -6,7 +6,8 @@ from .transcription_models import TranscriptionParams, TranscriptionResult
 from .vad_models import VadParams, VadResult
 from .sentence_models import SentenceConfig, SentenceParams, SentenceResult
 from .qa_models import SentenceQaParams, SentenceQaSaveParams, SentenceQaContextResult, SentenceQaSaveResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService"]
+from .index_models import SentenceIndexParams, SentenceIndexResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService"]
 
 
 def __getattr__(name: str):
@@ -30,4 +31,8 @@ def __getattr__(name: str):
         from .qa import SentenceQaService
 
         return SentenceQaService
+    if name == "SentenceIndexService":
+        from .index import SentenceIndexService
+
+        return SentenceIndexService
     raise AttributeError(name)

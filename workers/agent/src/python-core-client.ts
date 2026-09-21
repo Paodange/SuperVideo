@@ -35,6 +35,7 @@ import {
   isSentenceResult,
   isSentenceQaContextResult,
   isSentenceQaSaveResult,
+  isSentenceIndexResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -62,6 +63,8 @@ import {
   type SentenceQaContextResult,
   type SentenceQaSaveParams,
   type SentenceQaSaveResult,
+  type SentenceIndexParams,
+  type SentenceIndexResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -323,6 +326,12 @@ export class PythonCoreClient {
   async saveSentenceQa(params: SentenceQaSaveParams, options: CoreRpcRequestOptions = {}): Promise<SentenceQaSaveResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentenceQaSave, params, options);
     if (!isSentenceQaSaveResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async indexSentences(params: SentenceIndexParams, options: CoreRpcRequestOptions = {}): Promise<SentenceIndexResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentenceIndex, params, options);
+    if (!isSentenceIndexResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

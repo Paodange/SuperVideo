@@ -32,6 +32,7 @@ export const CORE_RPC_METHODS = {
   mediaSentences: "media.sentences",
   mediaSentenceQaContext: "media.sentences.qa.context",
   mediaSentenceQaSave: "media.sentences.qa.save",
+  mediaSentenceIndex: "media.sentences.index",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -58,6 +59,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaSentences
   | typeof CORE_RPC_METHODS.mediaSentenceQaContext
   | typeof CORE_RPC_METHODS.mediaSentenceQaSave
+  | typeof CORE_RPC_METHODS.mediaSentenceIndex
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -149,6 +151,13 @@ export const CORE_RPC_ERROR_CODES = {
   sentenceQaIndexInvalid: "SENTENCE_QA_INDEX_INVALID",
   sentenceQaStorageInvalid: "SENTENCE_QA_STORAGE_INVALID",
   sentenceQaOutputInvalid: "SENTENCE_QA_OUTPUT_INVALID",
+  sentenceIndexSourceNotFound: "SENTENCE_INDEX_SOURCE_NOT_FOUND",
+  sentenceIndexSourceInvalid: "SENTENCE_INDEX_SOURCE_INVALID",
+  sentenceIndexSourceStale: "SENTENCE_INDEX_SOURCE_STALE",
+  sentenceIndexStorageInvalid: "SENTENCE_INDEX_STORAGE_INVALID",
+  sentenceIndexOutputInvalid: "SENTENCE_INDEX_OUTPUT_INVALID",
+  sentenceIndexTimeout: "SENTENCE_INDEX_TIMEOUT",
+  sentenceIndexCancelled: "SENTENCE_INDEX_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -236,6 +245,13 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   SENTENCE_QA_INDEX_INVALID: -32322,
   SENTENCE_QA_STORAGE_INVALID: -32323,
   SENTENCE_QA_OUTPUT_INVALID: -32324,
+  SENTENCE_INDEX_SOURCE_NOT_FOUND: -32325,
+  SENTENCE_INDEX_SOURCE_INVALID: -32326,
+  SENTENCE_INDEX_SOURCE_STALE: -32327,
+  SENTENCE_INDEX_STORAGE_INVALID: -32328,
+  SENTENCE_INDEX_OUTPUT_INVALID: -32329,
+  SENTENCE_INDEX_TIMEOUT: -32330,
+  SENTENCE_INDEX_CANCELLED: -32331,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -321,6 +337,13 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   SENTENCE_QA_INDEX_INVALID: "The requested sentence index is invalid.",
   SENTENCE_QA_STORAGE_INVALID: "The saved sentence QA markers are invalid.",
   SENTENCE_QA_OUTPUT_INVALID: "The sentence QA output was invalid.",
+  SENTENCE_INDEX_SOURCE_NOT_FOUND: "The requested B05 sentence result is unavailable for indexing.",
+  SENTENCE_INDEX_SOURCE_INVALID: "The requested B05 sentence result is invalid for indexing.",
+  SENTENCE_INDEX_SOURCE_STALE: "The requested B05 sentence result is stale for the referenced asset.",
+  SENTENCE_INDEX_STORAGE_INVALID: "The sentence index storage is invalid.",
+  SENTENCE_INDEX_OUTPUT_INVALID: "The sentence index output was invalid.",
+  SENTENCE_INDEX_TIMEOUT: "The sentence index operation timed out.",
+  SENTENCE_INDEX_CANCELLED: "The sentence index operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -406,6 +429,9 @@ export type SentenceConfig = Readonly<{ maxSentenceMs: number; pauseBoundaryMs: 
 export type SentenceParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number; config?: Partial<SentenceConfig> }>;
 export type SentenceCandidate = Readonly<{ index: number; sourceAssetId: string; startMs: number; endMs: number; text: string; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[]; sourceSegmentIndexes: readonly number[] }>;
 export type SentenceResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; adapterVersion: "sentence-segmentation-v1"; durationMs: number; config: SentenceConfig; sentences: readonly SentenceCandidate[] }>;
+export type SentenceIndexParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; timeoutMs?: number }>;
+export type SentenceIndexEntry = Readonly<{ sentenceId: string; sourceAssetId: string; sentenceIndex: number; sourceSentenceCacheKey: string; startMs: number; endMs: number; text: string; keywords: readonly string[]; topics: readonly string[]; vector: readonly number[]; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[] }>;
+export type SentenceIndexResult = Readonly<{ schemaVersion: 1; indexVersion: "sentence-index-v1"; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; sourceSentenceCacheKey: string; sourceSentenceResultDigest: string; adapterVersion: "deterministic-keyword-topic-vector-v1"; vectorProvider: "sha256-hash-v1"; vectorDimension: 32; reusedCount: number; rebuiltCount: number; entries: readonly SentenceIndexEntry[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -553,6 +579,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaSentences) return isSentenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceQaContext) return isSentenceQaParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceQaSave) return isSentenceQaSaveParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaSentenceIndex) return isSentenceIndexParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -741,6 +768,17 @@ export function isSentenceResult(value: unknown): value is SentenceResult {
     && Array.isArray(value.sentences) && value.sentences.length <= 2_000
     && value.sentences.every((item, index) => isSentenceCandidate(item, index, value.assetId as string, value.durationMs as number))
     && isBoundedCoreJsonValue(value, 48 * 1024);
+}
+
+export function isSentenceIndexResult(value: unknown): value is SentenceIndexResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "indexVersion", "projectId", "assetId", "cacheStatus", "cacheKey", "sourceSentenceCacheKey", "sourceSentenceResultDigest", "adapterVersion", "vectorProvider", "vectorDimension", "reusedCount", "rebuiltCount", "entries"])
+    && value.schemaVersion === 1 && value.indexVersion === "sentence-index-v1" && isUuid(value.projectId) && isUuid(value.assetId)
+    && isMediaCacheStatus(value.cacheStatus) && isSentenceCacheKey(value.cacheKey) && isSentenceCacheKey(value.sourceSentenceCacheKey) && isSentenceCacheKey(value.sourceSentenceResultDigest)
+    && value.adapterVersion === "deterministic-keyword-topic-vector-v1" && value.vectorProvider === "sha256-hash-v1" && value.vectorDimension === 32
+    && isSafeInteger(value.reusedCount, 0, 2_000) && isSafeInteger(value.rebuiltCount, 0, 2_000)
+    && Array.isArray(value.entries) && value.entries.length <= 2_000 && value.reusedCount + value.rebuiltCount === value.entries.length
+    && value.entries.every((entry, index) => isSentenceIndexEntry(entry, index, value.assetId as string, value.sourceSentenceCacheKey as string))
+    && isBoundedCoreJsonValue(value, 60 * 1024);
 }
 
 export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
@@ -946,6 +984,12 @@ export function isSentenceQaParams(value: unknown): value is SentenceQaParams {
     && (value.contextAfter === undefined || isSafeInteger(value.contextAfter, 0, 3));
 }
 
+export function isSentenceIndexParams(value: unknown): value is SentenceIndexParams {
+  return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "timeoutMs"])
+    && isUuid(value.projectId) && isUuid(value.assetId) && isSentenceCacheKey(value.sentenceCacheKey)
+    && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1025,6 +1069,19 @@ function isSentenceCandidate(value: unknown, index: number, assetId: string, dur
     && Array.isArray(value.qualityReasons) && value.qualityReasons.length <= 8 && value.qualityReasons.every((reason) => isSafeString(reason, 64))
     && Array.isArray(value.sourceSegmentIndexes) && value.sourceSegmentIndexes.length <= 2_000
     && value.sourceSegmentIndexes.every((sourceIndex) => isSafeInteger(sourceIndex, 0, 1_999));
+}
+
+function isSentenceIndexEntry(value: unknown, index: number, assetId: string, sourceCacheKey: string): value is SentenceIndexEntry {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["sentenceId", "sourceAssetId", "sentenceIndex", "sourceSentenceCacheKey", "startMs", "endMs", "text", "keywords", "topics", "vector", "confidence", "quality", "qualityReasons"])) return false;
+  return isSentenceCacheKey(value.sentenceId) && value.sourceAssetId === assetId && value.sentenceIndex === index && value.sourceSentenceCacheKey === sourceCacheKey
+    && isSafeInteger(value.startMs, 0, 86_400_000) && isSafeInteger(value.endMs, value.startMs + 1, 86_400_000)
+    && isSafeString(value.text, 2_048)
+    && Array.isArray(value.keywords) && value.keywords.length <= 32 && value.keywords.length > 0 && value.keywords.every((item) => isSafeString(item, 64))
+    && Array.isArray(value.topics) && value.topics.length <= 8 && value.topics.length > 0 && value.topics.every((item) => isSafeString(item, 64))
+    && Array.isArray(value.vector) && value.vector.length === 32 && value.vector.every((item) => isFiniteInRange(item, -1, 1))
+    && (value.confidence === null || isFiniteInRange(value.confidence, 0, 1))
+    && (value.quality === "complete" && Array.isArray(value.qualityReasons) && value.qualityReasons.length === 0 || value.quality === "needs_review" && Array.isArray(value.qualityReasons) && value.qualityReasons.length > 0)
+    && Array.isArray(value.qualityReasons) && value.qualityReasons.length <= 8 && value.qualityReasons.every((reason) => isSafeString(reason, 64));
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {
