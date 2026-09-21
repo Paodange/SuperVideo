@@ -48,7 +48,10 @@ There is no cross-restart A03 smoke-run persistence. A07 persistence and
 recovery belong to the Python/SQLite job system and use a separate `jobId`.
 
 A06 adds fixed Main-to-Worker project commands: `project-create`,
-`project-open`, `project-inspect`, `asset-reference`, and `asset-list`.
+`project-open`, `project-inspect`, `asset-reference`, and `asset-list`. B01 adds
+the fixed `asset-scan` command; its payload is still a typed project operation,
+not a generic filesystem request, and the directory is expected to originate
+from a Main-owned native directory dialog.
 They carry an operation ID and strict, bounded payload. They are controller
 commands, not Pi tools. The controller permits at most one project operation or
 A03 smoke run at a time, applies a bounded operation timeout, rejects duplicate

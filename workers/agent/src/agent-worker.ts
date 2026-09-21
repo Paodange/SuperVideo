@@ -9,6 +9,7 @@ import {
   CORE_RPC_METHODS,
   isAssetListResult,
   isAssetReferenceBatchResult,
+  isAssetScanResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -134,6 +135,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "project-open":
     case "project-inspect":
     case "asset-reference":
+    case "asset-scan":
     case "asset-list":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
@@ -168,7 +170,9 @@ async function handleProjectOperation(
       ? isProjectSummary(result)
       : operation === "asset-reference"
         ? isAssetReferenceBatchResult(result)
-        : isAssetListResult(result);
+        : operation === "asset-scan"
+          ? isAssetScanResult(result)
+          : isAssetListResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -270,6 +274,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "project-open") return CORE_RPC_METHODS.projectOpen;
   if (operation === "project-inspect") return CORE_RPC_METHODS.projectInspect;
   if (operation === "asset-reference") return CORE_RPC_METHODS.assetReference;
+  if (operation === "asset-scan") return CORE_RPC_METHODS.assetScan;
   return CORE_RPC_METHODS.assetList;
 }
 

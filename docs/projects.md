@@ -43,13 +43,17 @@ Renderer button
 
 打开时先读 manifest，再检查固定数据库路径、migration、quick/foreign-key check 和 project ID/name/platform。一致后补齐缺失的可再生目录。项目整体移动到新根目录时，manifest ID 与数据库 ID 必须匹配，Core 只更新 `projects.project_root`、`updated_at_ms` 和 revision，不改变 project ID；外部素材的绝对路径不会随项目移动自动变化。
 
-## 外部素材引用
+## 外部素材引用与 B01 目录扫描
 
-A06 只处理用户通过原生文件选择器显式选择的普通文件，不递归扫描目录。当前视频扩展名为 `.mp4`、`.mov`、`.mkv`、`.avi`、`.m4v` 和 `.webm`；扩展名不是媒体真实性验证，B01 才负责 ffprobe。
+A06 只处理用户通过原生文件选择器显式选择的普通文件，不递归扫描目录。B01 在同一安全边界上新增受控的 `asset.scan`：目录必须来自用户明确选择的绝对路径，Core 只扫描该目录第一层，不跟随目录递归，也不提供通用文件系统 IPC。
+
+视频扩展名为 `.mp4`、`.mov`、`.mkv`、`.avi`、`.m4v` 和 `.webm`；B01 的音频扩展名为 `.mp3`、`.wav`、`.m4a`、`.aac`、`.flac`、`.ogg`、`.opus` 和 `.wma`。目录中的其他扩展名会被忽略；通过 `asset.reference` 直接引用不支持的扩展名仍返回 `UNSUPPORTED_ASSET_TYPE`。扩展名不是媒体真实性验证，B02 才负责 ffprobe。
 
 Core 将路径解析到 canonical regular file，登记大小、修改时间、`source_type=external` 和 `sampled-sha256-v1:<hex>` 指纹。指纹输入包含文件大小、首部和尾部固定采样块；采样块为 64 KiB，超过 128 KiB 的文件只定点读取首尾，避免整段视频进入内存。hash 前后 stat 不一致返回 `ASSET_CHANGED_DURING_REFERENCE`。
 
 单批最多 100 个文件。所有文件先预检和指纹，再在一个事务中插入；一个文件失败不会留下部分新增记录。相同项目中 canonical path、size、mtime 和 fingerprint 都一致时返回 `existing`；同一路径元数据或指纹变化时返回 `ASSET_CHANGED`，不会静默替换。项目隔离由每个查询的 project ID 和 active session 强制执行。
+
+`asset.scan({ projectId, directory })` 返回扫描目录的 canonical 路径和最多 100 条有界素材摘要。结果按 canonical 路径稳定排序；同一目录重复扫描只返回 `existing`，不会新增记录。扫描发现已登记文件的大小、修改时间或指纹变化时，整个批次返回 `ASSET_CHANGED`，不写入部分新记录。扫描和引用都只以只读方式打开原始素材，不复制、修改或删除文件。目录不存在、不是普通目录、不可访问或出现带支持扩展名但不是普通文件的条目时返回 `FILE_ACCESS_DENIED`；扫描超过 100 条支持的素材时返回 `TOO_MANY_ASSETS`。
 
 ## A07 reopen 与恢复
 
@@ -69,9 +73,10 @@ Core RPC protocol 仍为 v1，因为 A06 只新增显式白名单方法：
 - `project.open({ projectRoot })`
 - `project.inspect({ projectRoot })`
 - `asset.reference({ projectId, paths })`
+- `asset.scan({ projectId, directory })`
 - `asset.list({ projectId, limit })`
 
-新增方法必须同时更新 Python registry、Pydantic 参数模型、共享 TypeScript runtime validator、golden fixtures、稳定错误映射和本文件。不得增加任意 SQL、路径读取、目录列举或通用 dictionary update。数据库仍是 schema version 1，`0001_initial.sql` 不可修改。
+新增方法必须同时更新 Python registry、Pydantic 参数模型、共享 TypeScript runtime validator、golden fixtures、稳定错误映射和本文件。不得增加任意 SQL、路径读取、目录列举或通用 dictionary update。数据库仍是 schema version 2，`0001_initial.sql` 不可修改。
 
 ## Smoke 与当前限制
 
@@ -86,4 +91,4 @@ npm run project:smoke
 
 该命令先使用当前 build，Electron 在 `--project-smoke` 测试模式中自行创建临时中文/空格项目目录和固定 `.mp4` fixture，走与生产相同的 Worker/Core/controller 链路。它验证创建、引用、SQLite 记录、原文件 bytes/size/mtime、Worker/Core 关闭、第二个 Worker reopen 和 asset ID 恢复，最后删除自己创建的临时树；不接受用户路径，不写 tracked 报告，不操作真实素材。
 
-A06 不支持自然语言路径解析、Pi 自主选择磁盘路径、递归文件夹扫描、拖拽导入、ffprobe/转码/缩略图/ASR/VAD/镜头检测/向量化、A07 持久化 job、最近项目自动打开、项目删除/备份/导入导出、云同步或剪映草稿读取。
+A06/B01 不支持自然语言路径解析、Pi 自主选择磁盘路径、递归文件夹扫描、拖拽导入、ffprobe/转码/缩略图/ASR/VAD/镜头检测/向量化、A07 持久化 job、最近项目自动打开、项目删除/备份/导入导出、云同步或剪映草稿读取。B01 不改变 SQLite schema version（仍为 2）；`sampled-sha256-v1` 继续作为独立版本化的快速指纹算法，未来升级必须使用新前缀并保留兼容读取。

@@ -11,6 +11,7 @@ from supervideo_core import __version__
 from supervideo_core.project.models import (
     AssetListRequest,
     AssetReferenceRequest,
+    AssetScanRequest,
     ProjectCreateRequest,
     ProjectInspectRequest,
     ProjectOpenRequest,
@@ -262,6 +263,8 @@ def validate_request(value: Any) -> RpcRequest:
         ProjectInspectRequest.model_validate(request.params)
     elif request.method == "asset.reference":
         AssetReferenceRequest.model_validate(request.params)
+    elif request.method == "asset.scan":
+        AssetScanRequest.model_validate(request.params)
     elif request.method == "asset.list":
         AssetListRequest.model_validate(request.params)
     elif request.method == "job.smoke.start":
@@ -319,6 +322,7 @@ def health_result() -> dict[str, object]:
             "project.open",
             "project.inspect",
             "asset.reference",
+            "asset.scan",
             "asset.list",
             "job.smoke.start",
             "job.get",

@@ -78,6 +78,25 @@ class AssetReferenceRequest(ProjectRequestModel):
         return value
 
 
+class AssetScanRequest(ProjectRequestModel):
+    project_id: str = Field(alias="projectId")
+    directory: str = Field(min_length=1, max_length=32_767)
+
+    @field_validator("project_id")
+    @classmethod
+    def validate_project_id(cls, value: str) -> str:
+        if not _UUID_PATTERN.fullmatch(value):
+            raise ValueError("project id must be a UUID")
+        return value
+
+    @field_validator("directory")
+    @classmethod
+    def validate_directory(cls, value: str) -> str:
+        if "\x00" in value or not _is_absolute_path(value):
+            raise ValueError("asset scan directory must be absolute")
+        return value
+
+
 class AssetListRequest(ProjectRequestModel):
     project_id: str = Field(alias="projectId")
     limit: int = Field(default=STORAGE_DEFAULT_LIST_LIMIT, strict=True, ge=1, le=STORAGE_MAX_LIST_LIMIT)
@@ -116,6 +135,12 @@ class AssetSummary(ProjectRequestModel):
 
 class AssetReferenceBatchResult(ProjectRequestModel):
     project_id: str = Field(alias="projectId")
+    items: list[AssetSummary] = Field(max_length=MAX_ASSET_REFERENCE_BATCH)
+
+
+class AssetScanResult(ProjectRequestModel):
+    project_id: str = Field(alias="projectId")
+    directory: str
     items: list[AssetSummary] = Field(max_length=MAX_ASSET_REFERENCE_BATCH)
 
 

@@ -176,6 +176,10 @@ class RpcServerTests(unittest.TestCase):
         project_root.mkdir()
         asset_path = temp_root / "voice.mp4"
         asset_path.write_bytes(b"fixed rpc fixture")
+        scan_directory = temp_root / "scan directory"
+        scan_directory.mkdir()
+        (scan_directory / "scan.mp4").write_bytes(b"scan video fixture")
+        (scan_directory / "scan.mp3").write_bytes(b"scan audio fixture")
         try:
             self.send(
                 {
@@ -200,13 +204,24 @@ class RpcServerTests(unittest.TestCase):
             self.send(
                 {
                     "jsonrpc": "2.0",
+                    "id": "asset-scan",
+                    "method": "asset.scan",
+                    "params": {"projectId": created["projectId"], "directory": str(scan_directory)},
+                }
+            )
+            scanned = self.read_line()["result"]
+            self.assertEqual(scanned["directory"], os.path.normcase(str(scan_directory.resolve())))
+            self.assertEqual([item["kind"] for item in scanned["items"]], ["audio", "video"])
+            self.send(
+                {
+                    "jsonrpc": "2.0",
                     "id": "asset-list",
                     "method": "asset.list",
                     "params": {"projectId": created["projectId"], "limit": 10},
                 }
             )
             listed = self.read_line()["result"]
-            self.assertEqual(len(listed["items"]), 1)
+            self.assertEqual(len(listed["items"]), 3)
         finally:
             shutil.rmtree(temp_root, ignore_errors=True)
 

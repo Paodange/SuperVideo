@@ -12,6 +12,7 @@ from supervideo_core.project import ProjectService
 from supervideo_core.project.models import (
     AssetListRequest,
     AssetReferenceRequest,
+    AssetScanRequest,
     ProjectCreateRequest,
     ProjectInspectRequest,
     ProjectOpenRequest,
@@ -102,6 +103,16 @@ async def asset_list_handler(
     return result.model_dump(by_alias=True)
 
 
+async def asset_scan_handler(
+    params: AssetScanRequest,
+    _emit: ProgressEmitter,
+    _cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    result = service.scan_assets(params)
+    return result.model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -165,6 +176,10 @@ class RpcRegistry:
             "asset.list": (
                 AssetListRequest,
                 lambda params, emit, cancelled: asset_list_handler(params, emit, cancelled, self.project_service),
+            ),
+            "asset.scan": (
+                AssetScanRequest,
+                lambda params, emit, cancelled: asset_scan_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

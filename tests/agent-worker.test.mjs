@@ -91,6 +91,13 @@ test("Agent Worker protocol accepts valid messages and rejects malformed wire da
     { protocolVersion: 1, type: "cancel-run", runId: "run-1" },
     { protocolVersion: 1, type: "ping" },
     { protocolVersion: 1, type: "shutdown" },
+    {
+      protocolVersion: 1,
+      type: "asset-scan",
+      operationId: "op-scan-1",
+      timestamp: now(),
+      payload: { projectId: "11111111-1111-4111-8111-111111111111", directory: "C:\\素材\\口播" },
+    },
     readyMessage(),
     { protocolVersion: 1, type: "pong", timestamp: now() },
     eventMessage("run-1", 1, { kind: "run-started" }),

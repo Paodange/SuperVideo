@@ -27,6 +27,7 @@ import {
   isJobSummary,
   isAssetListResult,
   isAssetReferenceBatchResult,
+  isAssetScanResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -39,6 +40,8 @@ import {
   type AssetListResult,
   type AssetReferenceBatchResult,
   type AssetReferenceParams,
+  type AssetScanParams,
+  type AssetScanResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -252,6 +255,12 @@ export class PythonCoreClient {
   async listAssets(params: AssetListParams, options: CoreRpcRequestOptions = {}): Promise<AssetListResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.assetList, params, options);
     if (!isAssetListResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async scanAssets(params: AssetScanParams, options: CoreRpcRequestOptions = {}): Promise<AssetScanResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.assetScan, params, options);
+    if (!isAssetScanResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 
