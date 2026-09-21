@@ -214,7 +214,7 @@ class SentenceIndexService:
             return None
 
     def _previous_entries(self, project_root: Path, request: SentenceIndexParams, source: SentenceResult) -> dict[str, SentenceIndexEntry]:
-        directory = self._safe_path(project_root, ("cache", SENTENCE_INDEX_VERSION, "indexes"), "SENTENCE_INDEX_STORAGE_INVALID", allow_missing=True)
+        directory = self._safe_path(project_root, ("cache", SENTENCE_INDEX_VERSION, "indexes"), "SENTENCE_INDEX_STORAGE_INVALID", allow_missing=True, expect_directory=True)
         if not directory.exists():
             return {}
         previous: dict[str, SentenceIndexEntry] = {}
@@ -297,19 +297,24 @@ class SentenceIndexService:
         return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
     @staticmethod
-    def _safe_path(root: Path, parts: tuple[str, ...], error_code: str, *, allow_missing: bool = False) -> Path:
+    def _safe_path(root: Path, parts: tuple[str, ...], error_code: str, *, allow_missing: bool = False, expect_directory: bool = False) -> Path:
         target = root.joinpath(*parts)
         try:
             current = root
             for part in parts[:-1]:
                 current = current / part
-                if current.exists() and (current.is_symlink() or not current.is_dir()):
-                    raise MediaError(error_code)
+                if current.exists() or current.is_symlink():
+                    current_stat = os.lstat(current)
+                    if stat.S_ISLNK(current_stat.st_mode) or not stat.S_ISDIR(current_stat.st_mode):
+                        raise MediaError(error_code)
             if target.exists() or target.is_symlink():
                 target_stat = os.lstat(target)
-                if stat.S_ISLNK(target_stat.st_mode) or not stat.S_ISREG(target_stat.st_mode):
-                    if allow_missing and target.is_dir():
-                        return target
+                if stat.S_ISLNK(target_stat.st_mode):
+                    raise MediaError(error_code)
+                if expect_directory:
+                    if not stat.S_ISDIR(target_stat.st_mode):
+                        raise MediaError(error_code)
+                elif not stat.S_ISREG(target_stat.st_mode):
                     raise MediaError(error_code)
             if not allow_missing and not target.exists():
                 raise MediaError(error_code)
@@ -322,8 +327,10 @@ class SentenceIndexService:
     @staticmethod
     def _atomic_json_write(path: Path, value: dict[str, Any]) -> None:
         try:
+            project_root = path.parents[3]
+            SentenceIndexService._safe_path(project_root, ("cache", SENTENCE_INDEX_VERSION, "indexes", path.name), "SENTENCE_INDEX_STORAGE_INVALID", allow_missing=True)
             path.parent.mkdir(parents=True, exist_ok=True)
-            SentenceIndexService._safe_path(path.parents[3], ("cache", SENTENCE_INDEX_VERSION, "indexes", path.name), "SENTENCE_INDEX_STORAGE_INVALID", allow_missing=True)
+            SentenceIndexService._safe_path(project_root, ("cache", SENTENCE_INDEX_VERSION, "indexes", path.name), "SENTENCE_INDEX_STORAGE_INVALID", allow_missing=True)
             fd, temporary = tempfile.mkstemp(prefix=f".{path.name}-", suffix=".tmp", dir=str(path.parent))
             try:
                 with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:

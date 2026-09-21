@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
+import stat
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from supervideo_core.media.index import SentenceIndexService
 from supervideo_core.media.index_models import SentenceIndexParams
@@ -136,6 +139,45 @@ class SentenceIndexTests(unittest.TestCase):
             self.assertEqual(getattr(error.exception, "code", None), "ASSET_NOT_FOUND")
         finally:
             other.close()
+
+    def test_indexes_directory_symlink_is_rejected_without_external_write(self) -> None:
+        source = self._write_b05(SentenceConfig())
+        indexes_parent = self.project_root / "cache" / "sentence-index-v1"
+        indexes_parent.mkdir(parents=True, exist_ok=True)
+        external = self.temp_root / "external-indexes"
+        external.mkdir()
+        indexes = indexes_parent / "indexes"
+        try:
+            os.symlink(external, indexes, target_is_directory=True)
+        except (OSError, NotImplementedError) as error:
+            # Windows developer-mode/symlink privilege is not guaranteed in CI.
+            # Keep the regression active by emulating the same lstat result at
+            # the narrow filesystem boundary; the external directory remains
+            # a real directory and is asserted to stay untouched.
+            real_lstat = os.lstat
+
+            def fake_lstat(path: str | bytes | os.PathLike[str] | os.PathLike[bytes]):
+                if Path(path) == indexes:
+                    return os.stat_result((stat.S_IFLNK, 0, 0, 1, 0, 0, 0, 0, 0, 0))
+                return real_lstat(path)
+
+            with patch("supervideo_core.media.index.os.lstat", side_effect=fake_lstat):
+                with self.assertRaises(Exception) as error:
+                    asyncio.run(self.project.index_sentences(
+                        SentenceIndexParams(projectId=self.project_id, assetId=self.asset_id, sentenceCacheKey=source.cache_key),
+                        asyncio.Event(),
+                    ))
+            self.assertEqual(getattr(error.exception, "code", None), "SENTENCE_INDEX_STORAGE_INVALID")
+            self.assertEqual(list(external.iterdir()), [])
+            return
+
+        with self.assertRaises(Exception) as error:
+            asyncio.run(self.project.index_sentences(
+                SentenceIndexParams(projectId=self.project_id, assetId=self.asset_id, sentenceCacheKey=source.cache_key),
+                asyncio.Event(),
+            ))
+        self.assertEqual(getattr(error.exception, "code", None), "SENTENCE_INDEX_STORAGE_INVALID")
+        self.assertEqual(list(external.iterdir()), [])
 
 
 if __name__ == "__main__":
