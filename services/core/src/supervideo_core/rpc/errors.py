@@ -107,6 +107,13 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "RETRIEVAL_OUTPUT_INVALID": RpcErrorDefinition(-32336, "The sentence retrieval output was invalid."),
     "RETRIEVAL_TIMEOUT": RpcErrorDefinition(-32337, "The sentence retrieval operation timed out."),
     "RETRIEVAL_CANCELLED": RpcErrorDefinition(-32338, "The sentence retrieval operation was cancelled."),
+    "RERANK_RETRIEVAL_INVALID": RpcErrorDefinition(-32339, "The B08 retrieval result is invalid for reranking."),
+    "RERANK_SOURCE_INVALID": RpcErrorDefinition(-32340, "The B05/B07 source is invalid for reranking."),
+    "RERANK_SOURCE_STALE": RpcErrorDefinition(-32341, "The B05/B07 source is stale for reranking."),
+    "RERANK_QA_STORAGE_INVALID": RpcErrorDefinition(-32342, "The B06 sentence QA storage is invalid."),
+    "RERANK_OUTPUT_INVALID": RpcErrorDefinition(-32343, "The sentence reranking output was invalid."),
+    "RERANK_TIMEOUT": RpcErrorDefinition(-32344, "The sentence reranking operation timed out."),
+    "RERANK_CANCELLED": RpcErrorDefinition(-32345, "The sentence reranking operation was cancelled."),
 }
 
 

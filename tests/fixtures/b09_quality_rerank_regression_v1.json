@@ -1,0 +1,486 @@
+{
+  "schemaVersion": 1,
+  "fixtureVersion": "b09-quality-rerank-regression-v1",
+  "candidates": [
+    {
+      "sentenceIndex": 0,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第1句，薪资和福利需要提前确认。",
+      "confidence": 0.55,
+      "quality": "needs_review",
+      "qaOpenIssue": "half-sentence"
+    },
+    {
+      "sentenceIndex": 1,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第2句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 2,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第3句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 3,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第4句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 4,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第5句，准备简历和工作经验。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 5,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第6句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 6,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第7句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 7,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第8句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 8,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第9句，素材和字幕要保持完整。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 9,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第10句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 10,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第11句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 11,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第12句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "needs_review",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 12,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第13句，薪资和福利需要提前确认。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 13,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第14句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": "half-sentence"
+    },
+    {
+      "sentenceIndex": 14,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第15句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 15,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第16句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 16,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第17句，准备简历和工作经验。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 17,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第18句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 18,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第19句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 19,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第20句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 20,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第21句，素材和字幕要保持完整。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 21,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第22句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 22,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第23句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "needs_review",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 23,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第24句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 24,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第25句，薪资和福利需要提前确认。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 25,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第26句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 26,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第27句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": "half-sentence"
+    },
+    {
+      "sentenceIndex": 27,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第28句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 28,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第29句，准备简历和工作经验。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 29,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第30句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 30,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第31句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 31,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第32句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 32,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第33句，素材和字幕要保持完整。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 33,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第34句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "needs_review",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 34,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第35句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 35,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第36句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 36,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第37句，薪资和福利需要提前确认。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 37,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第38句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 38,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第39句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 39,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第40句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": "half-sentence"
+    },
+    {
+      "sentenceIndex": 40,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第41句，准备简历和工作经验。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 41,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第42句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 42,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第43句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 43,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第44句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 44,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第45句，素材和字幕要保持完整。",
+      "confidence": 0.55,
+      "quality": "needs_review",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 45,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第46句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 46,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第47句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 47,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第48句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 48,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第49句，薪资和福利需要提前确认。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 49,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第50句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 50,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第51句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 51,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第52句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 52,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第53句，准备简历和工作经验。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": "half-sentence"
+    },
+    {
+      "sentenceIndex": 53,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第54句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 54,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第55句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 55,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第56句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "needs_review",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 56,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第57句，素材和字幕要保持完整。",
+      "confidence": 0.55,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 57,
+      "sourceAsset": "asset-a",
+      "text": "工厂招聘岗位第58句，薪资和福利需要提前确认。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 58,
+      "sourceAsset": "asset-a",
+      "text": "求职面试第59句，准备简历和工作经验。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    },
+    {
+      "sentenceIndex": 59,
+      "sourceAsset": "asset-a",
+      "text": "视频剪辑第60句，素材和字幕要保持完整。",
+      "confidence": 0.95,
+      "quality": "complete",
+      "qaOpenIssue": null
+    }
+  ]
+}

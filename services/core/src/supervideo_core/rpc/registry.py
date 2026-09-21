@@ -25,6 +25,7 @@ from supervideo_core.media.sentence_models import SentenceParams
 from supervideo_core.media.qa_models import SentenceQaParams, SentenceQaSaveParams
 from supervideo_core.media.index_models import SentenceIndexParams
 from supervideo_core.media.retrieval_models import RetrievalParams
+from supervideo_core.media.rerank_models import RerankParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -201,6 +202,15 @@ async def media_sentence_retrieval_handler(
     return (await service.retrieve_sentences(params, cancelled)).model_dump(by_alias=True)
 
 
+async def media_sentence_rerank_handler(
+    params: RerankParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.rerank_sentences(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -304,6 +314,10 @@ class RpcRegistry:
             "media.sentences.retrieve": (
                 RetrievalParams,
                 lambda params, emit, cancelled: media_sentence_retrieval_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.sentences.rerank": (
+                RerankParams,
+                lambda params, emit, cancelled: media_sentence_rerank_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

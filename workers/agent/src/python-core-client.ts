@@ -37,6 +37,7 @@ import {
   isSentenceQaSaveResult,
   isSentenceIndexResult,
   isRetrievalResult,
+  isRerankResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -339,6 +340,12 @@ export class PythonCoreClient {
   async retrieveSentences(params: import("@supervideo/shared").RetrievalParams, options: CoreRpcRequestOptions = {}): Promise<import("@supervideo/shared").RetrievalResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentenceRetrieve, params, options);
     if (!isRetrievalResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async rerankSentences(params: import("@supervideo/shared").RerankParams, options: CoreRpcRequestOptions = {}): Promise<import("@supervideo/shared").RerankResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentenceRerank, params, options);
+    if (!isRerankResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 
