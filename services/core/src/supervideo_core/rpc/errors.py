@@ -74,6 +74,11 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "MEDIA_NOT_MEDIA": RpcErrorDefinition(-32303, "The selected asset is not a valid media file."),
     "MEDIA_OUTPUT_INVALID": RpcErrorDefinition(-32304, "The generated media output was invalid."),
     "MEDIA_CANCELLED": RpcErrorDefinition(-32305, "The media operation was cancelled."),
+    "TRANSCRIPTION_TOOL_UNAVAILABLE": RpcErrorDefinition(-32306, "The local transcription tool is unavailable."),
+    "TRANSCRIPTION_MODEL_UNAVAILABLE": RpcErrorDefinition(-32307, "The local transcription model is unavailable."),
+    "TRANSCRIPTION_OUTPUT_INVALID": RpcErrorDefinition(-32308, "The local transcription output was invalid."),
+    "TRANSCRIPTION_TIMEOUT": RpcErrorDefinition(-32309, "The local transcription timed out."),
+    "TRANSCRIPTION_CANCELLED": RpcErrorDefinition(-32310, "The local transcription was cancelled."),
 }
 
 

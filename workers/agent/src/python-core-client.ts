@@ -30,6 +30,7 @@ import {
   isAssetScanResult,
   isMediaProbeResult,
   isMediaProxyResult,
+  isTranscriptionResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -47,6 +48,8 @@ import {
   type MediaParams,
   type MediaProbeResult,
   type MediaProxyResult,
+  type TranscriptionParams,
+  type TranscriptionResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -278,6 +281,12 @@ export class PythonCoreClient {
   async proxyMedia(params: MediaParams, options: CoreRpcRequestOptions = {}): Promise<MediaProxyResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaProxy, params, options);
     if (!isMediaProxyResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async transcribeMedia(params: TranscriptionParams, options: CoreRpcRequestOptions = {}): Promise<TranscriptionResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaTranscribe, params, options);
+    if (!isTranscriptionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

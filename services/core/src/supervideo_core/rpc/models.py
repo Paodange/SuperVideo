@@ -17,6 +17,7 @@ from supervideo_core.project.models import (
     ProjectOpenRequest,
 )
 from supervideo_core.media.models import MediaProbeParams, MediaProxyParams
+from supervideo_core.media.transcription_models import TranscriptionParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -272,6 +273,8 @@ def validate_request(value: Any) -> RpcRequest:
         MediaProbeParams.model_validate(request.params)
     elif request.method == "media.proxy":
         MediaProxyParams.model_validate(request.params)
+    elif request.method == "media.transcribe":
+        TranscriptionParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -331,6 +334,7 @@ def health_result() -> dict[str, object]:
             "asset.list",
             "media.probe",
             "media.proxy",
+            "media.transcribe",
             "job.smoke.start",
             "job.get",
             "job.list",

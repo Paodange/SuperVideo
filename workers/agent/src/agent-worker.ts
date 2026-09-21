@@ -12,6 +12,7 @@ import {
   isAssetScanResult,
   isMediaProbeResult,
   isMediaProxyResult,
+  isTranscriptionResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -141,6 +142,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "asset-list":
     case "media-probe":
     case "media-proxy":
+    case "media-transcribe":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -180,7 +182,9 @@ async function handleProjectOperation(
           ? isAssetListResult(result)
           : operation === "media-probe"
             ? isMediaProbeResult(result)
-            : isMediaProxyResult(result);
+            : operation === "media-proxy"
+              ? isMediaProxyResult(result)
+              : isTranscriptionResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -285,7 +289,8 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "asset-scan") return CORE_RPC_METHODS.assetScan;
   if (operation === "asset-list") return CORE_RPC_METHODS.assetList;
   if (operation === "media-probe") return CORE_RPC_METHODS.mediaProbe;
-  return CORE_RPC_METHODS.mediaProxy;
+  if (operation === "media-proxy") return CORE_RPC_METHODS.mediaProxy;
+  return CORE_RPC_METHODS.mediaTranscribe;
 }
 
 function sendProjectError(operationId: string, operation: AgentProjectOperationType, code: ProjectOperationErrorCode): void {
@@ -328,7 +333,12 @@ function isProjectOperationErrorCode(value: string): value is ProjectOperationEr
     || value === "MEDIA_PROBE_PARSE_ERROR"
     || value === "MEDIA_NOT_MEDIA"
     || value === "MEDIA_OUTPUT_INVALID"
-    || value === "MEDIA_CANCELLED";
+    || value === "MEDIA_CANCELLED"
+    || value === "TRANSCRIPTION_TOOL_UNAVAILABLE"
+    || value === "TRANSCRIPTION_MODEL_UNAVAILABLE"
+    || value === "TRANSCRIPTION_OUTPUT_INVALID"
+    || value === "TRANSCRIPTION_TIMEOUT"
+    || value === "TRANSCRIPTION_CANCELLED";
 }
 
 async function shutdown(): Promise<void> {

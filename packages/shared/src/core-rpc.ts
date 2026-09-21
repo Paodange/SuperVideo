@@ -27,6 +27,7 @@ export const CORE_RPC_METHODS = {
   assetList: "asset.list",
   mediaProbe: "media.probe",
   mediaProxy: "media.proxy",
+  mediaTranscribe: "media.transcribe",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -48,6 +49,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.assetList
   | typeof CORE_RPC_METHODS.mediaProbe
   | typeof CORE_RPC_METHODS.mediaProxy
+  | typeof CORE_RPC_METHODS.mediaTranscribe
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -120,6 +122,11 @@ export const CORE_RPC_ERROR_CODES = {
   mediaNotMedia: "MEDIA_NOT_MEDIA",
   mediaOutputInvalid: "MEDIA_OUTPUT_INVALID",
   mediaCancelled: "MEDIA_CANCELLED",
+  transcriptionToolUnavailable: "TRANSCRIPTION_TOOL_UNAVAILABLE",
+  transcriptionModelUnavailable: "TRANSCRIPTION_MODEL_UNAVAILABLE",
+  transcriptionOutputInvalid: "TRANSCRIPTION_OUTPUT_INVALID",
+  transcriptionTimeout: "TRANSCRIPTION_TIMEOUT",
+  transcriptionCancelled: "TRANSCRIPTION_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -188,6 +195,11 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   MEDIA_NOT_MEDIA: -32303,
   MEDIA_OUTPUT_INVALID: -32304,
   MEDIA_CANCELLED: -32305,
+  TRANSCRIPTION_TOOL_UNAVAILABLE: -32306,
+  TRANSCRIPTION_MODEL_UNAVAILABLE: -32307,
+  TRANSCRIPTION_OUTPUT_INVALID: -32308,
+  TRANSCRIPTION_TIMEOUT: -32309,
+  TRANSCRIPTION_CANCELLED: -32310,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -254,6 +266,11 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   MEDIA_NOT_MEDIA: "The selected asset is not a valid media file.",
   MEDIA_OUTPUT_INVALID: "The generated media output was invalid.",
   MEDIA_CANCELLED: "The media operation was cancelled.",
+  TRANSCRIPTION_TOOL_UNAVAILABLE: "The local transcription tool is unavailable.",
+  TRANSCRIPTION_MODEL_UNAVAILABLE: "The local transcription model is unavailable.",
+  TRANSCRIPTION_OUTPUT_INVALID: "The local transcription output was invalid.",
+  TRANSCRIPTION_TIMEOUT: "The local transcription timed out.",
+  TRANSCRIPTION_CANCELLED: "The local transcription was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -314,11 +331,16 @@ export type AssetReferenceBatchResult = Readonly<{ projectId: string; items: rea
 export type AssetScanResult = Readonly<{ projectId: string; directory: string; items: readonly AssetSummary[] }>;
 export type AssetListResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
 export type MediaParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number }>;
+export type TranscriptionParams = MediaParams;
 export type MediaStream = Readonly<{ index: number; codecType: "video" | "audio" | "data" | "subtitle" | "attachment" | "unknown"; codecName: string | null; width: number | null; height: number | null; frameRate: number | null; sampleRate: number | null; channels: number | null; channelLayout: string | null; language: string | null }>;
 export type MediaMetadata = Readonly<{ schemaVersion: 1; formatName: string | null; formatLongName: string | null; durationMs: number | null; bitRate: number | null; streams: readonly MediaStream[] }>;
 export type MediaProbeResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; metadata: MediaMetadata }>;
 export type MediaOutput = Readonly<{ kind: "audio" | "video" | "thumbnail"; relativePath: string; sizeBytes: number }>;
 export type MediaProxyResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; outputs: readonly MediaOutput[] }>;
+export type TranscriptionModelInfo = Readonly<{ adapterVersion: "faster-whisper-v1"; provider: "faster-whisper"; modelName: "tiny" | "base" | "small" | "medium" | "large-v3"; device: "cpu" | "cuda"; computeType: "int8" | "float16" | "float32" | "int8_float16" }>;
+export type TranscriptionWord = Readonly<{ startMs: number; endMs: number; text: string; probability: number | null }>;
+export type TranscriptionSegment = Readonly<{ index: number; startMs: number; endMs: number; text: string; confidence: number | null; avgLogprob: number | null; noSpeechProbability: number | null; compressionRatio: number | null; words: readonly TranscriptionWord[] }>;
+export type TranscriptionResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; model: TranscriptionModelInfo; language: string | null; languageProbability: number | null; durationMs: number | null; segments: readonly TranscriptionSegment[] }>;
 export type CoreProgress = Readonly<{
   requestId: CoreRpcId;
   sequence: number;
@@ -451,7 +473,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.assetList) {
     return isAssetListParams(value.params);
   }
-  if (value.method === CORE_RPC_METHODS.mediaProbe || value.method === CORE_RPC_METHODS.mediaProxy) {
+  if (value.method === CORE_RPC_METHODS.mediaProbe || value.method === CORE_RPC_METHODS.mediaProxy || value.method === CORE_RPC_METHODS.mediaTranscribe) {
     return isMediaParams(value.params);
   }
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
@@ -609,6 +631,18 @@ export function isMediaProxyResult(value: unknown): value is MediaProxyResult {
     && Array.isArray(value.outputs) && value.outputs.length === 3 && value.outputs.every(isMediaOutput);
 }
 
+export function isTranscriptionResult(value: unknown): value is TranscriptionResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "projectId", "assetId", "cacheStatus", "cacheKey", "model", "language", "languageProbability", "durationMs", "segments"])
+    && value.schemaVersion === 1 && isUuid(value.projectId) && isUuid(value.assetId)
+    && isMediaCacheStatus(value.cacheStatus) && isSafeString(value.cacheKey, 128)
+    && isTranscriptionModelInfo(value.model)
+    && (value.language === null || isSafeString(value.language, 64))
+    && (value.languageProbability === null || isFiniteInRange(value.languageProbability, 0, 1))
+    && (value.durationMs === null || isSafeInteger(value.durationMs, 0, 86_400_000))
+    && Array.isArray(value.segments) && value.segments.length <= 2_000 && value.segments.every(isTranscriptionSegment)
+    && isBoundedCoreJsonValue(value, 48 * 1024);
+}
+
 export function isCoreProgress(value: unknown): value is CoreProgress {
   if (!isPlainRecord(value) || !isCoreJsonValue(value) || !hasOnlyKeys(value, ["requestId", "sequence", "progress", "message"])) {
     return false;
@@ -748,6 +782,39 @@ function isMediaParams(value: unknown): value is MediaParams {
   return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs"])
     && isUuid(value.projectId) && isUuid(value.assetId)
     && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
+}
+
+function isTranscriptionModelInfo(value: unknown): value is TranscriptionModelInfo {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["adapterVersion", "provider", "modelName", "device", "computeType"])
+    && value.adapterVersion === "faster-whisper-v1" && value.provider === "faster-whisper"
+    && ["tiny", "base", "small", "medium", "large-v3"].includes(value.modelName as string)
+    && ["cpu", "cuda"].includes(value.device as string)
+    && ["int8", "float16", "float32", "int8_float16"].includes(value.computeType as string);
+}
+
+function isTranscriptionSegment(value: unknown): value is TranscriptionSegment {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["index", "startMs", "endMs", "text", "confidence", "avgLogprob", "noSpeechProbability", "compressionRatio", "words"])
+    && isSafeInteger(value.index, 0, 1_999)
+    && isSafeInteger(value.startMs, 0, 86_400_000)
+    && isSafeInteger(value.endMs, value.startMs, 86_400_000)
+    && isSafeString(value.text, 2_048)
+    && (value.confidence === null || isFiniteInRange(value.confidence, 0, 1))
+    && (value.avgLogprob === null || isFiniteInRange(value.avgLogprob, -100, 100))
+    && (value.noSpeechProbability === null || isFiniteInRange(value.noSpeechProbability, 0, 1))
+    && (value.compressionRatio === null || isFiniteInRange(value.compressionRatio, 0, 100))
+    && Array.isArray(value.words) && value.words.length <= 128 && value.words.every(isTranscriptionWord);
+}
+
+function isTranscriptionWord(value: unknown): value is TranscriptionWord {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["startMs", "endMs", "text", "probability"])
+    && isSafeInteger(value.startMs, 0, 86_400_000)
+    && isSafeInteger(value.endMs, value.startMs, 86_400_000)
+    && isSafeString(value.text, 2_048)
+    && (value.probability === null || isFiniteInRange(value.probability, 0, 1));
+}
+
+function isFiniteInRange(value: unknown, minimum: number, maximum: number): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 
 function isMediaMetadata(value: unknown): value is MediaMetadata {

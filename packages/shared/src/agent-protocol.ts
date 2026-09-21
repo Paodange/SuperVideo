@@ -11,7 +11,7 @@ import type {
   JobSummary,
   ProjectSummary,
 } from "./core-rpc";
-import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult } from "./core-rpc";
+import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isTranscriptionResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -36,7 +36,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -51,6 +51,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   assetList: "asset-list",
   mediaProbe: "media-probe",
   mediaProxy: "media-proxy",
+  mediaTranscribe: "media-transcribe",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
   jobList: "job-list",
@@ -83,7 +84,8 @@ export type AgentProjectOperationType =
   | "asset-scan"
   | "asset-list"
   | "media-probe"
-  | "media-proxy";
+  | "media-proxy"
+  | "media-transcribe";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -119,7 +121,8 @@ export type ProjectOperationErrorCode =
   | "RECORD_NOT_FOUND"
   | "INVALID_RECORD"
   | "MEDIA_TOOL_UNAVAILABLE" | "MEDIA_TOOL_TIMEOUT" | "MEDIA_PROBE_PARSE_ERROR"
-  | "MEDIA_NOT_MEDIA" | "MEDIA_OUTPUT_INVALID" | "MEDIA_CANCELLED";
+  | "MEDIA_NOT_MEDIA" | "MEDIA_OUTPUT_INVALID" | "MEDIA_CANCELLED"
+  | "TRANSCRIPTION_TOOL_UNAVAILABLE" | "TRANSCRIPTION_MODEL_UNAVAILABLE" | "TRANSCRIPTION_OUTPUT_INVALID" | "TRANSCRIPTION_TIMEOUT" | "TRANSCRIPTION_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -454,6 +457,11 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   MEDIA_NOT_MEDIA: "The selected asset is not a valid media file.",
   MEDIA_OUTPUT_INVALID: "The generated media output was invalid.",
   MEDIA_CANCELLED: "The media operation was cancelled.",
+  TRANSCRIPTION_TOOL_UNAVAILABLE: "The local transcription tool is unavailable.",
+  TRANSCRIPTION_MODEL_UNAVAILABLE: "The local transcription model is unavailable.",
+  TRANSCRIPTION_OUTPUT_INVALID: "The local transcription output was invalid.",
+  TRANSCRIPTION_TIMEOUT: "The local transcription timed out.",
+  TRANSCRIPTION_CANCELLED: "The local transcription was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -741,7 +749,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "asset-scan"
     || value === "asset-list"
     || value === "media-probe"
-    || value === "media-proxy";
+    || value === "media-proxy"
+    || value === "media-transcribe";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -793,7 +802,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
       && isUuid(value.projectId)
       && isAbsolutePath(value.directory);
   }
-  if (type === "media-probe" || type === "media-proxy") {
+  if (type === "media-probe" || type === "media-proxy" || type === "media-transcribe") {
     return hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs"])
       && isUuid(value.projectId) && isUuid(value.assetId)
       && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
@@ -876,6 +885,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "INVALID_RECORD",
   "MEDIA_TOOL_UNAVAILABLE", "MEDIA_TOOL_TIMEOUT", "MEDIA_PROBE_PARSE_ERROR",
   "MEDIA_NOT_MEDIA", "MEDIA_OUTPUT_INVALID", "MEDIA_CANCELLED",
+  "TRANSCRIPTION_TOOL_UNAVAILABLE", "TRANSCRIPTION_MODEL_UNAVAILABLE", "TRANSCRIPTION_OUTPUT_INVALID", "TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -909,6 +919,7 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): b
 function isProjectOperationResultPayload(type: AgentProjectOperationType, value: Readonly<Record<string, unknown>>): boolean {
   if (type === "media-probe") return isMediaProbeResult(value);
   if (type === "media-proxy") return isMediaProxyResult(value);
+  if (type === "media-transcribe") return isTranscriptionResult(value);
   return true;
 }
 

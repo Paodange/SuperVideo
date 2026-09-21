@@ -19,6 +19,7 @@ from supervideo_core.project.models import (
 )
 from supervideo_core.jobs import JobManager, JobSmokeInput
 from supervideo_core.media import MediaProbeParams, MediaProxyParams
+from supervideo_core.media.transcription_models import TranscriptionParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -132,6 +133,15 @@ async def media_proxy_handler(
     return (await service.proxy_media(params, cancelled)).model_dump(by_alias=True)
 
 
+async def media_transcribe_handler(
+    params: TranscriptionParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.transcribe_media(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -207,6 +217,10 @@ class RpcRegistry:
             "media.proxy": (
                 MediaProxyParams,
                 lambda params, emit, cancelled: media_proxy_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.transcribe": (
+                TranscriptionParams,
+                lambda params, emit, cancelled: media_transcribe_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,
