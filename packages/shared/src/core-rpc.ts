@@ -34,6 +34,7 @@ export const CORE_RPC_METHODS = {
   mediaSentenceQaSave: "media.sentences.qa.save",
   mediaSentenceIndex: "media.sentences.index",
   mediaSentenceRetrieve: "media.sentences.retrieve",
+  mediaSentenceRerank: "media.sentences.rerank",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -62,6 +63,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaSentenceQaSave
   | typeof CORE_RPC_METHODS.mediaSentenceIndex
   | typeof CORE_RPC_METHODS.mediaSentenceRetrieve
+  | typeof CORE_RPC_METHODS.mediaSentenceRerank
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -167,6 +169,13 @@ export const CORE_RPC_ERROR_CODES = {
   retrievalOutputInvalid: "RETRIEVAL_OUTPUT_INVALID",
   retrievalTimeout: "RETRIEVAL_TIMEOUT",
   retrievalCancelled: "RETRIEVAL_CANCELLED",
+  rerankRetrievalInvalid: "RERANK_RETRIEVAL_INVALID",
+  rerankSourceInvalid: "RERANK_SOURCE_INVALID",
+  rerankSourceStale: "RERANK_SOURCE_STALE",
+  rerankQaStorageInvalid: "RERANK_QA_STORAGE_INVALID",
+  rerankOutputInvalid: "RERANK_OUTPUT_INVALID",
+  rerankTimeout: "RERANK_TIMEOUT",
+  rerankCancelled: "RERANK_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -268,6 +277,13 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   RETRIEVAL_OUTPUT_INVALID: -32336,
   RETRIEVAL_TIMEOUT: -32337,
   RETRIEVAL_CANCELLED: -32338,
+  RERANK_RETRIEVAL_INVALID: -32339,
+  RERANK_SOURCE_INVALID: -32340,
+  RERANK_SOURCE_STALE: -32341,
+  RERANK_QA_STORAGE_INVALID: -32342,
+  RERANK_OUTPUT_INVALID: -32343,
+  RERANK_TIMEOUT: -32344,
+  RERANK_CANCELLED: -32345,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -367,6 +383,13 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   RETRIEVAL_OUTPUT_INVALID: "The sentence retrieval output was invalid.",
   RETRIEVAL_TIMEOUT: "The sentence retrieval operation timed out.",
   RETRIEVAL_CANCELLED: "The sentence retrieval operation was cancelled.",
+  RERANK_RETRIEVAL_INVALID: "The B08 retrieval result is invalid for reranking.",
+  RERANK_SOURCE_INVALID: "The B05/B07 source is invalid for reranking.",
+  RERANK_SOURCE_STALE: "The B05/B07 source is stale for reranking.",
+  RERANK_QA_STORAGE_INVALID: "The B06 sentence QA storage is invalid.",
+  RERANK_OUTPUT_INVALID: "The sentence reranking output was invalid.",
+  RERANK_TIMEOUT: "The sentence reranking operation timed out.",
+  RERANK_CANCELLED: "The sentence reranking operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -461,6 +484,14 @@ export type RetrievalTimecode = Readonly<{ startMs: number; endMs: number }>;
 export type RetrievalExplanation = Readonly<{ queryKeywords: readonly string[]; matchedKeywords: readonly string[]; matchedTopics: readonly string[]; vectorProvider: "sha256-hash-v1"; scoreFormula: "lexical-keyword-overlap-v1" | "vector-cosine-v1" | "hybrid-0.6-0.4-v1" }>;
 export type RetrievalCandidate = Readonly<{ rank: number; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: RetrievalTimecode; text: string; lexicalScore: number; vectorScore: number; hybridScore: number; score: number; explanation: RetrievalExplanation; confidence: number | null; quality: "complete" | "needs_review"; qualityReasons: readonly string[]; previewUri: string }>;
 export type RetrievalResult = Readonly<{ schemaVersion: 1; retrievalVersion: "hybrid-retrieval-v1"; projectId: string; query: string; mode: "lexical" | "vector" | "hybrid"; limit: number; candidateCount: number; candidates: readonly RetrievalCandidate[] }>;
+export type RerankWeights = Readonly<{ originalScore?: number; narrationClarity?: number; visualQuality?: number; sentenceCompleteness?: number; sentenceIndependence?: number; qaQuality?: number; sourceDiversity?: number }>;
+export type RerankConfig = Readonly<{ weights?: RerankWeights; duplicatePenalty?: number; diversityReward?: number; duplicateThreshold?: number; maxPerAsset?: number }>;
+export type RerankParams = Readonly<{ projectId: string; query: string; mode?: "lexical" | "vector" | "hybrid"; assetIds?: readonly string[]; filters?: RetrievalFilters; candidateLimit?: number; limit?: number; config?: RerankConfig; timeoutMs?: number }>;
+export type RerankTimecode = Readonly<{ startMs: number; endMs: number }>;
+export type RerankScores = Readonly<{ originalScore: number; narrationClarityScore: number; narrationQualityScore: number; visualQualityScore: number; sentenceCompletenessScore: number; sentenceIndependenceScore: number; qaScore: number; duplicatePenalty: number; sourceDiversityReward: number; finalScore: number }>;
+export type RerankExplanation = Readonly<{ reasons: readonly string[]; qaOpenMarkerCount: number; qaIssueTypes: readonly string[]; duplicateOfSentenceId: string | null; selectedSourceAssetCount: number; visualQualityStatus: "measured" | "degraded"; visualQualityReason: string }>;
+export type RerankCandidate = Readonly<{ rank: number; retrievalRank: number; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: RerankTimecode; text: string; quality: "complete" | "needs_review"; qualityStatus: "complete" | "needs_review"; qualityReasons: readonly string[]; previewUri: string; scores: RerankScores; explanation: RerankExplanation }>;
+export type RerankResult = Readonly<{ schemaVersion: 1; rerankVersion: "quality-rerank-v1"; projectId: string; query: string; mode: "lexical" | "vector" | "hybrid"; candidateLimit: number; limit: number; candidateCount: number; candidates: readonly RerankCandidate[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -610,6 +641,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaSentenceQaSave) return isSentenceQaSaveParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceIndex) return isSentenceIndexParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceRetrieve) return isRetrievalParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaSentenceRerank) return isRerankParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -818,6 +850,16 @@ export function isRetrievalResult(value: unknown): value is RetrievalResult {
     && isSafeInteger(value.limit, 1, 50) && isSafeInteger(value.candidateCount, 0, 50)
     && Array.isArray(value.candidates) && value.candidates.length === value.candidateCount
     && value.candidates.every((item, index) => isRetrievalCandidate(item, index + 1))
+    && isBoundedCoreJsonValue(value, 60 * 1024);
+}
+
+export function isRerankResult(value: unknown): value is RerankResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "rerankVersion", "projectId", "query", "mode", "candidateLimit", "limit", "candidateCount", "candidates"])
+    && value.schemaVersion === 1 && value.rerankVersion === "quality-rerank-v1" && isUuid(value.projectId)
+    && isBoundedText(value.query, 512) && ["lexical", "vector", "hybrid"].includes(value.mode as string)
+    && isSafeInteger(value.candidateLimit, 1, 50) && isSafeInteger(value.limit, 1, 50) && value.limit <= value.candidateLimit
+    && isSafeInteger(value.candidateCount, 0, 50) && Array.isArray(value.candidates) && value.candidates.length === value.candidateCount
+    && value.candidates.every((item, index) => isRerankCandidate(item, index + 1))
     && isBoundedCoreJsonValue(value, 60 * 1024);
 }
 
@@ -1048,6 +1090,31 @@ export function isRetrievalParams(value: unknown): value is RetrievalParams {
   return filters.startMs === undefined || filters.endMs === undefined || filters.endMs > filters.startMs;
 }
 
+export function isRerankParams(value: unknown): value is RerankParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "query", "mode", "assetIds", "filters", "candidateLimit", "limit", "config", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isBoundedText(value.query, 512) || !(value.query as string).trim()) return false;
+  if (value.mode !== undefined && !["lexical", "vector", "hybrid"].includes(value.mode as string)) return false;
+  if (value.candidateLimit !== undefined && !isSafeInteger(value.candidateLimit, 1, 50)) return false;
+  if (value.limit !== undefined && !isSafeInteger(value.limit, 1, 50)) return false;
+  if (value.limit !== undefined && value.candidateLimit !== undefined && value.limit > value.candidateLimit) return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  if (value.assetIds !== undefined && (!Array.isArray(value.assetIds) || value.assetIds.length > 100 || value.assetIds.length !== new Set(value.assetIds).size || !value.assetIds.every(isUuid))) return false;
+  if (value.filters !== undefined && !isRetrievalParams({ projectId: value.projectId, query: value.query, filters: value.filters })) return false;
+  if (value.config === undefined) return true;
+  const config = value.config;
+  if (!isPlainRecord(config) || !hasNoUnexpectedKeys(config, ["weights", "duplicatePenalty", "diversityReward", "duplicateThreshold", "maxPerAsset"])) return false;
+  if (config.duplicatePenalty !== undefined && !isFiniteInRange(config.duplicatePenalty, 0, 1)) return false;
+  if (config.diversityReward !== undefined && !isFiniteInRange(config.diversityReward, 0, 1)) return false;
+  if (config.duplicateThreshold !== undefined && !isFiniteInRange(config.duplicateThreshold, 0, 1)) return false;
+  if (config.maxPerAsset !== undefined && !isSafeInteger(config.maxPerAsset, 1, 50)) return false;
+  if (config.weights === undefined) return true;
+  const weights = config.weights;
+  if (!isPlainRecord(weights) || !hasNoUnexpectedKeys(weights, ["originalScore", "narrationClarity", "visualQuality", "sentenceCompleteness", "sentenceIndependence", "qaQuality", "sourceDiversity"])) return false;
+  const values = [weights.originalScore, weights.narrationClarity, weights.visualQuality, weights.sentenceCompleteness, weights.sentenceIndependence, weights.qaQuality, weights.sourceDiversity];
+  return values.every((item) => item === undefined || isFiniteInRange(item, 0, 1))
+    && (values.every((item) => item === undefined) || values.some((item) => item !== undefined && item > 0));
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1157,6 +1224,26 @@ function isRetrievalCandidate(value: unknown, rank: number): value is RetrievalC
   if (value.quality !== "complete" && value.quality !== "needs_review") return false;
   if (!Array.isArray(value.qualityReasons) || value.qualityReasons.length > 8 || !value.qualityReasons.every((item) => isSafeString(item, 256))) return false;
   return value.previewUri === `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`;
+}
+
+function isRerankCandidate(value: unknown, rank: number): value is RerankCandidate {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["rank", "retrievalRank", "sentenceId", "sourceAssetId", "sourceSentenceCacheKey", "sentenceIndex", "timecode", "text", "quality", "qualityStatus", "qualityReasons", "previewUri", "scores", "explanation"])) return false;
+  if (value.rank !== rank || !isSafeInteger(value.retrievalRank, 1, 50) || !isSentenceCacheKey(value.sentenceId) || !isUuid(value.sourceAssetId) || !isSentenceCacheKey(value.sourceSentenceCacheKey)) return false;
+  if (!isSafeInteger(value.sentenceIndex, 0, 1_999) || !isSafeString(value.text, 2_048)) return false;
+  if (!isPlainRecord(value.timecode) || !hasOnlyKeys(value.timecode, ["startMs", "endMs"]) || !isSafeInteger(value.timecode.startMs, 0, 86_400_000) || !isSafeInteger(value.timecode.endMs, 1, 86_400_000) || value.timecode.endMs <= value.timecode.startMs) return false;
+  if ((value.quality !== "complete" && value.quality !== "needs_review") || value.qualityStatus !== value.quality) return false;
+  if (!Array.isArray(value.qualityReasons) || value.qualityReasons.length > 8 || !value.qualityReasons.every((item) => isSafeString(item, 2_048))) return false;
+  if (value.quality === "complete" && value.qualityReasons.length > 0 || value.quality === "needs_review" && value.qualityReasons.length === 0) return false;
+  if (value.previewUri !== `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`) return false;
+  if (!isPlainRecord(value.scores) || !hasOnlyKeys(value.scores, ["originalScore", "narrationClarityScore", "narrationQualityScore", "visualQualityScore", "sentenceCompletenessScore", "sentenceIndependenceScore", "qaScore", "duplicatePenalty", "sourceDiversityReward", "finalScore"])) return false;
+  if (![value.scores.originalScore, value.scores.narrationClarityScore, value.scores.narrationQualityScore, value.scores.visualQualityScore, value.scores.sentenceCompletenessScore, value.scores.sentenceIndependenceScore, value.scores.qaScore, value.scores.duplicatePenalty, value.scores.sourceDiversityReward, value.scores.finalScore].every((item) => isFiniteInRange(item, 0, 1))) return false;
+  if (!isPlainRecord(value.explanation) || !hasOnlyKeys(value.explanation, ["reasons", "qaOpenMarkerCount", "qaIssueTypes", "duplicateOfSentenceId", "selectedSourceAssetCount", "visualQualityStatus", "visualQualityReason"])) return false;
+  if (!Array.isArray(value.explanation.reasons) || value.explanation.reasons.length > 8 || !value.explanation.reasons.every((item) => isSafeString(item, 96))) return false;
+  if (!isSafeInteger(value.explanation.qaOpenMarkerCount, 0, 500) || !Array.isArray(value.explanation.qaIssueTypes) || value.explanation.qaIssueTypes.length > 5 || !value.explanation.qaIssueTypes.every((item) => isSafeString(item, 64))) return false;
+  if (value.explanation.duplicateOfSentenceId !== null && !isSentenceCacheKey(value.explanation.duplicateOfSentenceId)) return false;
+  return isSafeInteger(value.explanation.selectedSourceAssetCount, 1, 50)
+    && (value.explanation.visualQualityStatus === "measured" || value.explanation.visualQualityStatus === "degraded")
+    && isSafeString(value.explanation.visualQualityReason, 96);
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {

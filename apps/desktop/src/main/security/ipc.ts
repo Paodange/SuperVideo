@@ -13,6 +13,7 @@ import {
   isSentenceQaParams,
   isSentenceQaSaveParams,
   isRetrievalParams,
+  isRerankParams,
   isValidAgentRunId,
   isCredentialRemoveRequest,
   isCredentialReplaceRequest,
@@ -55,6 +56,8 @@ import {
   type SentenceQaSaveResult,
   type RetrievalParams,
   type RetrievalResult,
+  type RerankParams,
+  type RerankResult,
 } from "@supervideo/shared";
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { isTrustedRendererUrl, sanitizeUrlForDiagnostics, type RendererTrustPolicy } from "./policies";
@@ -73,6 +76,7 @@ export type DesktopIpcDependencies = Readonly<{
   inspectSentenceQa: (event: IpcMainInvokeEvent, input: SentenceQaParams) => Promise<SentenceQaContextResult>;
   saveSentenceQa: (event: IpcMainInvokeEvent, input: SentenceQaSaveParams) => Promise<SentenceQaSaveResult>;
   retrieveSentences: (event: IpcMainInvokeEvent, input: RetrievalParams) => Promise<RetrievalResult>;
+  rerankSentences: (event: IpcMainInvokeEvent, input: RerankParams) => Promise<RerankResult>;
   startSmokeJob: (event: IpcMainInvokeEvent, input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
@@ -124,6 +128,7 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.inspectSentenceQa, isSentenceQaParams, dependencies, (payload, event) => dependencies.inspectSentenceQa(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.saveSentenceQa, isSentenceQaSaveParams, dependencies, (payload, event) => dependencies.saveSentenceQa(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.retrieveSentences, isRetrievalParams, dependencies, (payload, event) => dependencies.retrieveSentences(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.rerankSentences, isRerankParams, dependencies, (payload, event) => dependencies.rerankSentences(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startSmokeJob, isValidJobSmokeStartPayload, dependencies, (payload, event) => dependencies.startSmokeJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),

@@ -8,7 +8,8 @@ from .sentence_models import SentenceConfig, SentenceParams, SentenceResult
 from .qa_models import SentenceQaParams, SentenceQaSaveParams, SentenceQaContextResult, SentenceQaSaveResult
 from .index_models import SentenceIndexParams, SentenceIndexResult
 from .retrieval_models import RetrievalFilters, RetrievalParams, RetrievalResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService"]
+from .rerank_models import RerankConfig, RerankParams, RerankResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService"]
 
 
 def __getattr__(name: str):
@@ -40,4 +41,8 @@ def __getattr__(name: str):
         from .retrieval import SentenceRetrievalService
 
         return SentenceRetrievalService
+    if name == "SentenceQualityRerankService":
+        from .rerank import SentenceQualityRerankService
+
+        return SentenceQualityRerankService
     raise AttributeError(name)

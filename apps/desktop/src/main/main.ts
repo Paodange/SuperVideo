@@ -17,6 +17,7 @@ import {
   isSentenceQaContextResult,
   isSentenceQaSaveResult,
   isRetrievalResult,
+  isRerankResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -38,6 +39,8 @@ import {
   type SentenceQaSaveResult,
   type RetrievalParams,
   type RetrievalResult,
+  type RerankParams,
+  type RerankResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -698,6 +701,11 @@ app.whenReady().then(() => {
     retrieveSentences: async (_event, input: RetrievalParams): Promise<RetrievalResult> => {
       const result = await agentController.runProjectOperation("media-sentence-retrieve", input, input.projectId);
       if (!isRetrievalResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    rerankSentences: async (_event, input: RerankParams): Promise<RerankResult> => {
+      const result = await agentController.runProjectOperation("media-sentence-rerank", input, input.projectId);
+      if (!isRerankResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(
