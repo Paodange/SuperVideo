@@ -9,7 +9,8 @@ from .qa_models import SentenceQaParams, SentenceQaSaveParams, SentenceQaContext
 from .index_models import SentenceIndexParams, SentenceIndexResult
 from .retrieval_models import RetrievalFilters, RetrievalParams, RetrievalResult
 from .rerank_models import RerankConfig, RerankParams, RerankResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService"]
+from .slot_alignment_models import InformationSlot, SlotAlignmentCandidate, SlotAlignmentParams, SlotAlignmentResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService"]
 
 
 def __getattr__(name: str):
@@ -45,4 +46,8 @@ def __getattr__(name: str):
         from .rerank import SentenceQualityRerankService
 
         return SentenceQualityRerankService
+    if name == "InformationSlotAlignmentService":
+        from .slot_alignment import InformationSlotAlignmentService
+
+        return InformationSlotAlignmentService
     raise AttributeError(name)

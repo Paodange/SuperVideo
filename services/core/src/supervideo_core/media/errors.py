@@ -52,6 +52,13 @@ MediaErrorCode = Literal[
     "RERANK_OUTPUT_INVALID",
     "RERANK_TIMEOUT",
     "RERANK_CANCELLED",
+    "SLOT_INPUT_INVALID",
+    "SLOT_SOURCE_INVALID",
+    "SLOT_SOURCE_STALE",
+    "SLOT_RETRIEVAL_INVALID",
+    "SLOT_OUTPUT_INVALID",
+    "SLOT_TIMEOUT",
+    "SLOT_CANCELLED",
 ]
 
 
@@ -107,6 +114,13 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "RERANK_OUTPUT_INVALID": MediaErrorDefinition("The sentence reranking output was invalid."),
     "RERANK_TIMEOUT": MediaErrorDefinition("The sentence reranking operation timed out."),
     "RERANK_CANCELLED": MediaErrorDefinition("The sentence reranking operation was cancelled."),
+    "SLOT_INPUT_INVALID": MediaErrorDefinition("The information-slot input is invalid or exceeds its bounds."),
+    "SLOT_SOURCE_INVALID": MediaErrorDefinition("The B08/B09 source is invalid for slot alignment."),
+    "SLOT_SOURCE_STALE": MediaErrorDefinition("The B08/B09 source is stale for slot alignment."),
+    "SLOT_RETRIEVAL_INVALID": MediaErrorDefinition("The B08/B09 retrieval result is invalid for slot alignment."),
+    "SLOT_OUTPUT_INVALID": MediaErrorDefinition("The information-slot alignment output was invalid."),
+    "SLOT_TIMEOUT": MediaErrorDefinition("The information-slot alignment operation timed out."),
+    "SLOT_CANCELLED": MediaErrorDefinition("The information-slot alignment operation was cancelled."),
 }
 
 

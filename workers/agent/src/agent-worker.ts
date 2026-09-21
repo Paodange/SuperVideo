@@ -20,6 +20,7 @@ import {
   isSentenceIndexResult,
   isRetrievalResult,
   isRerankResult,
+  isSlotAlignmentResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -157,6 +158,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-sentence-index":
     case "media-sentence-retrieve":
     case "media-sentence-rerank":
+    case "media-script-align":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -210,9 +212,11 @@ async function handleProjectOperation(
                 ? isSentenceQaSaveResult(result)
                 : operation === "media-sentence-index"
                   ? isSentenceIndexResult(result)
-                  : operation === "media-sentence-rerank"
-                    ? isRerankResult(result)
-                    : isRetrievalResult(result);
+              : operation === "media-sentence-rerank"
+                ? isRerankResult(result)
+                : operation === "media-script-align"
+                  ? isSlotAlignmentResult(result)
+                : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -325,6 +329,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-sentence-qa-save") return CORE_RPC_METHODS.mediaSentenceQaSave;
   if (operation === "media-sentence-retrieve") return CORE_RPC_METHODS.mediaSentenceRetrieve;
   if (operation === "media-sentence-rerank") return CORE_RPC_METHODS.mediaSentenceRerank;
+  if (operation === "media-script-align") return CORE_RPC_METHODS.mediaScriptAlign;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 

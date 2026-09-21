@@ -68,6 +68,27 @@ test("golden fixtures are checked by the TypeScript runtime validator", () => {
   }
 });
 
+test("B10 slot alignment validators enforce bounded input, order, and source binding", () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const assetId = "22222222-2222-4222-8222-222222222222";
+  const sentenceId = "a".repeat(64);
+  const sourceDigest = "b".repeat(64);
+  const params = { projectId, inputKind: "outline", inputText: "岗位介绍。\n月薪 8000 元。", candidateLimit: 3, useRerank: true, timeoutMs: 120000 };
+  assert.equal(shared.isSlotAlignmentParams(params), true);
+  assert.equal(shared.isSlotAlignmentParams({ ...params, inputText: "x".repeat(8193) }), false);
+  const candidate = {
+    rank: 1, origin: "b08-retrieval", sentenceId, sourceAssetId: assetId, sourceSentenceCacheKey: sourceDigest,
+    sentenceIndex: 0, timecode: { startMs: 0, endMs: 1000 }, text: "岗位介绍。", score: 1, quality: "complete",
+    previewUri: `supervideo://asset/${assetId}?kind=audio&startMs=0&endMs=1000`, selectionReason: "b08-hybrid-score;all-key-facts-preserved", preservedFacts: [],
+  };
+  const result = {
+    schemaVersion: 1, alignmentVersion: "information-slot-alignment-v1", splitterVersion: "deterministic-slot-split-v1", projectId,
+    inputKind: "outline", inputText: "岗位介绍。", sourceDigest: "c".repeat(64), slotCount: 1, matchedCount: 1,
+    slots: [{ slotId: "slot-1", order: 1, kind: "context", sourceText: "岗位介绍。", query: "岗位介绍。", keyFacts: [], status: "matched", selectedCandidateRank: 1, candidates: [candidate], selectionReason: "b08-hybrid-score;all-key-facts-preserved", gapReason: null }],
+  };
+  assert.equal(shared.isSlotAlignmentResult(result), true, "shared validator checks the bounded digest shape; Core verifies its value");
+});
+
 test("VAD runtime validator rejects a gap between otherwise valid intervals", () => {
   const base = {
     schemaVersion: 1,

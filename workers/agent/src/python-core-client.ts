@@ -38,6 +38,7 @@ import {
   isSentenceIndexResult,
   isRetrievalResult,
   isRerankResult,
+  isSlotAlignmentResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -67,6 +68,8 @@ import {
   type SentenceQaSaveResult,
   type SentenceIndexParams,
   type SentenceIndexResult,
+  type SlotAlignmentParams,
+  type SlotAlignmentResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -346,6 +349,12 @@ export class PythonCoreClient {
   async rerankSentences(params: import("@supervideo/shared").RerankParams, options: CoreRpcRequestOptions = {}): Promise<import("@supervideo/shared").RerankResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaSentenceRerank, params, options);
     if (!isRerankResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async alignScript(params: SlotAlignmentParams, options: CoreRpcRequestOptions = {}): Promise<SlotAlignmentResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaScriptAlign, params, options);
+    if (!isSlotAlignmentResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 
