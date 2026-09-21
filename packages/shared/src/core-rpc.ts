@@ -1156,7 +1156,7 @@ function isRetrievalCandidate(value: unknown, rank: number): value is RetrievalC
   if (value.confidence !== null && !isFiniteInRange(value.confidence, 0, 1)) return false;
   if (value.quality !== "complete" && value.quality !== "needs_review") return false;
   if (!Array.isArray(value.qualityReasons) || value.qualityReasons.length > 8 || !value.qualityReasons.every((item) => isSafeString(item, 256))) return false;
-  return isSafeString(value.previewUri, 256) && value.previewUri.startsWith("supervideo://asset/");
+  return value.previewUri === `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`;
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {

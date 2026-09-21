@@ -8,9 +8,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from supervideo_core.media.index_models import SentenceIndexParams
 from supervideo_core.media.retrieval import SentenceRetrievalService
-from supervideo_core.media.retrieval_models import RetrievalParams
+from supervideo_core.media.retrieval_models import RetrievalCandidate, RetrievalParams
 from supervideo_core.media.sentence_models import SentenceCandidate, SentenceConfig, SentenceResult, validate_sentence_result_size
 from supervideo_core.media.sentences import SentenceService
 from supervideo_core.project import AssetReferenceRequest, ProjectCreateRequest, ProjectService
@@ -39,7 +41,9 @@ class SentenceRetrievalTests(unittest.TestCase):
     def _digest(value: object) -> str:
         return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
-    def _write_b05(self) -> SentenceResult:
+    def _write_b05(self, *, asset_id: str | None = None, asset_path: Path | None = None) -> SentenceResult:
+        selected_asset_id = asset_id or self.asset_id
+        selected_asset_path = asset_path or self.asset_path
         texts = []
         for index in range(60):
             if index % 3 == 0:
@@ -51,7 +55,7 @@ class SentenceRetrievalTests(unittest.TestCase):
             texts.append(text)
         sentences = [SentenceCandidate(
             index=index,
-            sourceAssetId=self.asset_id,
+            sourceAssetId=selected_asset_id,
             startMs=index * 1_000,
             endMs=index * 1_000 + 700,
             text=text,
@@ -60,14 +64,14 @@ class SentenceRetrievalTests(unittest.TestCase):
             qualityReasons=[],
             sourceSegmentIndexes=[index],
         ) for index, text in enumerate(texts)]
-        canonical_path, _ = canonical_asset_path(str(self.asset_path))
+        canonical_path, _ = canonical_asset_path(str(selected_asset_path))
         signature, fingerprint = SentenceService._asset_signature(canonical_path)
         config = SentenceConfig()
         cache_key = SentenceService._cache_key(self.project_id, canonical_path, signature, fingerprint, config)
         result = validate_sentence_result_size(SentenceResult(
             schemaVersion=1,
             projectId=self.project_id,
-            assetId=self.asset_id,
+            assetId=selected_asset_id,
             cacheStatus="created",
             cacheKey=cache_key,
             adapterVersion="sentence-segmentation-v1",
@@ -99,6 +103,10 @@ class SentenceRetrievalTests(unittest.TestCase):
         self.assertEqual(hybrid.candidates[0].score, hybrid.candidates[0].hybrid_score)
         self.assertEqual(hybrid.candidates[0].source_sentence_cache_key, source.cache_key)
         self.assertTrue(hybrid.candidates[0].preview_uri.startswith("supervideo://asset/"))
+        invalid_uri = hybrid.candidates[0].model_dump(by_alias=True)
+        invalid_uri["previewUri"] = f"{invalid_uri['previewUri']}x"
+        with self.assertRaises(ValidationError):
+            RetrievalCandidate.model_validate(invalid_uri)
         again = asyncio.run(self.project.retrieve_sentences(RetrievalParams(projectId=self.project_id, query="工厂招聘薪资", limit=10), asyncio.Event()))
         self.assertEqual(hybrid.model_dump(), again.model_dump())
 
@@ -145,6 +153,23 @@ class SentenceRetrievalTests(unittest.TestCase):
             self.assertEqual(getattr(isolated.exception, "code", None), "RETRIEVAL_INDEX_NOT_FOUND")
         finally:
             other.close()
+
+    def test_mixed_valid_and_corrupt_indexes_fail_for_requested_scope(self) -> None:
+        first = self._index()
+        second_path = self.temp_root / "second.mp4"
+        second_path.write_bytes(b"second retrieval fixture")
+        second_reference = self.project.reference_assets(AssetReferenceRequest(projectId=self.project_id, paths=[str(second_path)]))
+        second_asset_id = second_reference.items[0].asset_id
+        second = self._write_b05(asset_id=second_asset_id, asset_path=second_path)
+        asyncio.run(self.project.index_sentences(SentenceIndexParams(projectId=self.project_id, assetId=second_asset_id, sentenceCacheKey=second.cache_key), asyncio.Event()))
+
+        second_index_path = self.project_root / "cache" / "sentence-index-v1" / "indexes" / f"{second.cache_key}.json"
+        second_payload = json.loads(second_index_path.read_text(encoding="utf-8"))
+        second_payload["result"]["entries"][0]["text"] = "损坏索引"
+        second_index_path.write_text(json.dumps(second_payload, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaises(Exception) as error:
+            asyncio.run(self.project.retrieve_sentences(RetrievalParams(projectId=self.project_id, assetIds=[self.asset_id, second_asset_id], query="招聘"), asyncio.Event()))
+        self.assertEqual(getattr(error.exception, "code", None), "RETRIEVAL_INDEX_INVALID")
 
 
 if __name__ == "__main__":

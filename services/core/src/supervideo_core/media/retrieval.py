@@ -107,11 +107,11 @@ class SentenceRetrievalService:
         if project_root is None or database is None:
             raise ProjectError("PROJECT_NOT_ACTIVE")
         indexes, invalid, stale = self._load_indexes(project_root, request, assets)
+        if invalid:
+            raise MediaError("RETRIEVAL_INDEX_INVALID")
+        if stale:
+            raise MediaError("RETRIEVAL_INDEX_STALE")
         if not indexes:
-            if stale:
-                raise MediaError("RETRIEVAL_INDEX_STALE")
-            if invalid:
-                raise MediaError("RETRIEVAL_INDEX_INVALID")
             raise MediaError("RETRIEVAL_INDEX_NOT_FOUND")
 
         query_keywords = _retrieval_keywords(request.query)
@@ -221,35 +221,37 @@ class SentenceRetrievalService:
         for child in children:
             if child.suffix != ".json":
                 continue
+            value: Any = None
+            in_scope = False
             try:
                 child_stat = os.lstat(child)
                 if stat.S_ISLNK(child_stat.st_mode) or not stat.S_ISREG(child_stat.st_mode):
-                    invalid = True
                     continue
                 if child_stat.st_size > SENTENCE_INDEX_MAX_RESULT_BYTES:
-                    invalid = True
                     continue
                 value = json.loads(child.read_text(encoding="utf-8"))
+                in_scope = self._manifest_in_scope(value, request, assets)
                 if not isinstance(value, dict) or set(value) != {"schemaVersion", "indexVersion", "cacheKey", "sourceSentenceCacheKey", "sourceSentenceResultDigest", "resultDigest", "result"}:
-                    invalid = True
+                    invalid = invalid or in_scope
                     continue
                 if value["schemaVersion"] != SENTENCE_INDEX_SCHEMA_VERSION or value["indexVersion"] != SENTENCE_INDEX_VERSION:
-                    invalid = True
+                    invalid = invalid or in_scope
                     continue
                 if value["resultDigest"] != self._digest(value.get("result")):
-                    invalid = True
+                    invalid = invalid or in_scope
                     continue
                 result = validate_sentence_index_size(SentenceIndexResult.model_validate(value["result"]))
                 if result.cache_status != "created" or value["cacheKey"] != result.cache_key or value["sourceSentenceCacheKey"] != result.source_sentence_cache_key or value["sourceSentenceResultDigest"] != result.source_sentence_result_digest:
-                    invalid = True
+                    invalid = invalid or (result.project_id == request.project_id and result.asset_id in assets)
                     continue
                 if result.project_id != request.project_id or result.asset_id not in assets:
                     continue
                 manifests.append((result.source_sentence_cache_key, value))
             except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, ValidationError):
-                # Do not disclose filenames. A matching malformed cache is
-                # surfaced below only when no valid index remains.
-                invalid = True
+                # Do not disclose filenames. Only a manifest that can be
+                # attributed to the requested project/assets affects the
+                # request; unrelated project caches cannot poison this scope.
+                invalid = invalid or in_scope
 
         by_asset: dict[str, list[SentenceIndexResult]] = {}
         stale = False
@@ -280,6 +282,13 @@ class SentenceRetrievalService:
             if options:
                 selected.append(sorted(options, key=lambda item: item.source_sentence_cache_key)[-1])
         return selected, invalid, stale
+
+    @staticmethod
+    def _manifest_in_scope(value: Any, request: RetrievalParams, assets: dict[str, tuple[Path, Any]]) -> bool:
+        if not isinstance(value, dict) or not isinstance(value.get("result"), dict):
+            return False
+        result = value["result"]
+        return result.get("projectId") == request.project_id and result.get("assetId") in assets
 
     @staticmethod
     def _matches_filters(entry: Any, request: RetrievalParams) -> bool:

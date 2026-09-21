@@ -147,6 +147,13 @@ class RetrievalCandidate(RetrievalModel):
             raise ValueError("invalid retrieval text")
         return value
 
+    @model_validator(mode="after")
+    def validate_preview_uri(self) -> "RetrievalCandidate":
+        expected = f"supervideo://asset/{self.source_asset_id}?kind=audio&startMs={self.timecode.start_ms}&endMs={self.timecode.end_ms}"
+        if self.preview_uri != expected:
+            raise ValueError("retrieval preview URI does not match source")
+        return self
+
 
 class RetrievalResult(RetrievalModel):
     schema_version: Literal[1] = Field(alias="schemaVersion")
