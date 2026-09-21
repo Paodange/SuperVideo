@@ -40,7 +40,7 @@ import {
 import { createSecurityLogger } from "./security/diagnostics";
 import { createElectronCredentialEncryptionAdapter, CredentialVault } from "./security/credential-vault";
 import { DiagnosticsCollector } from "./diagnostics/collector";
-import { exportDiagnostics } from "./diagnostics/exporter";
+import { DiagnosticsExporterError, exportDiagnostics } from "./diagnostics/exporter";
 import {
   createDesktopAgentStatusEvent,
   registerDesktopIpcHandlers,
@@ -703,7 +703,10 @@ app.whenReady().then(() => {
         log("diagnostic-export-finished", { status: result.status });
         return result;
       } catch (error) {
-        log("diagnostic-export-failed", { errorCode: "DIAGNOSTIC_EXPORT_FAILED" });
+        log("diagnostic-export-failed", {
+          errorCode: "DIAGNOSTIC_EXPORT_FAILED",
+          reason: error instanceof DiagnosticsExporterError ? error.phase : "unknown",
+        });
         throw error;
       }
     },
