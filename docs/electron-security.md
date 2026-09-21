@@ -49,6 +49,12 @@ job errors; preload validates summaries/pages/events and returns no generic IPC
 or database capability. Job event payloads are summaries only, never input JSON,
 checkpoint contents, SQL or stack traces.
 
+A08 adds only fixed credential and diagnostics capabilities. Main owns the
+`safeStorage`/DPAPI adapter, versioned vault file, and native diagnostics save
+dialog. Renderer receives metadata and bounded summaries, never a secret,
+ciphertext, arbitrary path, or generic IPC capability. See
+[observability-and-secrets.md](observability-and-secrets.md).
+
 ## 当前限制
 
 A02/A03 不实现代码签名、安装包沙箱或对已取得 Windows 管理员权限的本机攻击者的防护。生产打包流程、自动更新和 Python/SQLite 业务 IPC 将在后续工作包中继续收紧；新增能力必须扩展共享 contract 和显式 allowlist，不能暴露通用 `invoke/send`。

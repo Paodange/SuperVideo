@@ -66,6 +66,12 @@ The Worker does not persist job state and does not expose generic
 RPC/notifications; after a restart, the caller reopens the project and reads
 SQLite-backed jobs/events.
 
+A08 adds one fixed `diagnostic-event` Worker-to-Main message. It carries only a
+versioned, allowlisted, scalar diagnostic summary and uses the same `send()`
+runtime shape and 64 KiB validator as every other outbound message. Pi
+messages, tool arguments/results, prompts and raw Core stderr are not
+forwarded.
+
 The Worker lazily starts one `PythonCoreClient` for the current session. A
 successful project open/create leaves that Core session active for subsequent
 asset calls. Normal Worker shutdown closes Core before exit; Python receives

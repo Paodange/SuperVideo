@@ -250,6 +250,7 @@ test("preload exposes one frozen typed capability and no arbitrary channel", asy
     "getEnvironment", "getAgentStatus", "runSmokeTask", "cancelSmokeRun", "onAgentEvent",
     "createProject", "openProject", "addAssetReferences", "listProjectAssets",
     "startSmokeJob", "getJob", "listJobs", "listJobEvents", "cancelJob", "retryJob", "onJobEvent",
+    "credentials", "diagnostics",
   ]);
   assert.equal("invoke" in api, false);
   assert.equal("send" in api, false);

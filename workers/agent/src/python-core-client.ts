@@ -154,7 +154,7 @@ export class PythonCoreClient {
   private processHandlers?: ProcessHandlers;
   private stdoutBuffer = "";
   private readonly stdoutDecoder = new TextDecoder("utf-8", { fatal: true });
-  private stderrBuffer = "";
+ private diagnosticLineBuffer = "";
   private status: CoreClientStatus = "stopped";
   private healthResult?: CoreHealth;
   private startPromise?: Promise<CoreHealth>;
@@ -539,11 +539,17 @@ export class PythonCoreClient {
 
   private handleStderrData(chunk: unknown): void {
     const text = typeof chunk === "string" ? chunk : chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
-    const remaining = Math.max(0, MAX_DIAGNOSTIC_BYTES - new TextEncoder().encode(this.stderrBuffer).byteLength);
-    if (remaining > 0) {
-      this.stderrBuffer += text.slice(0, remaining);
+    this.diagnosticLineBuffer += text;
+    if (this.diagnosticLineBuffer.length > MAX_DIAGNOSTIC_BYTES) {
+      this.diagnosticLineBuffer = this.diagnosticLineBuffer.slice(-MAX_DIAGNOSTIC_BYTES);
     }
-    this.emitDiagnostic(text.slice(0, Math.min(text.length, 2_048)));
+    let newlineIndex = this.diagnosticLineBuffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = this.diagnosticLineBuffer.slice(0, newlineIndex).replace(/\r$/, "");
+      this.diagnosticLineBuffer = this.diagnosticLineBuffer.slice(newlineIndex + 1);
+      if (line) this.emitDiagnostic(line.slice(0, 2_048));
+      newlineIndex = this.diagnosticLineBuffer.indexOf("\n");
+    }
   }
 
   private handleProcessError(error: NodeJS.ErrnoException): void {
@@ -569,7 +575,7 @@ export class PythonCoreClient {
     this.process = undefined;
     this.processHandlers = undefined;
     this.stdoutBuffer = "";
-    this.stderrBuffer = "";
+   this.diagnosticLineBuffer = "";
     this.rejectAll("TRANSPORT_CLOSED");
     if (this.shutdownTimer) {
       clearTimeout(this.shutdownTimer);

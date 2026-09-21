@@ -3,6 +3,7 @@ import {
   DESKTOP_IPC_CHANNELS,
   isDesktopIpcChannel,
   isDesktopPublicError,
+  isDesktopPublicErrorCode,
   isProjectOperationErrorCode,
   isJobOperationErrorCode,
   isJobEventsListParams,
@@ -10,6 +11,17 @@ import {
   isJobReferenceParams,
   isJobSmokeStartParams,
   isValidAgentRunId,
+  isCredentialRemoveRequest,
+  isCredentialReplaceRequest,
+  isCredentialSaveRequest,
+  type CredentialListResult,
+  type CredentialMetadata,
+  type CredentialRemoveRequest,
+  type CredentialRemoveResult,
+  type CredentialReplaceRequest,
+  type CredentialSaveRequest,
+  type CredentialStorageStatus,
+  type DiagnosticExportResult,
   type AgentRunHandle,
   type AgentWorkerMessage,
   type AgentWorkerStatusSnapshot,
@@ -38,7 +50,7 @@ import {
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { isTrustedRendererUrl, sanitizeUrlForDiagnostics, type RendererTrustPolicy } from "./policies";
 
-export type SecurityLog = (event: string, details?: Readonly<Record<string, string | number | boolean>>) => void;
+export type SecurityLog = (event: string, details?: Readonly<Record<string, unknown>>) => void;
 
 export type DesktopIpcDependencies = Readonly<{
   getEnvironment: () => DesktopEnvironment;
@@ -55,6 +67,12 @@ export type DesktopIpcDependencies = Readonly<{
   listJobEvents: (event: IpcMainInvokeEvent, input: JobEventsListParams) => Promise<JobEventPage>;
   cancelJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   retryJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
+  credentialsStatus?: () => CredentialStorageStatus;
+  credentialsList?: () => Promise<CredentialListResult>;
+  credentialsSave?: (input: CredentialSaveRequest) => Promise<CredentialMetadata>;
+  credentialsReplace?: (input: CredentialReplaceRequest) => Promise<CredentialMetadata>;
+  credentialsRemove?: (input: CredentialRemoveRequest) => Promise<CredentialRemoveResult>;
+  diagnosticsExport?: (event: IpcMainInvokeEvent) => Promise<DiagnosticExportResult>;
   rendererTrustPolicy: RendererTrustPolicy;
   log: SecurityLog;
 }>;
@@ -98,6 +116,17 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.cancelJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.cancelJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.retryJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.retryJob(event, payload)),
   ];
+
+  if (dependencies.credentialsStatus && dependencies.credentialsList && dependencies.credentialsSave && dependencies.credentialsReplace && dependencies.credentialsRemove && dependencies.diagnosticsExport) {
+    disposers.push(
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsStatus, isValidEmptyPayload, dependencies, () => dependencies.credentialsStatus!()),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsList, isValidEmptyPayload, dependencies, () => dependencies.credentialsList!()),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsSave, isValidCredentialSavePayload, dependencies, (payload) => dependencies.credentialsSave!(payload)),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsReplace, isValidCredentialReplacePayload, dependencies, (payload) => dependencies.credentialsReplace!(payload)),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsRemove, isValidCredentialRemovePayload, dependencies, (payload) => dependencies.credentialsRemove!(payload)),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.diagnosticsExport, isValidEmptyPayload, dependencies, (_payload, event) => dependencies.diagnosticsExport!(event)),
+    );
+  }
 
   let disposed = false;
   return () => {
@@ -185,6 +214,10 @@ export function isValidJobReferencePayload(value: unknown): value is JobReferenc
 export function isValidJobListPayload(value: unknown): value is JobListParams { return isJobListParams(value); }
 export function isValidJobEventsListPayload(value: unknown): value is JobEventsListParams { return isJobEventsListParams(value); }
 
+export function isValidCredentialSavePayload(value: unknown): value is CredentialSaveRequest { return isCredentialSaveRequest(value); }
+export function isValidCredentialReplacePayload(value: unknown): value is CredentialReplaceRequest { return isCredentialReplaceRequest(value); }
+export function isValidCredentialRemovePayload(value: unknown): value is CredentialRemoveRequest { return isCredentialRemoveRequest(value); }
+
 export function toDesktopAgentEvent(message: AgentWorkerMessage): DesktopAgentEvent | undefined {
   if (message.type === "run-event") {
     return Object.freeze({
@@ -224,6 +257,9 @@ function publicErrorCode(error: unknown): Parameters<typeof createDesktopPublicE
   }
   if (error && typeof error === "object" && "publicError" in error && isDesktopPublicError(error.publicError)) {
     return error.publicError.code;
+  }
+  if (error && typeof error === "object" && "code" in error && isDesktopPublicErrorCode(error.code)) {
+    return error.code;
   }
   if (error && typeof error === "object" && "operationError" in error) {
     const code = (error.operationError as { code?: unknown }).code;

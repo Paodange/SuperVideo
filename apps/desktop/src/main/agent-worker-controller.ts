@@ -101,6 +101,7 @@ type PendingProjectOperation = {
 type PendingJobOperation = {
   operationId: string;
   operation: AgentJobOperationType;
+  projectId: string;
   generation: number;
   timer: ReturnType<typeof globalThis.setTimeout>;
   resolve: (payload: Readonly<Record<string, unknown>>) => void;
@@ -229,6 +230,7 @@ export class AgentWorkerController {
     this.activeRun = { runId, sequence: 0 };
     this.runStatus = "running";
     this.setStatus("running");
+    this.log("agent-run-started", { runId });
     try {
       process.child.postMessage({
         protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
@@ -259,6 +261,7 @@ export class AgentWorkerController {
     }
     const operationId = `op-${this.now()}-${++this.runCounter}`;
     this.setStatus("running");
+    this.log("job-operation-started", { operation, operationId, projectId });
     return new Promise<Readonly<Record<string, unknown>>>((resolve, reject) => {
       const timer = this.setTimer(() => {
         const pending = this.pendingJobOperations.get(operationId);
@@ -267,7 +270,7 @@ export class AgentWorkerController {
         reject(new JobOperationControllerError({ code: "JOB_STATE_CONFLICT", message: "The job state changed concurrently." }));
         this.setStatus(this.shutdownRequested ? "stopped" : "ready");
       }, DEFAULT_PROJECT_OPERATION_TIMEOUT_MS);
-      this.pendingJobOperations.set(operationId, { operationId, operation, generation: process.generation, timer, resolve, reject });
+      this.pendingJobOperations.set(operationId, { operationId, operation, projectId, generation: process.generation, timer, resolve, reject });
       try {
         process.child.postMessage({
           protocolVersion: AGENT_WORKER_PROTOCOL_VERSION, type: operation, operationId,
@@ -296,6 +299,7 @@ export class AgentWorkerController {
     }
     const operationId = `op-${this.now()}-${++this.runCounter}`;
     this.setStatus("running");
+    this.log("project-operation-started", { operation, operationId, ...(projectId ? { projectId } : {}) });
     return new Promise<Readonly<Record<string, unknown>>>((resolve, reject) => {
       const timer = this.setTimer(() => {
         const pending = this.pendingProjectOperations.get(operationId);
@@ -343,6 +347,7 @@ export class AgentWorkerController {
     }
     try {
       process.child.postMessage({ protocolVersion: AGENT_WORKER_PROTOCOL_VERSION, type: "cancel-run", runId });
+      this.log("agent-run-event", { runId, status: "cancelling" });
     } catch {
       throw new AgentWorkerControllerError("internal-error");
     }
@@ -447,12 +452,17 @@ export class AgentWorkerController {
       this.handleReady(process, message);
       return;
     }
+    if (message.type === "diagnostic-event") {
+      this.onMessage?.(message);
+      return;
+    }
     if (message.type === "run-event") {
       if (!this.activeRun || this.activeRun.runId !== message.runId || message.sequence <= this.activeRun.sequence) {
         this.log("agent-worker-message-rejected", { generation: process.generation, reason: "stale-run-event" });
         return;
       }
       this.activeRun.sequence = message.sequence;
+      this.log("agent-run-event", { runId: message.runId, sequence: message.sequence });
       this.onMessage?.(message);
       return;
     }
@@ -462,6 +472,7 @@ export class AgentWorkerController {
         return;
       }
       this.activeRun.sequence = message.sequence;
+      this.log("agent-run-terminal", { runId: message.runId, sequence: message.sequence, status: message.status, ...(message.error ? { errorCode: message.error.code } : {}) });
       this.runStatus = message.status;
       this.activeRun = undefined;
       this.setStatus(this.shutdownRequested ? "stopped" : "ready");
@@ -483,6 +494,7 @@ export class AgentWorkerController {
       this.pendingProjectOperations.delete(message.operationId);
       this.clearTimer(pending.timer);
       this.setStatus(this.shutdownRequested ? "stopped" : "ready");
+      this.log("project-operation-finished", { operation: pending.operation, operationId: pending.operationId, status: message.type === "project-operation-error" ? "error" : "succeeded" });
       if (message.type === "project-operation-error") {
         pending.reject(new ProjectOperationControllerError(message.error));
       } else {
@@ -496,6 +508,7 @@ export class AgentWorkerController {
       const previous = this.jobEventSequences.get(key) ?? 0;
       if (message.event.sequence <= previous) return;
       this.jobEventSequences.set(key, message.event.sequence);
+      this.log("job-event", { projectId: message.projectId, jobId: message.jobId, sequence: message.event.sequence, status: message.event.status, eventType: message.event.eventType, progress: message.event.progress });
       this.onMessage?.(message);
       return;
     }
@@ -508,6 +521,7 @@ export class AgentWorkerController {
       this.pendingJobOperations.delete(message.operationId);
       this.clearTimer(pending.timer);
       this.setStatus(this.shutdownRequested ? "stopped" : "ready");
+      this.log("job-operation-finished", { operation: pending.operation, operationId: pending.operationId, projectId: pending.projectId, status: message.type === "job-operation-error" ? "error" : "succeeded" });
       if (message.type === "job-operation-error") pending.reject(new JobOperationControllerError(message.error));
       else pending.resolve(message.payload);
       return;

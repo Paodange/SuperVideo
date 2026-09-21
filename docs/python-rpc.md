@@ -157,3 +157,6 @@ protocol v1，因为只增加了向后兼容的方法/通知。公共契约发�
 A04/A07 不包含媒体分析、FFmpeg、Whisper、Remotion、真实模型/TTS、网络下载、
 正式 Pi tool 注册、真实媒体 executor、跨机器恢复、后台服务或打包 Python。原始 spike 保持独立，
 正式模块不依赖 spike 路径或其运行时文件。
+A08 的 stderr 诊断是独立的版本化 JSON 事件，每行有固定 schema 和 4 KiB
+上限；Worker 会再次校验、脱敏和限流后才交给 Main。Core 不把完整异常
+traceback、参数或 stderr 原文透传到 Renderer，stdout 的 JSON-RPC 契约不变。
