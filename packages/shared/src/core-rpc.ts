@@ -28,6 +28,7 @@ export const CORE_RPC_METHODS = {
   mediaProbe: "media.probe",
   mediaProxy: "media.proxy",
   mediaTranscribe: "media.transcribe",
+  mediaVad: "media.vad",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -50,6 +51,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaProbe
   | typeof CORE_RPC_METHODS.mediaProxy
   | typeof CORE_RPC_METHODS.mediaTranscribe
+  | typeof CORE_RPC_METHODS.mediaVad
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -127,6 +129,10 @@ export const CORE_RPC_ERROR_CODES = {
   transcriptionOutputInvalid: "TRANSCRIPTION_OUTPUT_INVALID",
   transcriptionTimeout: "TRANSCRIPTION_TIMEOUT",
   transcriptionCancelled: "TRANSCRIPTION_CANCELLED",
+  vadToolUnavailable: "VAD_TOOL_UNAVAILABLE",
+  vadOutputInvalid: "VAD_OUTPUT_INVALID",
+  vadTimeout: "VAD_TIMEOUT",
+  vadCancelled: "VAD_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -200,6 +206,10 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   TRANSCRIPTION_OUTPUT_INVALID: -32308,
   TRANSCRIPTION_TIMEOUT: -32309,
   TRANSCRIPTION_CANCELLED: -32310,
+  VAD_TOOL_UNAVAILABLE: -32311,
+  VAD_OUTPUT_INVALID: -32312,
+  VAD_TIMEOUT: -32313,
+  VAD_CANCELLED: -32314,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -271,6 +281,10 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   TRANSCRIPTION_OUTPUT_INVALID: "The local transcription output was invalid.",
   TRANSCRIPTION_TIMEOUT: "The local transcription timed out.",
   TRANSCRIPTION_CANCELLED: "The local transcription was cancelled.",
+  VAD_TOOL_UNAVAILABLE: "The local VAD backend is unavailable.",
+  VAD_OUTPUT_INVALID: "The local VAD output was invalid.",
+  VAD_TIMEOUT: "The local VAD timed out.",
+  VAD_CANCELLED: "The local VAD operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -332,6 +346,15 @@ export type AssetScanResult = Readonly<{ projectId: string; directory: string; i
 export type AssetListResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
 export type MediaParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number }>;
 export type TranscriptionParams = MediaParams;
+export type VadConfig = Readonly<{
+  thresholdDb: number;
+  minSpeechMs: number;
+  minSilenceMs: number;
+  preRollMs: number;
+  postRollMs: number;
+  mergeGapMs: number;
+}>;
+export type VadParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number; config?: Partial<VadConfig> }>;
 export type MediaStream = Readonly<{ index: number; codecType: "video" | "audio" | "data" | "subtitle" | "attachment" | "unknown"; codecName: string | null; width: number | null; height: number | null; frameRate: number | null; sampleRate: number | null; channels: number | null; channelLayout: string | null; language: string | null }>;
 export type MediaMetadata = Readonly<{ schemaVersion: 1; formatName: string | null; formatLongName: string | null; durationMs: number | null; bitRate: number | null; streams: readonly MediaStream[] }>;
 export type MediaProbeResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; metadata: MediaMetadata }>;
@@ -341,6 +364,8 @@ export type TranscriptionModelInfo = Readonly<{ adapterVersion: "faster-whisper-
 export type TranscriptionWord = Readonly<{ startMs: number; endMs: number; text: string; probability: number | null }>;
 export type TranscriptionSegment = Readonly<{ index: number; startMs: number; endMs: number; text: string; confidence: number | null; avgLogprob: number | null; noSpeechProbability: number | null; compressionRatio: number | null; words: readonly TranscriptionWord[] }>;
 export type TranscriptionResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; model: TranscriptionModelInfo; language: string | null; languageProbability: number | null; durationMs: number | null; segments: readonly TranscriptionSegment[] }>;
+export type SpeechInterval = Readonly<{ index: number; startMs: number; endMs: number; isSpeech: boolean; confidence: number | null; quality: "detected" | "silence" | "boundary-expanded" | "boundary-clipped" | "merged" }>;
+export type VadResult = Readonly<{ schemaVersion: 1; projectId: string; assetId: string; cacheStatus: "created" | "cache-hit"; cacheKey: string; adapterVersion: "ffmpeg-silencedetect-v1"; durationMs: number; config: VadConfig; intervals: readonly SpeechInterval[] }>;
 export type CoreProgress = Readonly<{
   requestId: CoreRpcId;
   sequence: number;
@@ -476,6 +501,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaProbe || value.method === CORE_RPC_METHODS.mediaProxy || value.method === CORE_RPC_METHODS.mediaTranscribe) {
     return isMediaParams(value.params);
   }
+  if (value.method === CORE_RPC_METHODS.mediaVad) return isVadParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -643,6 +669,28 @@ export function isTranscriptionResult(value: unknown): value is TranscriptionRes
     && isBoundedCoreJsonValue(value, 48 * 1024);
 }
 
+export function isVadResult(value: unknown): value is VadResult {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "projectId", "assetId", "cacheStatus", "cacheKey", "adapterVersion", "durationMs", "config", "intervals"])
+    && value.schemaVersion === 1 && isUuid(value.projectId) && isUuid(value.assetId)
+    && isMediaCacheStatus(value.cacheStatus) && isSafeString(value.cacheKey, 128)
+    && value.adapterVersion === "ffmpeg-silencedetect-v1"
+    && isSafeInteger(value.durationMs, 0, 86_400_000)
+    && isVadConfig(value.config)
+    && isVadIntervals(value.intervals, value.durationMs)
+    && isBoundedCoreJsonValue(value, 48 * 1024);
+}
+
+function isVadIntervals(value: unknown, durationMs: number): value is readonly SpeechInterval[] {
+  if (!Array.isArray(value) || value.length > 4_000) return false;
+  let cursor = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const interval = value[index];
+    if (!isSpeechInterval(interval) || interval.index !== index || interval.startMs !== cursor || interval.endMs > durationMs) return false;
+    cursor = interval.endMs;
+  }
+  return durationMs === 0 ? value.length === 0 : cursor === durationMs;
+}
+
 export function isCoreProgress(value: unknown): value is CoreProgress {
   if (!isPlainRecord(value) || !isCoreJsonValue(value) || !hasOnlyKeys(value, ["requestId", "sequence", "progress", "message"])) {
     return false;
@@ -782,6 +830,40 @@ function isMediaParams(value: unknown): value is MediaParams {
   return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs"])
     && isUuid(value.projectId) && isUuid(value.assetId)
     && (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000));
+}
+
+function isVadParams(value: unknown): value is VadParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"])) return false;
+  if (!isUuid(value.projectId) || !isUuid(value.assetId) || (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000))) return false;
+  if (value.config === undefined) return true;
+  if (!isPlainRecord(value.config)) return false;
+  return hasNoUnexpectedKeys(value.config, ["thresholdDb", "minSpeechMs", "minSilenceMs", "preRollMs", "postRollMs", "mergeGapMs"])
+    && (value.config.thresholdDb === undefined || isFiniteInRange(value.config.thresholdDb, -60, -5))
+    && (value.config.minSpeechMs === undefined || isSafeInteger(value.config.minSpeechMs, 20, 5_000))
+    && (value.config.minSilenceMs === undefined || isSafeInteger(value.config.minSilenceMs, 20, 5_000))
+    && (value.config.preRollMs === undefined || isSafeInteger(value.config.preRollMs, 0, 180))
+    && (value.config.postRollMs === undefined || isSafeInteger(value.config.postRollMs, 0, 250))
+    && (value.config.mergeGapMs === undefined || isSafeInteger(value.config.mergeGapMs, 0, 1_000));
+}
+
+function isVadConfig(value: unknown): value is VadConfig {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["thresholdDb", "minSpeechMs", "minSilenceMs", "preRollMs", "postRollMs", "mergeGapMs"])
+    && isFiniteInRange(value.thresholdDb, -60, -5)
+    && isSafeInteger(value.minSpeechMs, 20, 5_000)
+    && isSafeInteger(value.minSilenceMs, 20, 5_000)
+    && isSafeInteger(value.preRollMs, 0, 180)
+    && isSafeInteger(value.postRollMs, 0, 250)
+    && isSafeInteger(value.mergeGapMs, 0, 1_000);
+}
+
+function isSpeechInterval(value: unknown): value is SpeechInterval {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["index", "startMs", "endMs", "isSpeech", "confidence", "quality"])
+    && isSafeInteger(value.index, 0, 3_999)
+    && isSafeInteger(value.startMs, 0, 86_400_000)
+    && isSafeInteger(value.endMs, value.startMs + 1, 86_400_000)
+    && typeof value.isSpeech === "boolean"
+    && (value.confidence === null || isFiniteInRange(value.confidence, 0, 1))
+    && ["detected", "silence", "boundary-expanded", "boundary-clipped", "merged"].includes(value.quality as string);
 }
 
 function isTranscriptionModelInfo(value: unknown): value is TranscriptionModelInfo {

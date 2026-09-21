@@ -20,6 +20,7 @@ from supervideo_core.project.models import (
 from supervideo_core.jobs import JobManager, JobSmokeInput
 from supervideo_core.media import MediaProbeParams, MediaProxyParams
 from supervideo_core.media.transcription_models import TranscriptionParams
+from supervideo_core.media.vad_models import VadParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -142,6 +143,15 @@ async def media_transcribe_handler(
     return (await service.transcribe_media(params, cancelled)).model_dump(by_alias=True)
 
 
+async def media_vad_handler(
+    params: VadParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.detect_voice_activity(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -221,6 +231,10 @@ class RpcRegistry:
             "media.transcribe": (
                 TranscriptionParams,
                 lambda params, emit, cancelled: media_transcribe_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.vad": (
+                VadParams,
+                lambda params, emit, cancelled: media_vad_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

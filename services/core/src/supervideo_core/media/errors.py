@@ -17,6 +17,10 @@ MediaErrorCode = Literal[
     "TRANSCRIPTION_OUTPUT_INVALID",
     "TRANSCRIPTION_TIMEOUT",
     "TRANSCRIPTION_CANCELLED",
+    "VAD_TOOL_UNAVAILABLE",
+    "VAD_OUTPUT_INVALID",
+    "VAD_TIMEOUT",
+    "VAD_CANCELLED",
 ]
 
 
@@ -37,6 +41,10 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "TRANSCRIPTION_OUTPUT_INVALID": MediaErrorDefinition("The local transcription output was invalid."),
     "TRANSCRIPTION_TIMEOUT": MediaErrorDefinition("The local transcription timed out."),
     "TRANSCRIPTION_CANCELLED": MediaErrorDefinition("The local transcription was cancelled."),
+    "VAD_TOOL_UNAVAILABLE": MediaErrorDefinition("The local VAD backend is unavailable."),
+    "VAD_OUTPUT_INVALID": MediaErrorDefinition("The local VAD output was invalid."),
+    "VAD_TIMEOUT": MediaErrorDefinition("The local VAD timed out."),
+    "VAD_CANCELLED": MediaErrorDefinition("The local VAD operation was cancelled."),
 }
 
 
