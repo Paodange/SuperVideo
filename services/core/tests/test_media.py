@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -51,6 +52,16 @@ class MediaServiceTests(unittest.TestCase):
             self.assertEqual(proxy.cache_status, "created")
             self.assertEqual(len(proxy.outputs), 3)
             self.assertEqual((await self.service.proxy_media(MediaProxyParams(projectId=self.project_id, assetId=self.asset_id), asyncio.Event())).cache_status, "cache-hit")
+            probe_cache = self.project_root / "cache" / "media-cache-v1" / "probe" / f"{probe.cache_key}.json"
+            probe_cache.write_text('{"schemaVersion":999,"metadata":{}}', encoding="utf-8")
+            self.assertEqual((await self.service.probe_media(MediaProbeParams(projectId=self.project_id, assetId=self.asset_id), asyncio.Event())).cache_status, "created")
+            proxy_dir = self.project_root / proxy.outputs[0].relative_path
+            proxy_dir = proxy_dir.parent
+            (proxy_dir / "sentinel.txt").write_text("must survive publish", encoding="utf-8")
+            (proxy_dir / "manifest.json").write_text('{"schemaVersion":1,"cacheKey":"bad","outputs":[]}', encoding="utf-8")
+            rebuilt = await self.service.proxy_media(MediaProxyParams(projectId=self.project_id, assetId=self.asset_id), asyncio.Event())
+            self.assertEqual(rebuilt.cache_status, "created")
+            self.assertTrue((proxy_dir / "sentinel.txt").is_file())
 
         asyncio.run(scenario())
         self.assertEqual(self.asset_path.read_bytes(), original)
@@ -67,12 +78,20 @@ class MediaServiceTests(unittest.TestCase):
         async def scenario() -> None:
             service = MediaService()
             cancelled = asyncio.Event()
-            task = asyncio.create_task(service._run([shutil.which("python") or "python", "-c", "import time; time.sleep(30)"], 120_000, cancelled))
+            task = asyncio.create_task(service._run([sys.executable, "-c", "import time; time.sleep(30)"], 120_000, cancelled, overflow_code="MEDIA_OUTPUT_INVALID", stdout_limit=64))
             await asyncio.sleep(0.05)
             cancelled.set()
             with self.assertRaises(MediaError) as cancelled_error:
                 await task
             self.assertEqual(cancelled_error.exception.code, "MEDIA_CANCELLED")
+
+            with self.assertRaises(MediaError) as output_error:
+                await service._run([sys.executable, "-c", "import sys; sys.stdout.write('x' * 1024)"], 120_000, asyncio.Event(), overflow_code="MEDIA_OUTPUT_INVALID", stdout_limit=64)
+            self.assertEqual(output_error.exception.code, "MEDIA_OUTPUT_INVALID")
+
+            with self.assertRaises(MediaError) as stderr_error:
+                await service._run([sys.executable, "-c", "import sys; sys.stderr.write('x' * 70000)"], 120_000, asyncio.Event(), overflow_code="MEDIA_PROBE_PARSE_ERROR", stdout_limit=64)
+            self.assertEqual(stderr_error.exception.code, "MEDIA_PROBE_PARSE_ERROR")
 
         asyncio.run(scenario())
 

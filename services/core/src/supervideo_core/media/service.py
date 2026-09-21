@@ -17,11 +17,14 @@ from pydantic import ValidationError
 
 from supervideo_core.storage import AssetRepository
 
-from .errors import MediaError
+from .errors import MediaError, MediaErrorCode
 from .models import MediaMetadata, MediaOutput, MediaProbeParams, MediaProbeResult, MediaProxyParams, MediaProxyResult, MediaStream
 
 MEDIA_CACHE_VERSION = "media-cache-v1"
 MEDIA_SCHEMA_VERSION = 1
+MEDIA_MAX_PROBE_STDOUT_BYTES = 512 * 1024
+MEDIA_MAX_TOOL_STDERR_BYTES = 64 * 1024
+MEDIA_MAX_FFMPEG_STDOUT_BYTES = 64 * 1024
 PROBE_PARAMETERS = {"ffprobe": ["-v", "error", "-print_format", "json", "-show_format", "-show_streams"]}
 PROXY_PARAMETERS = {
     "audio": ["-vn", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart"],
@@ -40,48 +43,42 @@ class MediaService:
         signature, fingerprint = self._asset_signature(asset_path)
         key = self._cache_key(asset_path, signature, fingerprint, PROBE_PARAMETERS)
         target = project_root / "cache" / MEDIA_CACHE_VERSION / "probe" / f"{key}.json"
-        cached = self._read_json_cache(target)
+        cached = self._read_probe_cache(target)
         if cached is not None:
-            return MediaProbeResult.model_validate({**cached, "projectId": request.project_id, "assetId": request.asset_id, "cacheStatus": "cache-hit", "cacheKey": key})
+            return MediaProbeResult(schemaVersion=MEDIA_SCHEMA_VERSION, projectId=request.project_id, assetId=request.asset_id, cacheStatus="cache-hit", cacheKey=key, metadata=cached)
         if self.ffprobe_path is None:
             raise MediaError("MEDIA_TOOL_UNAVAILABLE")
         args = [self.ffprobe_path, *PROBE_PARAMETERS["ffprobe"], str(asset_path)]
-        raw = await self._run(args, request.timeout_ms, cancelled)
+        raw = await self._run(args, request.timeout_ms, cancelled, overflow_code="MEDIA_PROBE_PARSE_ERROR", stdout_limit=MEDIA_MAX_PROBE_STDOUT_BYTES)
         metadata = self._parse_probe(raw)
         self._ensure_unchanged(asset_path, signature, fingerprint)
-        payload = {"schemaVersion": MEDIA_SCHEMA_VERSION, "metadata": metadata.model_dump(by_alias=True)}
-        self._atomic_json_write(target, payload)
-        return MediaProbeResult.model_validate({**payload, "projectId": request.project_id, "assetId": request.asset_id, "cacheStatus": "created", "cacheKey": key})
+        self._atomic_json_write(target, {"schemaVersion": MEDIA_SCHEMA_VERSION, "metadata": metadata.model_dump(by_alias=True)})
+        return MediaProbeResult(schemaVersion=MEDIA_SCHEMA_VERSION, projectId=request.project_id, assetId=request.asset_id, cacheStatus="created", cacheKey=key, metadata=metadata)
 
     async def proxy(self, request: MediaProxyParams, cancelled: asyncio.Event) -> MediaProxyResult:
         project_root, asset_path, _asset = self._asset(request.project_id, request.asset_id)
         signature, fingerprint = self._asset_signature(asset_path)
         key = self._cache_key(asset_path, signature, fingerprint, PROXY_PARAMETERS)
         output_dir = project_root / "cache" / MEDIA_CACHE_VERSION / "proxy" / key
-        manifest = output_dir / "manifest.json"
-        cached = self._read_json_cache(manifest)
-        if cached is not None and self._cached_outputs_are_valid(project_root, cached):
-            return MediaProxyResult.model_validate({**cached, "projectId": request.project_id, "assetId": request.asset_id, "cacheStatus": "cache-hit", "cacheKey": key})
+        cached = self._read_proxy_cache(project_root, output_dir, key)
+        if cached is not None:
+            return MediaProxyResult(schemaVersion=MEDIA_SCHEMA_VERSION, projectId=request.project_id, assetId=request.asset_id, cacheStatus="cache-hit", cacheKey=key, outputs=cached)
         if self.ffmpeg_path is None:
             raise MediaError("MEDIA_TOOL_UNAVAILABLE")
-        output_dir.parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_output_directory(output_dir)
         temp_dir = Path(tempfile.mkdtemp(prefix=f".{key[:16]}-", dir=str(output_dir.parent)))
         try:
             targets = {"audio": temp_dir / "audio.m4a", "video": temp_dir / "video.mp4", "thumbnail": temp_dir / "thumbnail.jpg"}
             for kind, target in targets.items():
                 args = [self.ffmpeg_path, "-y", "-hide_banner", "-loglevel", "error", "-i", str(asset_path), *PROXY_PARAMETERS[kind], str(target)]
-                await self._run(args, request.timeout_ms, cancelled)
+                await self._run(args, request.timeout_ms, cancelled, overflow_code="MEDIA_OUTPUT_INVALID", stdout_limit=MEDIA_MAX_FFMPEG_STDOUT_BYTES)
                 self._ensure_output(target)
                 self._ensure_unchanged(asset_path, signature, fingerprint)
-            outputs = [MediaOutput(kind=kind, relativePath=str((Path("cache") / MEDIA_CACHE_VERSION / "proxy" / key / target.name)).replace("\\", "/"), sizeBytes=target.stat().st_size) for kind, target in targets.items()]
-            payload = {"schemaVersion": MEDIA_SCHEMA_VERSION, "outputs": [item.model_dump(by_alias=True) for item in outputs]}
-            if output_dir.exists():
-                shutil.rmtree(output_dir)
-            output_dir.mkdir(parents=True, exist_ok=False)
+            outputs = [MediaOutput(kind=kind, relativePath=self._relative_output_path(key, target.name), sizeBytes=target.stat().st_size) for kind, target in targets.items()]
             for target in targets.values():
                 os.replace(target, output_dir / target.name)
-            self._atomic_json_write(output_dir / "manifest.json", payload)
-            return MediaProxyResult.model_validate({**payload, "projectId": request.project_id, "assetId": request.asset_id, "cacheStatus": "created", "cacheKey": key})
+            self._atomic_json_write(output_dir / "manifest.json", self._proxy_manifest(key, outputs))
+            return MediaProxyResult(schemaVersion=MEDIA_SCHEMA_VERSION, projectId=request.project_id, assetId=request.asset_id, cacheStatus="created", cacheKey=key, outputs=outputs)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -89,7 +86,7 @@ class MediaService:
         self._project_root = project_root
         self._database = database
 
-    def _asset(self, project_id: str, asset_id: str) -> tuple[Path, Path, Any]:  # type: ignore[no-redef]
+    def _asset(self, project_id: str, asset_id: str) -> tuple[Path, Path, Any]:
         from supervideo_core.project.errors import ProjectError
         from supervideo_core.project.paths import canonical_asset_path
 
@@ -162,6 +159,16 @@ class MediaService:
             return None
         return value if isinstance(value, dict) else None
 
+    @classmethod
+    def _read_probe_cache(cls, path: Path) -> MediaMetadata | None:
+        value = cls._read_json_cache(path)
+        if value is None or set(value) != {"schemaVersion", "metadata"} or value.get("schemaVersion") != MEDIA_SCHEMA_VERSION:
+            return None
+        try:
+            return MediaMetadata.model_validate(value["metadata"])
+        except (TypeError, ValueError, ValidationError):
+            return None
+
     @staticmethod
     def _atomic_json_write(path: Path, value: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -187,52 +194,115 @@ class MediaService:
             raise MediaError("MEDIA_OUTPUT_INVALID", cause=error) from error
 
     @staticmethod
-    def _cached_outputs_are_valid(project_root: Path, value: dict[str, Any]) -> bool:
-        try:
-            outputs = value["outputs"]
-            if not isinstance(outputs, list) or len(outputs) != 3:
-                return False
-            for item in outputs:
-                relative = str(item["relativePath"])
-                path = (project_root / relative).resolve()
-                if not relative.startswith(f"cache/{MEDIA_CACHE_VERSION}/proxy/") or os.path.commonpath([str(project_root.resolve()), str(path)]) != str(project_root.resolve()):
-                    return False
-                if not stat.S_ISREG(path.stat().st_mode) or path.stat().st_size != int(item["sizeBytes"]):
-                    return False
-            return True
-        except (KeyError, TypeError, ValueError, OSError):
-            return False
+    def _relative_output_path(key: str, filename: str) -> str:
+        return str(Path("cache") / MEDIA_CACHE_VERSION / "proxy" / key / filename).replace("\\", "/")
 
-    async def _run(self, args: list[str], timeout_ms: int, cancelled: asyncio.Event) -> bytes:
+    @classmethod
+    def _proxy_manifest(cls, key: str, outputs: list[MediaOutput]) -> dict[str, Any]:
+        return {"schemaVersion": MEDIA_SCHEMA_VERSION, "cacheKey": key, "outputs": [item.model_dump(by_alias=True) for item in outputs]}
+
+    @staticmethod
+    def _ensure_output_directory(output_dir: Path) -> None:
+        try:
+            if output_dir.exists():
+                if output_dir.is_symlink() or not output_dir.is_dir():
+                    raise MediaError("MEDIA_OUTPUT_INVALID")
+                return
+            output_dir.mkdir(parents=True, exist_ok=False)
+        except MediaError:
+            raise
+        except (FileExistsError, OSError) as error:
+            raise MediaError("MEDIA_OUTPUT_INVALID", cause=error) from error
+
+    @classmethod
+    def _read_proxy_cache(cls, project_root: Path, output_dir: Path, key: str) -> list[MediaOutput] | None:
+        if not output_dir.exists() or output_dir.is_symlink() or not output_dir.is_dir():
+            return None
+        value = cls._read_json_cache(output_dir / "manifest.json")
+        if value is None or set(value) != {"schemaVersion", "cacheKey", "outputs"} or value.get("schemaVersion") != MEDIA_SCHEMA_VERSION or value.get("cacheKey") != key or not isinstance(value.get("outputs"), list):
+            return None
+        try:
+            outputs = [MediaOutput.model_validate(item) for item in value["outputs"]]
+        except (TypeError, ValueError, ValidationError):
+            return None
+        if len(outputs) != 3 or {item.kind for item in outputs} != {"audio", "video", "thumbnail"}:
+            return None
+        expected_names = {"audio": "audio.m4a", "video": "video.mp4", "thumbnail": "thumbnail.jpg"}
+        root = project_root.resolve()
+        for item in outputs:
+            if item.relative_path != cls._relative_output_path(key, expected_names[item.kind]):
+                return None
+            path = (root / item.relative_path).resolve()
+            try:
+                if os.path.commonpath([str(root), str(path)]) != str(root) or not stat.S_ISREG(path.stat().st_mode) or path.stat().st_size != item.size_bytes:
+                    return None
+            except (OSError, ValueError):
+                return None
+        return outputs
+
+    @staticmethod
+    async def _read_bounded(stream: asyncio.StreamReader, limit: int, overflow: asyncio.Event) -> bytes:
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = await stream.read(min(8_192, limit + 1 - total))
+            if not chunk:
+                return b"".join(chunks)
+            total += len(chunk)
+            if total > limit:
+                overflow.set()
+                return b""
+            chunks.append(chunk)
+
+    @staticmethod
+    async def _kill_and_wait(process: asyncio.subprocess.Process) -> None:
+        if process.returncode is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+        await process.wait()
+
+    @classmethod
+    async def _run(cls, args: list[str], timeout_ms: int, cancelled: asyncio.Event, *, overflow_code: MediaErrorCode, stdout_limit: int) -> bytes:
         try:
             process = await asyncio.create_subprocess_exec(*args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         except (FileNotFoundError, PermissionError, OSError) as error:
             raise MediaError("MEDIA_TOOL_UNAVAILABLE", cause=error) from error
-        communicate = asyncio.create_task(process.communicate())
+        assert process.stdout is not None and process.stderr is not None
+        overflow = asyncio.Event()
+        stdout_task = asyncio.create_task(cls._read_bounded(process.stdout, stdout_limit, overflow))
+        stderr_task = asyncio.create_task(cls._read_bounded(process.stderr, MEDIA_MAX_TOOL_STDERR_BYTES, overflow))
+        process_task = asyncio.create_task(process.wait())
         cancel_wait = asyncio.create_task(cancelled.wait())
+        overflow_wait = asyncio.create_task(overflow.wait())
         try:
-            done, _ = await asyncio.wait({communicate, cancel_wait}, timeout=timeout_ms / 1_000, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait({process_task, cancel_wait, overflow_wait}, timeout=timeout_ms / 1_000, return_when=asyncio.FIRST_COMPLETED)
+            if overflow_wait in done or overflow.is_set():
+                await cls._kill_and_wait(process)
+                raise MediaError(overflow_code)
             if cancel_wait in done and cancelled.is_set():
-                process.kill()
-                await process.wait()
+                await cls._kill_and_wait(process)
                 raise MediaError("MEDIA_CANCELLED")
-            if communicate not in done:
-                process.kill()
-                await process.wait()
+            if process_task not in done:
+                await cls._kill_and_wait(process)
                 raise MediaError("MEDIA_TOOL_TIMEOUT")
-            stdout, _stderr = communicate.result()
+            stdout, _stderr = await asyncio.gather(stdout_task, stderr_task)
+            if overflow.is_set():
+                raise MediaError(overflow_code)
             if process.returncode != 0:
                 raise MediaError("MEDIA_NOT_MEDIA")
             return stdout
         except asyncio.CancelledError:
-            if process.returncode is None:
-                process.kill()
-                await process.wait()
+            await cls._kill_and_wait(process)
             raise
         finally:
             cancel_wait.cancel()
-            if not communicate.done():
-                communicate.cancel()
+            overflow_wait.cancel()
+            for task in (stdout_task, stderr_task, process_task, cancel_wait, overflow_wait):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(stdout_task, stderr_task, process_task, cancel_wait, overflow_wait, return_exceptions=True)
 
     @staticmethod
     def _parse_probe(raw: bytes) -> MediaMetadata:

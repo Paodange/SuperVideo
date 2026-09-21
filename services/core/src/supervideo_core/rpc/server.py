@@ -163,7 +163,7 @@ class RpcServer:
         except MediaError as error:
             if not self.closing:
                 self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
-                await self.send_error(request.id, "REQUEST_CANCELLED" if error.code == "MEDIA_CANCELLED" else error.code)
+                await self.send_error(request.id, error.code)
         except ProjectError as error:
             if not self.closing:
                 self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")

@@ -32,6 +32,7 @@ regenerated. This is a filesystem cache and does not change the SQLite schema
 or the immutable migrations.
 
 `core.cancel` cancels an active `media.probe` or `media.proxy` request and the
-Core kills its corresponding child process. Reissuing the fixed operation is
-safe and acts as recovery because incomplete temporary output is not treated
-as a cache hit.
+Core kills its corresponding child process. The stable `MEDIA_CANCELLED` code
+is preserved through Core RPC and the Worker operation boundary. Reissuing the
+fixed operation is safe and acts as recovery because incomplete temporary
+output is not treated as a cache hit.

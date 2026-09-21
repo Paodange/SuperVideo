@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+from io import BytesIO
 import os
 import queue
 import shutil
@@ -14,8 +16,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from supervideo_core.media.errors import MediaError
+from supervideo_core.rpc.server import RpcServer
 from supervideo_core.rpc.models import (
     HealthParams,
+    RpcRequest,
     SmokeCountdownParams,
     is_valid_rpc_message,
     validate_rpc_message,
@@ -259,6 +264,24 @@ class RpcServerTests(unittest.TestCase):
             self.assertEqual(asset_path.read_bytes(), original)
         finally:
             shutil.rmtree(temp_root, ignore_errors=True)
+
+    def test_media_cancel_preserves_stable_media_error_code(self) -> None:
+        async def scenario() -> dict[str, Any]:
+            output = BytesIO()
+            server = RpcServer(stdin=BytesIO(), stdout=output)
+            request = RpcRequest.model_validate({"jsonrpc": "2.0", "id": "media-cancel", "method": "media.probe", "params": {"projectId": "11111111-1111-4111-8111-111111111111", "assetId": "22222222-2222-4222-8222-222222222222"}})
+
+            async def cancelled_invoke(*_args: Any, **_kwargs: Any) -> dict[str, object]:
+                raise MediaError("MEDIA_CANCELLED")
+
+            server.registry.invoke = cancelled_invoke  # type: ignore[method-assign]
+            server.active_request_id = request.id
+            server.active_cancel = asyncio.Event()
+            await server.execute_active(request)
+            return json.loads(output.getvalue().decode("utf-8"))
+
+        message = asyncio.run(scenario())
+        self.assertEqual(message["error"]["data"]["errorCode"], "MEDIA_CANCELLED")
 
     def test_persistent_job_returns_fast_and_streams_durable_events(self) -> None:
         import shutil
