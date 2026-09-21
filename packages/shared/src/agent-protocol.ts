@@ -13,7 +13,7 @@ import type {
   SentenceQaParams,
   SentenceQaSaveParams,
 } from "./core-rpc";
-import { isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -854,7 +854,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
       && (value.config.postRollMs === undefined || isSafeInteger(value.config.postRollMs, 0, 250));
   }
   if (type === "media-sentence-qa-context" || type === "media-sentence-qa-save") {
-    if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"]) || !isUuid(value.projectId) || !isUuid(value.assetId) || !isSafeString(value.sentenceCacheKey, 64) || !isSafeInteger(value.sentenceIndex, 0, 1_999)) return false;
+    if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"]) || !isUuid(value.projectId) || !isUuid(value.assetId) || !isSentenceCacheKey(value.sentenceCacheKey) || !isSafeInteger(value.sentenceIndex, 0, 1_999)) return false;
     if (value.contextBefore !== undefined && !isSafeInteger(value.contextBefore, 0, 3)) return false;
     if (value.contextAfter !== undefined && !isSafeInteger(value.contextAfter, 0, 3)) return false;
     if (type === "media-sentence-qa-context") return value.markers === undefined;
@@ -1003,12 +1003,14 @@ function hasNoUnexpectedKeys(value: Record<string, unknown>, keys: readonly stri
 
 function isSentenceQaMarkerInput(value: unknown): boolean {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["sentenceIndex", "issueType", "status", "source", "note", "expectedText"])) return false;
-  return isSafeInteger(value.sentenceIndex, 0, 1_999)
+  const validFields = isSafeInteger(value.sentenceIndex, 0, 1_999)
     && ["missing-text", "half-sentence", "low-confidence", "boundary-uncertain", "other"].includes(value.issueType as string)
     && (value.status === undefined || value.status === "open" || value.status === "resolved")
     && (value.source === undefined || value.source === "manual" || value.source === "automatic")
-    && (value.note === undefined || isSafeString(value.note, 256))
-    && (value.expectedText === undefined || value.expectedText === null || isSafeString(value.expectedText, 2_048));
+    && (value.note === undefined || isBoundedText(value.note, 256))
+    && (value.expectedText === undefined || value.expectedText === null || isBoundedText(value.expectedText, 2_048));
+  if (!validFields) return false;
+  return value.issueType !== "missing-text" || value.status === "resolved" || (value.expectedText !== undefined && value.expectedText !== null) || (typeof value.note === "string" && value.note.length > 0);
 }
 
 function isSafeInteger(value: unknown, minimum: number, maximum: number): value is number {

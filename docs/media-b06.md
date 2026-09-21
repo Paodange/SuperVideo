@@ -9,7 +9,7 @@ index/context window.
 
 - `media.sentences.qa.context` returns at most three sentences before and after
   the selected sentence, the B05 quality reasons, saved QA markers, and a
-  stable `supervideo://asset/{assetId}?startMs={start}&endMs={end}` playback
+  stable `supervideo://asset/{assetId}?kind={audio|video}&startMs={start}&endMs={end}` playback
   address. The address is an asset/time reference, never an arbitrary path.
 - `media.sentences.qa.save` replaces the bounded marker set for one B05 cache
   key. Marker types are `missing-text`, `half-sentence`, `low-confidence`,

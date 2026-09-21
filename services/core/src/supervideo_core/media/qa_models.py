@@ -103,6 +103,7 @@ class SentenceQaSaveParams(SentenceQaParams):
 class SentencePlaybackAddress(SentenceModel):
     scheme: Literal["supervideo"] = "supervideo"
     asset_id: str = Field(alias="assetId")
+    kind: Literal["audio", "video"]
     start_ms: int = Field(alias="startMs", strict=True, ge=0, le=86_400_000)
     end_ms: int = Field(alias="endMs", strict=True, ge=0, le=86_400_000)
     uri: str = Field(min_length=1, max_length=256)

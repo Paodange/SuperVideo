@@ -146,6 +146,8 @@ dd {
 .qa-sentence p { margin: 0; color: #f5f8ff; line-height: 1.5; }
 .qa-sentence code, .qa-markers code { overflow-wrap: anywhere; color: #8bf1cf; font-family: "Cascadia Code", Consolas, monospace; font-size: 11px; }
 .qa-sentence .secondary { justify-self: start; padding: 7px 9px; font-size: 11px; }
+.qa-player { display: grid; gap: 8px; margin-top: 18px; padding: 12px; border: 1px solid rgba(56, 214, 165, 0.35); border-radius: 12px; background: rgba(7, 13, 29, 0.42); }
+.qa-player audio, .qa-player video { width: 100%; max-height: 280px; }
 .qa-markers { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(167, 190, 238, 0.1); }
 .qa-markers .actions { flex-wrap: wrap; margin-top: 10px; }
 .credential-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

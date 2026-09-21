@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from supervideo_core.media.qa import SentenceQaService
-from supervideo_core.media.qa_models import SentenceQaParams, SentenceQaSaveParams
+from supervideo_core.media.qa_models import SENTENCE_QA_MAX_RESULT_BYTES, SentenceQaParams, SentenceQaSaveParams
 from supervideo_core.media.sentence_models import SentenceParams
 from supervideo_core.project import AssetReferenceRequest, ProjectCreateRequest, ProjectService
 
@@ -54,7 +54,7 @@ class SentenceQaTests(unittest.TestCase):
         context = self.project.inspect_sentence_qa(SentenceQaParams(projectId=self.project_id, assetId=self.asset_id, sentenceCacheKey=sentence_result.cache_key, sentenceIndex=1, contextBefore=1, contextAfter=1))
         self.assertEqual(context.qa_version, "sentence-qa-v1")
         self.assertEqual([item.relation for item in context.items], ["before", "selected", "after"])
-        self.assertTrue(context.items[1].playback.uri.startswith(f"supervideo://asset/{self.asset_id}?startMs="))
+        self.assertTrue(context.items[1].playback.uri.startswith(f"supervideo://asset/{self.asset_id}?kind=video&startMs="))
         self.assertNotIn(str(self.asset_path), context.items[1].playback.uri)
 
     def test_markers_are_bounded_atomic_and_reloaded(self) -> None:
@@ -82,6 +82,31 @@ class SentenceQaTests(unittest.TestCase):
         with self.assertRaises(Exception) as error:
             self.project.inspect_sentence_qa(SentenceQaParams(projectId=self.project_id, assetId=self.asset_id, sentenceCacheKey=sentence_result.cache_key, sentenceIndex=2))
         self.assertEqual(getattr(error.exception, "code", None), "SENTENCE_QA_STORAGE_INVALID")
+
+    def test_marker_storage_rejects_oversized_and_over_count_manifests(self) -> None:
+        sentence_result = asyncio.run(self.project.split_sentences(SentenceParams(projectId=self.project_id, assetId=self.asset_id), asyncio.Event()))
+        request = SentenceQaParams(projectId=self.project_id, assetId=self.asset_id, sentenceCacheKey=sentence_result.cache_key, sentenceIndex=0)
+        self.project.save_sentence_qa(SentenceQaSaveParams(**request.model_dump(by_alias=True), markers=[]))
+        marker_path = self.temp_root / "project" / "data" / "qa" / "sentence-qa-v1" / self.asset_id / f"{sentence_result.cache_key}.json"
+        marker_path.write_bytes(b"x" * (SENTENCE_QA_MAX_RESULT_BYTES + 1))
+        with self.assertRaises(Exception) as oversized:
+            self.project.inspect_sentence_qa(request)
+        self.assertEqual(getattr(oversized.exception, "code", None), "SENTENCE_QA_STORAGE_INVALID")
+
+        markers = [{"sentenceIndex": 0, "issueType": "half-sentence"}] * 501
+        digest_value = {
+            "schemaVersion": 1,
+            "qaVersion": "sentence-qa-v1",
+            "projectId": self.project_id,
+            "assetId": self.asset_id,
+            "sentenceCacheKey": sentence_result.cache_key,
+            "revision": 1,
+            "markers": markers,
+        }
+        marker_path.write_text(json.dumps({**digest_value, "resultDigest": SentenceQaService._digest(digest_value)}), encoding="utf-8")
+        with self.assertRaises(Exception) as over_count:
+            self.project.inspect_sentence_qa(request)
+        self.assertEqual(getattr(over_count.exception, "code", None), "SENTENCE_QA_STORAGE_INVALID")
 
     def test_unknown_cache_and_out_of_range_markers_are_rejected(self) -> None:
         with self.assertRaises(Exception) as missing:

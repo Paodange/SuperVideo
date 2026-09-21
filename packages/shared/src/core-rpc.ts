@@ -409,7 +409,7 @@ export type SentenceResult = Readonly<{ schemaVersion: 1; projectId: string; ass
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
-export type SentencePlaybackAddress = Readonly<{ scheme: "supervideo"; assetId: string; startMs: number; endMs: number; uri: string }>;
+export type SentencePlaybackAddress = Readonly<{ scheme: "supervideo"; assetId: string; kind: "audio" | "video"; startMs: number; endMs: number; uri: string }>;
 export type SentenceQaContextItem = Readonly<{ relation: "before" | "selected" | "after"; sentence: SentenceCandidate; playback: SentencePlaybackAddress }>;
 export type SentenceQaContextResult = Readonly<{ schemaVersion: 1; qaVersion: "sentence-qa-v1"; projectId: string; assetId: string; sentenceCacheKey: string; selectedIndex: number; items: readonly SentenceQaContextItem[]; markers: readonly SentenceQaMarker[] }>;
 export type SentenceQaSaveParams = SentenceQaParams & Readonly<{ markers?: readonly SentenceQaMarkerInput[] }>;
@@ -746,7 +746,7 @@ export function isSentenceResult(value: unknown): value is SentenceResult {
 export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
   return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "selectedIndex", "items", "markers"])
     && value.schemaVersion === 1 && value.qaVersion === "sentence-qa-v1" && isUuid(value.projectId) && isUuid(value.assetId)
-    && isSafeString(value.sentenceCacheKey, 64) && isSafeInteger(value.selectedIndex, 0, 1_999)
+    && isSentenceCacheKey(value.sentenceCacheKey) && isSafeInteger(value.selectedIndex, 0, 1_999)
     && Array.isArray(value.items) && value.items.length <= 7 && value.items.every((item) => isSentenceQaContextItem(item, value.assetId as string))
     && Array.isArray(value.markers) && value.markers.length <= 500 && value.markers.every(isSentenceQaMarker)
     && isBoundedCoreJsonValue(value, 64 * 1024);
@@ -755,7 +755,7 @@ export function isSentenceQaContextResult(value: unknown): value is SentenceQaCo
 export function isSentenceQaSaveResult(value: unknown): value is SentenceQaSaveResult {
   return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "revision", "markers"])
     && value.schemaVersion === 1 && value.qaVersion === "sentence-qa-v1" && isUuid(value.projectId) && isUuid(value.assetId)
-    && isSafeString(value.sentenceCacheKey, 64) && isSafeInteger(value.revision, 1, 2_000_000_000)
+    && isSentenceCacheKey(value.sentenceCacheKey) && isSafeInteger(value.revision, 1, 2_000_000_000)
     && Array.isArray(value.markers) && value.markers.length <= 500 && value.markers.every(isSentenceQaMarker)
     && isBoundedCoreJsonValue(value, 64 * 1024);
 }
@@ -940,7 +940,7 @@ function isSentenceParams(value: unknown): value is SentenceParams {
 
 export function isSentenceQaParams(value: unknown): value is SentenceQaParams {
   return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter"])
-    && isUuid(value.projectId) && isUuid(value.assetId) && isSafeString(value.sentenceCacheKey, 64)
+    && isUuid(value.projectId) && isUuid(value.assetId) && isSentenceCacheKey(value.sentenceCacheKey)
     && isSafeInteger(value.sentenceIndex, 0, 1_999)
     && (value.contextBefore === undefined || isSafeInteger(value.contextBefore, 0, 3))
     && (value.contextAfter === undefined || isSafeInteger(value.contextAfter, 0, 3));
@@ -956,13 +956,23 @@ export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveP
 }
 
 function isSentenceQaMarkerInput(value: unknown): value is SentenceQaMarkerInput {
-  return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["sentenceIndex", "issueType", "status", "source", "note", "expectedText"])
-    && isSafeInteger(value.sentenceIndex, 0, 1_999)
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["sentenceIndex", "issueType", "status", "source", "note", "expectedText"])) return false;
+  const validFields = isSafeInteger(value.sentenceIndex, 0, 1_999)
     && ["missing-text", "half-sentence", "low-confidence", "boundary-uncertain", "other"].includes(value.issueType as string)
     && (value.status === undefined || value.status === "open" || value.status === "resolved")
     && (value.source === undefined || value.source === "manual" || value.source === "automatic")
-    && (value.note === undefined || isSafeString(value.note, 256))
-    && (value.expectedText === undefined || value.expectedText === null || isSafeString(value.expectedText, 2_048));
+    && (value.note === undefined || isBoundedText(value.note, 256))
+    && (value.expectedText === undefined || value.expectedText === null || isBoundedText(value.expectedText, 2_048));
+  if (!validFields) return false;
+  return value.issueType !== "missing-text" || value.status === "resolved" || (value.expectedText !== undefined && value.expectedText !== null) || (typeof value.note === "string" && value.note.length > 0);
+}
+
+export function isSentenceCacheKey(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+export function isBoundedText(value: unknown, maximumLength: number): value is string {
+  return typeof value === "string" && value.length <= maximumLength && !/[\u0000-\u001f]/.test(value);
 }
 
 function isSentenceQaMarker(value: unknown): value is SentenceQaMarker {
@@ -978,11 +988,12 @@ function isSentenceQaContextItem(value: unknown, assetId: string): value is Sent
   return isPlainRecord(value) && hasOnlyKeys(value, ["relation", "sentence", "playback"])
     && (value.relation === "before" || value.relation === "selected" || value.relation === "after")
     && isPlainRecord(value.sentence) && isSentenceCandidate(value.sentence, value.sentence.index as number, assetId, 86_400_000)
-    && isPlainRecord(value.playback) && hasOnlyKeys(value.playback, ["scheme", "assetId", "startMs", "endMs", "uri"])
+    && isPlainRecord(value.playback) && hasOnlyKeys(value.playback, ["scheme", "assetId", "kind", "startMs", "endMs", "uri"])
     && value.playback.scheme === "supervideo" && value.playback.assetId === assetId
+    && (value.playback.kind === "audio" || value.playback.kind === "video")
     && isSafeInteger(value.playback.startMs, 0, 86_400_000) && isSafeInteger(value.playback.endMs, 1, 86_400_000)
     && value.playback.endMs > value.playback.startMs
-    && value.playback.uri === `supervideo://asset/${assetId}?startMs=${value.playback.startMs}&endMs=${value.playback.endMs}`;
+    && value.playback.uri === `supervideo://asset/${assetId}?kind=${value.playback.kind}&startMs=${value.playback.startMs}&endMs=${value.playback.endMs}`;
 }
 
 function isVadConfig(value: unknown): value is VadConfig {

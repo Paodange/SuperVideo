@@ -17,6 +17,8 @@ from supervideo_core.storage import AssetRepository
 
 from .errors import MediaError
 from .qa_models import (
+    SENTENCE_QA_MAX_MARKERS,
+    SENTENCE_QA_MAX_RESULT_BYTES,
     SENTENCE_QA_SCHEMA_VERSION,
     SENTENCE_QA_VERSION,
     SentencePlaybackAddress,
@@ -44,7 +46,7 @@ class SentenceQaService:
         self._database = database
 
     def inspect(self, request: SentenceQaParams) -> SentenceQaContextResult:
-        project_root, _asset_path, _asset_record = self._asset(request.project_id, request.asset_id)
+        project_root, _asset_path, asset_record = self._asset(request.project_id, request.asset_id)
         result = self._read_sentence_result(project_root, request)
         if request.sentence_index >= len(result.sentences):
             raise MediaError("SENTENCE_QA_INDEX_INVALID")
@@ -58,7 +60,7 @@ class SentenceQaService:
             items.append(SentenceQaContextItem(
                 relation=relation,
                 sentence=candidate,
-                playback=self._playback(request.asset_id, candidate.start_ms, candidate.end_ms),
+                playback=self._playback(request.asset_id, asset_record.kind, candidate.start_ms, candidate.end_ms),
             ))
         try:
             return validate_sentence_qa_size(SentenceQaContextResult(
@@ -151,9 +153,16 @@ class SentenceQaService:
         if not target.exists():
             return []
         try:
-            value = json.loads(target.read_text(encoding="utf-8"))
+            if target.stat().st_size > SENTENCE_QA_MAX_RESULT_BYTES:
+                raise ValueError("QA manifest is too large")
+            raw = target.read_bytes()
+            if len(raw) > SENTENCE_QA_MAX_RESULT_BYTES:
+                raise ValueError("QA manifest is too large")
+            value = json.loads(raw.decode("utf-8"))
             if not isinstance(value, dict) or set(value) != {"schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "revision", "markers", "resultDigest"}:
                 raise ValueError("invalid QA manifest")
+            if not isinstance(value["markers"], list) or len(value["markers"]) > SENTENCE_QA_MAX_MARKERS:
+                raise ValueError("invalid QA marker count")
             digest_value = {key: value[key] for key in ("schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "revision", "markers")}
             if value["resultDigest"] != self._digest(digest_value):
                 raise ValueError("invalid QA digest")
@@ -182,8 +191,9 @@ class SentenceQaService:
         return json.dumps({"sentenceIndex": item.sentence_index, "issueType": item.issue_type, "source": item.source, "note": item.note, "expectedText": item.expected_text}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     @staticmethod
-    def _playback(asset_id: str, start_ms: int, end_ms: int) -> SentencePlaybackAddress:
-        return SentencePlaybackAddress(assetId=asset_id, startMs=start_ms, endMs=end_ms, uri=f"supervideo://asset/{asset_id}?startMs={start_ms}&endMs={end_ms}")
+    def _playback(asset_id: str, asset_kind: str, start_ms: int, end_ms: int) -> SentencePlaybackAddress:
+        kind = "audio" if asset_kind == "audio" else "video"
+        return SentencePlaybackAddress(assetId=asset_id, kind=kind, startMs=start_ms, endMs=end_ms, uri=f"supervideo://asset/{asset_id}?kind={kind}&startMs={start_ms}&endMs={end_ms}")
 
     @staticmethod
     def _digest(value: Any) -> str:
