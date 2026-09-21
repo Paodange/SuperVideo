@@ -114,6 +114,13 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "RERANK_OUTPUT_INVALID": RpcErrorDefinition(-32343, "The sentence reranking output was invalid."),
     "RERANK_TIMEOUT": RpcErrorDefinition(-32344, "The sentence reranking operation timed out."),
     "RERANK_CANCELLED": RpcErrorDefinition(-32345, "The sentence reranking operation was cancelled."),
+    "SLOT_INPUT_INVALID": RpcErrorDefinition(-32346, "The information-slot input is invalid or exceeds its bounds."),
+    "SLOT_SOURCE_INVALID": RpcErrorDefinition(-32347, "The B08/B09 source is invalid for slot alignment."),
+    "SLOT_SOURCE_STALE": RpcErrorDefinition(-32348, "The B08/B09 source is stale for slot alignment."),
+    "SLOT_RETRIEVAL_INVALID": RpcErrorDefinition(-32349, "The B08/B09 retrieval result is invalid for slot alignment."),
+    "SLOT_OUTPUT_INVALID": RpcErrorDefinition(-32350, "The information-slot alignment output was invalid."),
+    "SLOT_TIMEOUT": RpcErrorDefinition(-32351, "The information-slot alignment operation timed out."),
+    "SLOT_CANCELLED": RpcErrorDefinition(-32352, "The information-slot alignment operation was cancelled."),
 }
 
 

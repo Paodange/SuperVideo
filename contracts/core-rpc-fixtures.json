@@ -626,5 +626,53 @@
       "result": {},
       "unexpected": true
     }
+  },
+  {
+    "name": "valid-slot-alignment-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-slot-align-1",
+      "method": "media.script.align",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "inputKind": "outline",
+        "inputText": "1. 岗位介绍\n2. 月薪 8000 元",
+        "candidateLimit": 5,
+        "useRerank": true,
+        "timeoutMs": 120000
+      }
+    }
+  },
+  {
+    "name": "invalid-slot-alignment-path-field",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-slot-align-2",
+      "method": "media.script.align",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "inputKind": "outline",
+        "inputText": "岗位介绍",
+        "candidateLimit": 5,
+        "path": "C:\\secret\\source.mp4"
+      }
+    }
+  },
+  {
+    "name": "invalid-slot-alignment-candidate-limit",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-slot-align-3",
+      "method": "media.script.align",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "inputKind": "outline",
+        "inputText": "岗位介绍",
+        "candidateLimit": 9
+      }
+    }
   }
 ]
