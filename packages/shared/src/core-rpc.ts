@@ -1308,20 +1308,45 @@ function isInformationSlot(value: unknown, order: number): value is InformationS
   if (value.slotId !== `slot-${order}` || value.order !== order || !["hook", "context", "claim", "evidence", "benefit", "requirement", "process", "cta", "closing", "other"].includes(value.kind as string)) return false;
   if (!isBoundedText(value.sourceText, 512) || !isBoundedText(value.query, 512)) return false;
   if (!Array.isArray(value.keyFacts) || value.keyFacts.length > 8 || !value.keyFacts.every((item) => isBoundedText(item, 64))) return false;
-  if (!Array.isArray(value.candidates) || value.candidates.length > 8 || !value.candidates.every((candidate, index) => isSlotAlignmentCandidate(candidate, index + 1))) return false;
+  if (!Array.isArray(value.candidates) || value.candidates.length > 8 || !value.candidates.every((candidate, index) => isSlotAlignmentCandidate(candidate, index + 1, value.keyFacts as readonly string[]))) return false;
   if (value.status === "matched") {
     return value.candidates.length > 0 && value.selectedCandidateRank === 1 && isBoundedText(value.selectionReason, 128) && value.gapReason === null;
   }
   return value.status === "gap" && value.candidates.length === 0 && value.selectedCandidateRank === null && value.selectionReason === null && isBoundedText(value.gapReason, 128);
 }
 
-function isSlotAlignmentCandidate(value: unknown, rank: number): value is SlotAlignmentCandidate {
+function isSlotAlignmentCandidate(value: unknown, rank: number, keyFacts: readonly string[]): value is SlotAlignmentCandidate {
   if (!isPlainRecord(value) || !hasOnlyKeys(value, ["rank", "origin", "sentenceId", "sourceAssetId", "sourceSentenceCacheKey", "sentenceIndex", "timecode", "text", "score", "quality", "previewUri", "selectionReason", "preservedFacts"])) return false;
   if (value.rank !== rank || (value.origin !== "b08-retrieval" && value.origin !== "b09-quality-rerank") || !isSentenceCacheKey(value.sentenceId) || !isUuid(value.sourceAssetId) || !isSentenceCacheKey(value.sourceSentenceCacheKey)) return false;
   if (!isSafeInteger(value.sentenceIndex, 0, 1_999) || !isBoundedText(value.text, 2_048) || !isFiniteInRange(value.score, 0, 1) || value.quality !== "complete") return false;
   if (!isPlainRecord(value.timecode) || !hasOnlyKeys(value.timecode, ["startMs", "endMs"]) || !isSafeInteger(value.timecode.startMs, 0, 86_400_000) || !isSafeInteger(value.timecode.endMs, 1, 86_400_000) || value.timecode.endMs <= value.timecode.startMs) return false;
   if (value.previewUri !== `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`) return false;
-  return isBoundedText(value.selectionReason, 128) && Array.isArray(value.preservedFacts) && value.preservedFacts.length <= 8 && value.preservedFacts.every((item) => isBoundedText(item, 64));
+  return isBoundedText(value.selectionReason, 128)
+    && Array.isArray(value.preservedFacts)
+    && value.preservedFacts.length <= 8
+    && value.preservedFacts.every((item) => isBoundedText(item, 64) && keyFacts.includes(item) && extractSlotFacts(value.text as string).includes(item));
+}
+
+function extractSlotFacts(text: string): string[] {
+  const source = text.replace(/^\s*\d{1,3}[.)、]\s*/gm, "");
+  const patterns = [
+    /\d{4}年\d{1,2}月\d{1,2}日/g,
+    /\d{1,2}月\d{1,2}日/g,
+    /\d+(?:\.\d+)?\s*(?:(?:万|千)?元|万|千|岁|人|天|月|年|分钟|秒|小时|%|％)/g,
+    /\b[A-Z][A-Za-z0-9_-]{1,31}\b/g,
+    /(?<![A-Za-z0-9])\d+(?:\.\d+)?(?![A-Za-z0-9])/g,
+  ];
+  const matches: Array<{ position: number; value: string }> = [];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      if (match.index !== undefined) matches.push({ position: match.index, value: match[0] });
+    }
+  }
+  const values: string[] = [];
+  for (const item of matches.sort((left, right) => left.position - right.position || (left.value < right.value ? -1 : left.value > right.value ? 1 : 0))) {
+    if (item.value && !values.includes(item.value)) values.push(item.value);
+  }
+  return values.filter((item) => !values.some((other) => item !== other && other.includes(item))).slice(0, 8);
 }
 
 function isSpeechInterval(value: unknown): value is SpeechInterval {

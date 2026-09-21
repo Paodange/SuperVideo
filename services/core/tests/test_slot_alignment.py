@@ -155,11 +155,16 @@ class SlotAlignmentTests(unittest.TestCase):
         self.assertEqual([slot.gap_reason for slot in result.slots], ["no-retrieval-candidates", "no-retrieval-candidates"])
 
     def test_fact_mismatch_is_a_gap_and_never_rewritten(self) -> None:
-        self.retrieval.candidates = [retrieval_candidate("工资 7000 元")]
         self.retrieval.preserve_text = True
-        result = asyncio.run(self.service.align(SlotAlignmentParams(projectId=PROJECT_ID, inputText="工资 8000 元。", useRerank=False), asyncio.Event()))
-        self.assertEqual(result.slots[0].status, "gap")
-        self.assertEqual(result.slots[0].gap_reason, "key-facts-not-preserved")
+        for source_text, input_text in (
+            ("工资 17000 元", "工资 7000 元。"),
+            ("月薪 18 千元", "月薪 8 千元。"),
+            ("欢迎使用 SuperVideoPro", "欢迎使用 SuperVideo。"),
+        ):
+            self.retrieval.candidates = [retrieval_candidate(source_text)]
+            result = asyncio.run(self.service.align(SlotAlignmentParams(projectId=PROJECT_ID, inputText=input_text, useRerank=False), asyncio.Event()))
+            self.assertEqual(result.slots[0].status, "gap", source_text)
+            self.assertEqual(result.slots[0].gap_reason, "key-facts-not-preserved", source_text)
 
     def test_cross_project_source_is_rejected(self) -> None:
         self.retrieval._resolve_assets = lambda _request: {OTHER_ASSET_ID: (Path("C:/other/reference.mp4"), object())}  # type: ignore[method-assign]

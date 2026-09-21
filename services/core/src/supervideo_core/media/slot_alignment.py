@@ -229,7 +229,8 @@ class InformationSlotAlignmentService:
         for candidate in source_candidates:
             if candidate.quality != "complete":
                 continue
-            preserved = [fact for fact in key_facts if fact in candidate.text]
+            candidate_facts = set(extract_key_facts(candidate.text))
+            preserved = [fact for fact in key_facts if fact in candidate_facts]
             if len(preserved) != len(key_facts):
                 saw_fact_mismatch = True
                 continue
