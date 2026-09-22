@@ -32,6 +32,9 @@ from supervideo_core.storage import (
     migration_checksum,
 )
 from supervideo_core.storage import migrations as migrations_module
+from supervideo_core.timeline.version_errors import TimelineVersionError
+from supervideo_core.timeline.version_models import TimelineVersionListParams, TimelineVersionReferenceParams
+from supervideo_core.timeline.version_service import TimelineVersionService
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -153,6 +156,82 @@ class MigrationTests(StorageTestCase):
             self.assertIsNone(legacy.checkpoint_json)
         finally:
             database.close()
+
+    def test_v2_timeline_rows_backfill_c10_metadata_and_reject_dirty_ids(self) -> None:
+        project_id = "99999999-9999-4999-8999-999999999999"
+        root_version_id = "11111111-1111-4111-8111-111111111111"
+        child_version_id = "22222222-2222-4222-8222-222222222222"
+        fixture = json.loads((ROOT / "tests" / "fixtures" / "c01_timeline_ir_v1.json").read_text(encoding="utf-8"))
+
+        legacy_path = self.temp_root / "legacy-timeline" / "data" / "project.db"
+        legacy_path.parent.mkdir(parents=True)
+        database = Database.open(legacy_path)
+        try:
+            MigrationRunner(database, discover_migrations()[:2]).migrate()
+            with database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO projects(id, name, project_root, target_platform, config_json, created_at_ms, updated_at_ms, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (project_id, "legacy timeline", str(legacy_path.parent.parent), "douyin", "{}", 1, 1, 0),
+                )
+                connection.execute(
+                    "INSERT INTO timeline_versions(id, project_id, version_number, parent_version_id, schema_version, timeline_json, edit_intent_json, diff_summary_json, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (root_version_id, project_id, 1, None, 1, json.dumps(fixture), "{}", "{}", 1),
+                )
+                child_fixture = {**fixture, "id": "project-c01-child"}
+                connection.execute(
+                    "INSERT INTO timeline_versions(id, project_id, version_number, parent_version_id, schema_version, timeline_json, edit_intent_json, diff_summary_json, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (child_version_id, project_id, 2, root_version_id, 1, json.dumps(child_fixture), "{}", "{}", 2),
+                )
+
+            self.assertEqual(database.migrate().current_version, 3)
+            rows = database.connection.execute(
+                "SELECT id, timeline_id, source_type_v3, source_version_id FROM timeline_versions WHERE project_id = ? ORDER BY version_number",
+                (project_id,),
+            ).fetchall()
+            self.assertEqual(rows, [
+                (root_version_id, "project-c01-demo", "root", None),
+                (child_version_id, "project-c01-child", "edit", root_version_id),
+            ])
+
+            service = TimelineVersionService()
+            listed = service.list(
+                TimelineVersionListParams(schemaVersion=1, versioningVersion="timeline-version-v1", projectId=project_id, limit=10),
+                database,
+            )
+            self.assertEqual([item.timeline_id for item in listed.items], ["project-c01-demo", "project-c01-child"])
+            fetched = service.get(
+                TimelineVersionReferenceParams(schemaVersion=1, versioningVersion="timeline-version-v1", projectId=project_id, versionId=child_version_id),
+                database,
+            )
+            self.assertEqual(fetched.version_record.timeline_id, "project-c01-child")
+            self.assertEqual(fetched.model_dump(by_alias=True)["version"]["parentVersionId"], root_version_id)
+        finally:
+            database.close()
+
+        dirty_path = self.temp_root / "dirty-timeline" / "data" / "project.db"
+        dirty_path.parent.mkdir(parents=True)
+        dirty = Database.open(dirty_path)
+        try:
+            MigrationRunner(dirty, discover_migrations()[:2]).migrate()
+            with dirty.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO projects(id, name, project_root, target_platform, config_json, created_at_ms, updated_at_ms, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (project_id, "dirty timeline", str(dirty_path.parent.parent), "douyin", "{}", 1, 1, 0),
+                )
+                connection.execute(
+                    "INSERT INTO timeline_versions(id, project_id, version_number, parent_version_id, schema_version, timeline_json, edit_intent_json, diff_summary_json, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (root_version_id, project_id, 1, None, 1, json.dumps({"schemaVersion": 1, "durationMs": 1}), "{}", "{}", 1),
+                )
+            dirty.migrate()
+            self.assertEqual(dirty.connection.execute("SELECT timeline_id FROM timeline_versions WHERE id = ?", (root_version_id,)).fetchone()[0], "")
+            with self.assertRaises(TimelineVersionError) as error:
+                TimelineVersionService().list(
+                    TimelineVersionListParams(schemaVersion=1, versioningVersion="timeline-version-v1", projectId=project_id, limit=10),
+                    dirty,
+                )
+            self.assertEqual(error.exception.code, "TIMELINE_VERSION_INVALID")
+        finally:
+            dirty.close()
 
     def test_database_schema_too_new_is_rejected(self) -> None:
         self.database.close()

@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from supervideo_core.media.edit_models import EditIntent, TimelineEditResult
-from supervideo_core.timeline.models import TimelineProject
+from supervideo_core.timeline.models import ID_PATTERN, TimelineProject
 
 C10_VERSION_SCHEMA_VERSION = 1
 C10_VERSION = "timeline-version-v1"
@@ -34,6 +34,12 @@ def _uuid(value: str) -> str:
 
 def _optional_uuid(value: str | None) -> str | None:
     return None if value is None else _uuid(value)
+
+
+def _timeline_identifier(value: str) -> str:
+    if ID_PATTERN.fullmatch(value) is None:
+        raise ValueError("invalid timeline identifier")
+    return value
 
 
 def _timeline_size(value: TimelineProject) -> TimelineProject:
@@ -153,6 +159,7 @@ class TimelineVersionSnapshot(VersionModel):
 
     _project = field_validator("project_id")(_uuid)
     _version = field_validator("version_id")(_uuid)
+    _timeline_id = field_validator("timeline_id")(_timeline_identifier)
     _parent = field_validator("parent_version_id")(_optional_uuid)
     _timeline = field_validator("timeline")(_timeline_size)
 

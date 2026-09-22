@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from supervideo_core.media.edit_models import TimelineEditParams
 from supervideo_core.media.edit_service import TimelineEditService
 from supervideo_core.storage import StorageError, TimelineVersionCreate, TimelineVersionRecord, TimelineVersionRepository, utc_now_ms
+from supervideo_core.timeline.models import ID_PATTERN
 
 from .version_errors import TimelineVersionError
 from .version_models import (
@@ -246,14 +247,20 @@ class TimelineVersionService:
 
     @staticmethod
     def _snapshot(record: TimelineVersionRecord, is_active: bool) -> TimelineVersionSnapshot:
-        return TimelineVersionSnapshot(
-            schemaVersion=1, versioningVersion="timeline-version-v1", projectId=record.project_id,
-            versionId=record.id, timelineId=record.timeline_id or str(record.timeline_json.get("id", "")),
-            versionNumber=record.version_number, parentVersionId=record.parent_version_id,
-            sourceType=record.source_type, createdAtMs=record.created_at_ms, isActive=is_active,
-            editIntent=record.edit_intent_json, diffSummary=record.diff_summary_json,
-            timeline=record.timeline_json,
-        )
+        timeline_id = record.timeline_id or record.timeline_json.get("id")
+        if not isinstance(timeline_id, str) or ID_PATTERN.fullmatch(timeline_id) is None:
+            raise TimelineVersionError("TIMELINE_VERSION_INVALID")
+        try:
+            return TimelineVersionSnapshot(
+                schemaVersion=1, versioningVersion="timeline-version-v1", projectId=record.project_id,
+                versionId=record.id, timelineId=timeline_id,
+                versionNumber=record.version_number, parentVersionId=record.parent_version_id,
+                sourceType=record.source_type, createdAtMs=record.created_at_ms, isActive=is_active,
+                editIntent=record.edit_intent_json, diffSummary=record.diff_summary_json,
+                timeline=record.timeline_json,
+            )
+        except ValidationError as error:
+            raise TimelineVersionError("TIMELINE_VERSION_INVALID") from error
 
 
 def _diff_timelines(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:

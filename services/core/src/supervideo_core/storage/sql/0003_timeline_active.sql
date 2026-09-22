@@ -1,3 +1,5 @@
+DROP TRIGGER timeline_versions_immutable_update;
+
 ALTER TABLE timeline_versions ADD COLUMN source_type_v3 TEXT NOT NULL DEFAULT 'root' CHECK(source_type_v3 IN ('root', 'edit'));
 ALTER TABLE timeline_versions ADD COLUMN timeline_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE timeline_versions ADD COLUMN source_version_id TEXT;
@@ -7,6 +9,25 @@ ALTER TABLE timeline_versions ADD COLUMN idempotency_key TEXT;
 UPDATE timeline_versions SET source_type_v3 = CASE
     WHEN parent_version_id IS NULL THEN 'root'
     ELSE 'edit'
+END;
+
+UPDATE timeline_versions
+SET source_version_id = parent_version_id
+WHERE source_version_id IS NULL
+  AND parent_version_id IS NOT NULL;
+
+UPDATE timeline_versions
+SET timeline_id = json_extract(timeline_json, '$.id')
+WHERE timeline_id = ''
+  AND json_type(timeline_json, '$.id') = 'text'
+  AND length(json_extract(timeline_json, '$.id')) BETWEEN 1 AND 128
+  AND substr(json_extract(timeline_json, '$.id'), 1, 1) GLOB '[A-Za-z0-9]'
+  AND json_extract(timeline_json, '$.id') NOT GLOB '*[^-A-Za-z0-9._:]*';
+
+CREATE TRIGGER timeline_versions_immutable_update
+BEFORE UPDATE ON timeline_versions
+BEGIN
+    SELECT RAISE(ABORT, 'timeline versions are immutable');
 END;
 
 CREATE TABLE timeline_active (
