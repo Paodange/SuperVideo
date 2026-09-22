@@ -153,6 +153,14 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "SUBTITLE_OUTPUT_INVALID": RpcErrorDefinition(-32382, "The generated subtitle plan was invalid."),
     "SUBTITLE_TIMEOUT": RpcErrorDefinition(-32383, "The subtitle planning operation timed out."),
     "SUBTITLE_CANCELLED": RpcErrorDefinition(-32384, "The subtitle planning operation was cancelled."),
+    "PREVIEW_RENDER_INPUT_INVALID": RpcErrorDefinition(-32385, "The preview render input is invalid or exceeds its bounds."),
+    "PREVIEW_RENDER_SOURCE_INVALID": RpcErrorDefinition(-32386, "The preview source is invalid, stale, or outside the preview boundary."),
+    "PREVIEW_RENDER_SUBTITLE_INVALID": RpcErrorDefinition(-32387, "The subtitle plan cannot be bound to the preview timeline."),
+    "PREVIEW_RENDER_OUTPUT_INVALID": RpcErrorDefinition(-32388, "The generated preview output was invalid."),
+    "PREVIEW_RENDER_TOOL_UNAVAILABLE": RpcErrorDefinition(-32389, "The configured preview media tool is unavailable."),
+    "PREVIEW_RENDER_TOOL_TIMEOUT": RpcErrorDefinition(-32390, "The preview media tool timed out."),
+    "PREVIEW_RENDER_TIMEOUT": RpcErrorDefinition(-32391, "The preview render operation timed out."),
+    "PREVIEW_RENDER_CANCELLED": RpcErrorDefinition(-32392, "The preview render operation was cancelled."),
 }
 
 

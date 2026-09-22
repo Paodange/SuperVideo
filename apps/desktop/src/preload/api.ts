@@ -38,6 +38,8 @@ import {
   isArollCutJoinResult,
   isSubtitlePlanParams,
   isSubtitlePlanResult,
+  isPreviewRenderParams,
+  isPreviewRenderResult,
   type AgentRunHandle,
   type AgentWorkerStatusSnapshot,
   type DesktopAgentEvent,
@@ -86,6 +88,8 @@ import {
   type ArollCutJoinResult,
   type SubtitlePlanParams,
   type SubtitlePlanResult,
+  type PreviewRenderParams,
+  type PreviewRenderResult,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -108,6 +112,7 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.optimizeDuration
     | typeof DESKTOP_IPC_CHANNELS.cutJoinAroll
     | typeof DESKTOP_IPC_CHANNELS.planSubtitles
+    | typeof DESKTOP_IPC_CHANNELS.renderPreview
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.listJobs
@@ -222,6 +227,10 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
     planSubtitles: (input: SubtitlePlanParams) => {
       if (!isSubtitlePlanParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.planSubtitles, input, invoke, isSubtitlePlanResult);
+    },
+    renderPreview: (input: PreviewRenderParams) => {
+      if (!isPreviewRenderParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.renderPreview, input, invoke, isPreviewRenderResult);
     },
     startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),

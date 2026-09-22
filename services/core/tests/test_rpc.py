@@ -82,6 +82,7 @@ class RpcModelTests(unittest.TestCase):
         self.assertIn("plan.optimize_duration", health_result()["capabilities"])
         self.assertIn("media.aroll.cut_join", health_result()["capabilities"])
         self.assertIn("media.subtitle.plan", health_result()["capabilities"])
+        self.assertIn("media.preview.render", health_result()["capabilities"])
         expected_codes = {
             "SLOT_INPUT_INVALID": -32346,
             "SLOT_SOURCE_INVALID": -32347,
@@ -153,6 +154,19 @@ class RpcModelTests(unittest.TestCase):
             },
         }
         self.assertEqual(validate_request(request).method, "media.subtitle.plan")
+
+    def test_c06_preview_request_is_registered_and_does_not_accept_commands(self) -> None:
+        request = {
+            "jsonrpc": "2.0",
+            "id": "preview-render-1",
+            "method": "media.preview.render",
+            "params": {"projectId": "99999999-9999-4999-8999-999999999999", "arollPlan": {}, "subtitlePlan": {}},
+        }
+        with self.assertRaises(ValidationError):
+            validate_request(request)
+        request["params"]["command"] = "ffmpeg"
+        with self.assertRaises(ValidationError):
+            validate_request(request)
         invalid = {**request, "params": {**request["params"], "command": "render"}}
         with self.assertRaises(ValidationError):
             validate_request(invalid)

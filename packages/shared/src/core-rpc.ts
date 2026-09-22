@@ -42,6 +42,7 @@ export const CORE_RPC_METHODS = {
   planOptimizeDuration: "plan.optimize_duration",
   mediaArollCutJoin: "media.aroll.cut_join",
   mediaSubtitlePlan: "media.subtitle.plan",
+  mediaPreviewRender: "media.preview.render",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -76,6 +77,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.planOptimizeDuration
   | typeof CORE_RPC_METHODS.mediaArollCutJoin
   | typeof CORE_RPC_METHODS.mediaSubtitlePlan
+  | typeof CORE_RPC_METHODS.mediaPreviewRender
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -227,6 +229,14 @@ export const CORE_RPC_ERROR_CODES = {
   subtitleOutputInvalid: "SUBTITLE_OUTPUT_INVALID",
   subtitleTimeout: "SUBTITLE_TIMEOUT",
   subtitleCancelled: "SUBTITLE_CANCELLED",
+  previewRenderInputInvalid: "PREVIEW_RENDER_INPUT_INVALID",
+  previewRenderSourceInvalid: "PREVIEW_RENDER_SOURCE_INVALID",
+  previewRenderSubtitleInvalid: "PREVIEW_RENDER_SUBTITLE_INVALID",
+  previewRenderOutputInvalid: "PREVIEW_RENDER_OUTPUT_INVALID",
+  previewRenderToolUnavailable: "PREVIEW_RENDER_TOOL_UNAVAILABLE",
+  previewRenderToolTimeout: "PREVIEW_RENDER_TOOL_TIMEOUT",
+  previewRenderTimeout: "PREVIEW_RENDER_TIMEOUT",
+  previewRenderCancelled: "PREVIEW_RENDER_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -374,6 +384,14 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   SUBTITLE_OUTPUT_INVALID: -32382,
   SUBTITLE_TIMEOUT: -32383,
   SUBTITLE_CANCELLED: -32384,
+  PREVIEW_RENDER_INPUT_INVALID: -32385,
+  PREVIEW_RENDER_SOURCE_INVALID: -32386,
+  PREVIEW_RENDER_SUBTITLE_INVALID: -32387,
+  PREVIEW_RENDER_OUTPUT_INVALID: -32388,
+  PREVIEW_RENDER_TOOL_UNAVAILABLE: -32389,
+  PREVIEW_RENDER_TOOL_TIMEOUT: -32390,
+  PREVIEW_RENDER_TIMEOUT: -32391,
+  PREVIEW_RENDER_CANCELLED: -32392,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -519,6 +537,14 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   SUBTITLE_OUTPUT_INVALID: "The generated subtitle plan was invalid.",
   SUBTITLE_TIMEOUT: "The subtitle planning operation timed out.",
   SUBTITLE_CANCELLED: "The subtitle planning operation was cancelled.",
+  PREVIEW_RENDER_INPUT_INVALID: "The preview render input is invalid or exceeds its bounds.",
+  PREVIEW_RENDER_SOURCE_INVALID: "The preview source is invalid, stale, or outside the preview boundary.",
+  PREVIEW_RENDER_SUBTITLE_INVALID: "The subtitle plan cannot be bound to the preview timeline.",
+  PREVIEW_RENDER_OUTPUT_INVALID: "The generated preview output was invalid.",
+  PREVIEW_RENDER_TOOL_UNAVAILABLE: "The configured preview media tool is unavailable.",
+  PREVIEW_RENDER_TOOL_TIMEOUT: "The preview media tool timed out.",
+  PREVIEW_RENDER_TIMEOUT: "The preview render operation timed out.",
+  PREVIEW_RENDER_CANCELLED: "The preview render operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -648,6 +674,13 @@ export type SubtitlePlanParams = Readonly<{ projectId: string; timeline: Timelin
 export type SubtitlePlanGap = Readonly<{ code: "missing-sentence-source" | "missing-subtitle-text"; clipId: string; sentenceId: string | null; detail: string }>;
 export type SubtitleCue = Readonly<{ order: number; cueId: string; clipId: string; sentenceId: string | null; sourceId: string | null; sourceInMs: number | null; sourceOutMs: number | null; provenanceIds: readonly string[]; text: string; language: string | null; timelineStartMs: number; durationMs: number; timelineEndMs: number }>;
 export type SubtitlePlanResult = Readonly<{ schemaVersion: 1; planVersion: "subtitle-plan-v1"; projectId: string; timelineId: string; status: "ready" | "gaps"; selectionPolicy: "timeline-subtitles-or-sentence-clips-v1"; layoutPolicy: "bounded-display-width-v1"; maxLines: number; maxLineWidth: number; totalDurationMs: number; cueCount: number; planDigest: string; cues: readonly SubtitleCue[]; gaps: readonly SubtitlePlanGap[] }>;
+export type PreviewRenderParams = Readonly<{ projectId: string; arollPlan: ArollCutJoinResult; subtitlePlan: SubtitlePlanResult; executionMode?: "plan" | "ffmpeg"; timeoutMs?: number }>;
+export type PreviewSourceBinding = Readonly<{ sourceId: string; uri: string; fingerprint: string | null; segmentCount: number }>;
+export type PreviewRenderCue = Readonly<{ order: number; cueId: string; clipId: string; sentenceId: string | null; sourceId: string | null; provenanceIds: readonly string[]; text: string; timelineStartMs: number; durationMs: number; outputStartMs: number; outputEndMs: number }>;
+export type PreviewRenderGap = Readonly<{ code: "subtitle-plan-gap" | "subtitle-cue-unmapped" | "subtitle-cue-range-invalid"; clipId: string | null; cueId: string | null; detail: string }>;
+export type PreviewRenderOutput = Readonly<{ kind: "video"; relativePath: string; playbackUri: string; sizeBytes: number; durationMs: number; outputFingerprint: string }>;
+export type PreviewRenderLog = Readonly<{ status: "not-run" | "cache-hit" | "completed"; stdout: string; stderr: string }>;
+export type PreviewRenderResult = Readonly<{ schemaVersion: 1; planVersion: "preview-render-plan-v1"; projectId: string; timelineId: string; arollPlanDigest: string; subtitlePlanDigest: string; executionMode: "plan" | "ffmpeg"; executionStatus: "not-run" | "completed"; status: "ready" | "gaps"; renderPolicy: "ffmpeg-low-bitrate-subtitle-overlay-v1"; selectedDurationMs: number; timelineDurationMs: number; cueCount: number; planDigest: string; sourceBindings: readonly PreviewSourceBinding[]; cues: readonly PreviewRenderCue[]; gaps: readonly PreviewRenderGap[]; log: PreviewRenderLog; output: PreviewRenderOutput | null }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -803,6 +836,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.planOptimizeDuration) return isDurationOptimizationParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaArollCutJoin) return isArollCutJoinParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSubtitlePlan) return isSubtitlePlanParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaPreviewRender) return isPreviewRenderParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -1116,6 +1150,22 @@ export function isSubtitlePlanResult(value: unknown): value is SubtitlePlanResul
   return isBoundedCoreJsonValue(value, 256 * 1024);
 }
 
+export function isPreviewRenderResult(value: unknown): value is PreviewRenderResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "planVersion", "projectId", "timelineId", "arollPlanDigest", "subtitlePlanDigest", "executionMode", "executionStatus", "status", "renderPolicy", "selectedDurationMs", "timelineDurationMs", "cueCount", "planDigest", "sourceBindings", "cues", "gaps", "log", "output"])) return false;
+  if (value.schemaVersion !== 1 || value.planVersion !== "preview-render-plan-v1" || !isUuid(value.projectId) || !isTimelineId(value.timelineId)) return false;
+  if (!isSentenceCacheKey(value.arollPlanDigest) || !isSentenceCacheKey(value.subtitlePlanDigest) || !isSentenceCacheKey(value.planDigest)) return false;
+  if ((value.executionMode !== "plan" && value.executionMode !== "ffmpeg") || (value.executionStatus !== "not-run" && value.executionStatus !== "completed") || (value.status !== "ready" && value.status !== "gaps")) return false;
+  if (value.renderPolicy !== "ffmpeg-low-bitrate-subtitle-overlay-v1" || !isSafeInteger(value.selectedDurationMs, 1, 86_400_000) || value.timelineDurationMs !== value.selectedDurationMs) return false;
+  if (!Array.isArray(value.sourceBindings) || value.sourceBindings.length > 64 || !value.sourceBindings.every(isPreviewSourceBinding)) return false;
+  if (!Array.isArray(value.cues) || value.cues.length > 2_048 || value.cueCount !== value.cues.length || !value.cues.every((cue, index) => isPreviewRenderCue(cue, index + 1, value.selectedDurationMs as number))) return false;
+  if (!Array.isArray(value.gaps) || value.gaps.length > 2_048 || !value.gaps.every(isPreviewRenderGap)) return false;
+  if (!isPreviewRenderLog(value.log)) return false;
+  if (value.status !== (value.gaps.length > 0 ? "gaps" : "ready")) return false;
+  if (value.executionMode === "plan" && (value.executionStatus !== "not-run" || value.output !== null || (value.log as PreviewRenderLog).status !== "not-run")) return false;
+  if (value.executionMode === "ffmpeg" && (value.executionStatus !== "completed" || !isPreviewRenderOutput(value.output) || !["cache-hit", "completed"].includes((value.log as PreviewRenderLog).status))) return false;
+  return isBoundedCoreJsonValue(value, 256 * 1024);
+}
+
 export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
   return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "selectedIndex", "items", "markers"])
     && value.schemaVersion === 1 && value.qaVersion === "sentence-qa-v1" && isUuid(value.projectId) && isUuid(value.assetId)
@@ -1418,6 +1468,16 @@ export function isSubtitlePlanParams(value: unknown): value is SubtitlePlanParam
   return isBoundedCoreJsonValue(value, 512 * 1024);
 }
 
+export function isPreviewRenderParams(value: unknown): value is PreviewRenderParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "arollPlan", "subtitlePlan", "executionMode", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isArollCutJoinResult(value.arollPlan) || !isSubtitlePlanResult(value.subtitlePlan)) return false;
+  if ((value.arollPlan as ArollCutJoinResult).projectId !== value.projectId || (value.subtitlePlan as SubtitlePlanResult).projectId !== value.projectId) return false;
+  if ((value.arollPlan as ArollCutJoinResult).timelineId !== (value.subtitlePlan as SubtitlePlanResult).timelineId) return false;
+  if (value.executionMode !== undefined && value.executionMode !== "plan" && value.executionMode !== "ffmpeg") return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1606,6 +1666,43 @@ function isArollCutJoinOutput(value: unknown): value is ArollCutJoinOutput {
     && !value.relativePath.includes("\\") && !value.relativePath.includes(":")
     && !value.relativePath.split("/").some((part) => part === "" || part === "." || part === "..")
     && isSafeInteger(value.sizeBytes, 1, 2 ** 53 - 1);
+}
+
+function isPreviewSourceBinding(value: unknown): value is PreviewSourceBinding {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["sourceId", "uri", "fingerprint", "segmentCount"])
+    && isTimelineId(value.sourceId) && isSafeString(value.uri, 32_767)
+    && /^supervideo:\/\/asset\/[0-9a-f-]{36}$/.test(value.uri)
+    && (value.fingerprint === null || isSentenceCacheKey(value.fingerprint))
+    && isSafeInteger(value.segmentCount, 1, 64);
+}
+
+function isPreviewRenderCue(value: unknown, order: number, durationMs: number): value is PreviewRenderCue {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["order", "cueId", "clipId", "sentenceId", "sourceId", "provenanceIds", "text", "timelineStartMs", "durationMs", "outputStartMs", "outputEndMs"])) return false;
+  if (!isSafeInteger(value.order, 1, 2_048) || value.order !== order || !isTimelineId(value.cueId) || !isTimelineId(value.clipId)) return false;
+  if (value.sentenceId !== null && !isTimelineId(value.sentenceId) || value.sourceId !== null && !isTimelineId(value.sourceId)) return false;
+  if (!Array.isArray(value.provenanceIds) || value.provenanceIds.length > 32 || !value.provenanceIds.every(isTimelineId)) return false;
+  if (!isBoundedText(value.text, 256) || value.text.trim().length === 0) return false;
+  if (!isSafeInteger(value.timelineStartMs, 0, 86_400_000) || !isSafeInteger(value.durationMs, 1, 86_400_000) || !isSafeInteger(value.outputStartMs, 0, 86_400_000) || !isSafeInteger(value.outputEndMs, 1, 86_400_000)) return false;
+  return value.outputEndMs - value.outputStartMs === value.durationMs && value.outputEndMs <= durationMs;
+}
+
+function isPreviewRenderGap(value: unknown): value is PreviewRenderGap {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["code", "clipId", "cueId", "detail"])
+    && ["subtitle-plan-gap", "subtitle-cue-unmapped", "subtitle-cue-range-invalid"].includes(value.code as string)
+    && (value.clipId === null || isTimelineId(value.clipId)) && (value.cueId === null || isTimelineId(value.cueId)) && isSafeString(value.detail, 256);
+}
+
+function isPreviewRenderLog(value: unknown): value is PreviewRenderLog {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["status", "stdout", "stderr"])
+    && ["not-run", "cache-hit", "completed"].includes(value.status as string)
+    && isBoundedText(value.stdout, 4_096) && isBoundedText(value.stderr, 4_096);
+}
+
+function isPreviewRenderOutput(value: unknown): value is PreviewRenderOutput {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["kind", "relativePath", "playbackUri", "sizeBytes", "durationMs", "outputFingerprint"])
+    && value.kind === "video" && isSafeString(value.relativePath, 512) && /^previews\/preview-render-v1\/[0-9a-f]{64}\.mp4$/.test(value.relativePath)
+    && isSafeString(value.playbackUri, 256) && /^supervideo:\/\/preview\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{64}$/.test(value.playbackUri)
+    && isSafeInteger(value.sizeBytes, 1, 512 * 1024 * 1024) && isSafeInteger(value.durationMs, 1, 86_400_000) && isSentenceCacheKey(value.outputFingerprint);
 }
 
 function isSubtitleSentenceSource(value: unknown): value is SubtitleSentenceSource {

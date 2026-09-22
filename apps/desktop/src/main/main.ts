@@ -23,6 +23,7 @@ import {
   isDurationOptimizationResult,
   isArollCutJoinResult,
   isSubtitlePlanResult,
+  isPreviewRenderResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -56,6 +57,8 @@ import {
   type ArollCutJoinResult,
   type SubtitlePlanParams,
   type SubtitlePlanResult,
+  type PreviewRenderParams,
+  type PreviewRenderResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -76,7 +79,7 @@ import {
 import { denyWindowOpen, isTrustedRendererUrl, sanitizeUrlForDiagnostics } from "./security/policies";
 import { registerSessionSecurity } from "./security/session";
 import { createAgentWorkerController, type AgentWorkerController, type UtilityProcessLike } from "./agent-worker-controller";
-import { parseSuperVideoPlaybackRequest, resolveProxyOutput } from "./media-playback";
+import { parseSuperVideoPlaybackRequest, resolveProxyOutput, parseSuperVideoPreviewRequest, resolvePreviewOutput } from "./media-playback";
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "supervideo",
@@ -98,6 +101,18 @@ function registerSuperVideoProtocol(): void {
     const playback = parseSuperVideoPlaybackRequest(request.url);
     const project = activePlaybackProject;
     const controller = activeAgentController;
+    const preview = parseSuperVideoPreviewRequest(request.url);
+    if (preview && project && preview.projectId === project.projectId) {
+      try {
+        const outputPath = resolvePreviewOutput(project.projectRoot, preview.digest);
+        if (!outputPath) return new Response(null, { status: 404 });
+        const outputStat = fs.lstatSync(outputPath);
+        if (outputStat.isSymbolicLink() || !outputStat.isFile() || outputStat.size <= 0) return new Response(null, { status: 404 });
+        return net.fetch(pathToFileURL(outputPath).toString());
+      } catch {
+        return new Response(null, { status: 404 });
+      }
+    }
     if (!playback || !project || !controller) return new Response(null, { status: 404 });
     try {
       const result = await controller.runProjectOperation("media-proxy", { projectId: project.projectId, assetId: playback.assetId }, project.projectId);
@@ -746,6 +761,11 @@ app.whenReady().then(() => {
     planSubtitles: async (_event, input: SubtitlePlanParams): Promise<SubtitlePlanResult> => {
       const result = await agentController.runProjectOperation("media-subtitle-plan", input, input.projectId);
       if (!isSubtitlePlanResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    renderPreview: async (_event, input: PreviewRenderParams): Promise<PreviewRenderResult> => {
+      const result = await agentController.runProjectOperation("media-preview-render", input, input.projectId);
+      if (!isPreviewRenderResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(
