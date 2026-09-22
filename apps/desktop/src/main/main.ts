@@ -13,6 +13,7 @@ import {
   isJobPage,
   isJobSummary,
   isTtsSynthesisResult,
+  isRemotionRenderResult,
   isValidDesktopAgentEvent,
   isProjectSummary,
   isSentenceQaContextResult,
@@ -50,6 +51,8 @@ import {
   type JobSummary,
   type TtsStartRequest,
   type TtsSynthesisResult,
+  type RemotionRenderParams,
+  type RemotionRenderResult,
   type SentenceQaContextResult,
   type SentenceQaSaveResult,
   type RetrievalParams,
@@ -328,6 +331,10 @@ function jobPage(value: Readonly<Record<string, unknown>>): JobPage {
 
 function ttsResult(value: Readonly<Record<string, unknown>>): TtsSynthesisResult {
   if (!isTtsSynthesisResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+  return value;
+}
+function remotionResult(value: Readonly<Record<string, unknown>>): RemotionRenderResult {
+  if (!isRemotionRenderResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
   return value;
 }
 function jobEventPage(value: Readonly<Record<string, unknown>>): JobEventPage {
@@ -881,6 +888,11 @@ app.whenReady().then(() => {
     },
     getJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation("job-get", input.projectId, { jobId: input.jobId }))),
     getTtsJobResult: async (_event, input): Promise<TtsSynthesisResult> => ttsResult(await agentController.runJobOperation("job-tts-result", input.projectId, { jobId: input.jobId })),
+    startRemotionJob: async (_event, input: RemotionRenderParams) => rememberJob(jobSummary(await agentController.runJobOperation(
+      "job-remotion-start", input.projectId,
+      { schemaVersion: input.schemaVersion, renderVersion: input.renderVersion, idempotencyKey: input.idempotencyKey, inputProps: input.inputProps },
+    ))),
+    getRemotionJobResult: async (_event, input): Promise<RemotionRenderResult> => remotionResult(await agentController.runJobOperation("job-remotion-result", input.projectId, { jobId: input.jobId })),
     listJobs: async (_event, input) => {
       const result = jobPage(await agentController.runJobOperation(
         "job-list", input.projectId,

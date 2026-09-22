@@ -18,6 +18,10 @@ JobErrorCode = Literal[
     "IDEMPOTENCY_CONFLICT",
     "JOB_SHUTTING_DOWN",
     "JOB_EXECUTION_FAILED",
+    "REMOTION_INPUT_INVALID",
+    "REMOTION_SOURCE_INVALID",
+    "REMOTION_OUTPUT_INVALID",
+    "REMOTION_RUNTIME_UNAVAILABLE",
 ]
 
 
@@ -39,6 +43,10 @@ ERRORS: Final[dict[str, JobErrorDefinition]] = {
     "IDEMPOTENCY_CONFLICT": JobErrorDefinition("The idempotency key conflicts with another job."),
     "JOB_SHUTTING_DOWN": JobErrorDefinition("The job service is shutting down."),
     "JOB_EXECUTION_FAILED": JobErrorDefinition("The simulated job failed."),
+    "REMOTION_INPUT_INVALID": JobErrorDefinition("The Remotion render input is invalid."),
+    "REMOTION_SOURCE_INVALID": JobErrorDefinition("The Remotion source reference is invalid."),
+    "REMOTION_OUTPUT_INVALID": JobErrorDefinition("The Remotion render output is invalid."),
+    "REMOTION_RUNTIME_UNAVAILABLE": JobErrorDefinition("The fixed Remotion runtime is unavailable."),
 }
 
 

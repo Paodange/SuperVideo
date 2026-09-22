@@ -11,6 +11,7 @@ import {
   isJobReferenceParams,
   isJobSmokeStartParams,
   isTtsStartRequest,
+  isRemotionRenderParams,
   isSentenceQaParams,
   isSentenceQaSaveParams,
   isRetrievalParams,
@@ -79,6 +80,8 @@ import {
   type JobSummary,
   type TtsStartRequest,
   type TtsSynthesisResult,
+  type RemotionRenderParams,
+  type RemotionRenderResult,
   type SentenceQaParams,
   type SentenceQaSaveParams,
   type SentenceQaContextResult,
@@ -157,6 +160,8 @@ export type DesktopIpcDependencies = Readonly<{
   startTtsJob: (event: IpcMainInvokeEvent, input: TtsStartRequest) => Promise<JobSummary>;
   getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   getTtsJobResult: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<TtsSynthesisResult>;
+  startRemotionJob: (event: IpcMainInvokeEvent, input: RemotionRenderParams) => Promise<JobSummary>;
+  getRemotionJobResult: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<RemotionRenderResult>;
   listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
   listJobEvents: (event: IpcMainInvokeEvent, input: JobEventsListParams) => Promise<JobEventPage>;
   cancelJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
@@ -232,6 +237,8 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startTtsJob, isTtsStartRequest, dependencies, (payload, event) => dependencies.startTtsJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getTtsJobResult, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getTtsJobResult(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startRemotionJob, isRemotionRenderParams, dependencies, (payload, event) => dependencies.startRemotionJob(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getRemotionJobResult, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getRemotionJobResult(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobEvents, isValidJobEventsListPayload, dependencies, (payload, event) => dependencies.listJobEvents(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.cancelJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.cancelJob(event, payload)),

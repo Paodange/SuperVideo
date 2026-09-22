@@ -19,6 +19,7 @@
     "project:smoke": "node scripts/project-smoke.mjs",
     "jobs:smoke": "node scripts/jobs-smoke.mjs",
     "tts:smoke": "node scripts/tts-smoke.mjs",
+    "remotion:smoke": "node scripts/remotion-smoke.mjs",
     "diagnostics:smoke": "node scripts/diagnostics-smoke.mjs",
     "core:setup": "node scripts/core-setup.mjs",
     "core:test": "node scripts/core-test.mjs",
