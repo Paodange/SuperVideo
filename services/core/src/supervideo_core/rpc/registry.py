@@ -325,7 +325,34 @@ async def timeline_version_handler(params, _emit: ProgressEmitter, _cancelled: a
         "TimelineVersionDiffParams": service.diff_timeline_versions,
     }
     result = handlers[type(params).__name__](params)
-    return result.model_dump(by_alias=True, exclude_none=False)
+    payload = result.model_dump(by_alias=True, exclude_none=False)
+    version = payload.get("version")
+    if isinstance(version, dict) and isinstance(version.get("timeline"), dict):
+        version["timeline"] = _compact_timeline_wire(version["timeline"])
+    items = payload.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict) and isinstance(item.get("timeline"), dict):
+                item["timeline"] = _compact_timeline_wire(item["timeline"])
+    edit_result = payload.get("editResult")
+    if isinstance(edit_result, dict) and isinstance(edit_result.get("resultTimeline"), dict):
+        edit_result["resultTimeline"] = _compact_timeline_wire(edit_result["resultTimeline"])
+    if isinstance(edit_result, dict) and isinstance(edit_result.get("intent"), dict):
+        edit_result["intent"] = _compact_timeline_wire(edit_result["intent"])
+    return payload
+
+
+def _compact_timeline_wire(value: dict[str, object]) -> dict[str, object]:
+    """Omit optional null IR fields while preserving explicit contract nulls."""
+
+    def compact(item: object) -> object:
+        if isinstance(item, dict):
+            return {key: compact(child) for key, child in item.items() if child is not None}
+        if isinstance(item, list):
+            return [compact(child) for child in item]
+        return item
+
+    return compact(value)  # type: ignore[return-value]
 
 
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
