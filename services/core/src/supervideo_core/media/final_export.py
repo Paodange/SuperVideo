@@ -412,7 +412,7 @@ class FinalMp4ExportService:
                 ),
             )
         except MediaError as error:
-            if error.code in {"FINAL_EXPORT_CANCELLED", "FINAL_EXPORT_TIMEOUT"}:
+            if error.code in {"FINAL_EXPORT_CANCELLED", "FINAL_EXPORT_TIMEOUT", "FINAL_EXPORT_TOOL_UNAVAILABLE"}:
                 raise
             return None
         except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, ValidationError):
@@ -429,19 +429,29 @@ class FinalMp4ExportService:
             raise MediaError("FINAL_EXPORT_SOURCE_INVALID")
         if expected_prefix == "previews/aroll-cut-join-v1/" and AUDIO_OUTPUT_PATTERN.fullmatch(relative_path) is None:
             raise MediaError("FINAL_EXPORT_SOURCE_INVALID")
-        root = self._project_root.resolve()
-        lexical = self._project_root / relative_path
+        project_root = self._project_root
+        lexical = project_root / relative_path
         try:
+            root = project_root.resolve()
+            if project_root.is_symlink() or _is_junction(project_root):
+                raise MediaError("FINAL_EXPORT_SOURCE_INVALID")
             cursor = lexical
-            while cursor != root:
-                if cursor.is_symlink():
+            for _ in range(len(relative_path.split("/")) + 1):
+                if cursor == project_root:
+                    break
+                if cursor.is_symlink() or _is_junction(cursor):
                     raise MediaError("FINAL_EXPORT_SOURCE_INVALID")
-                cursor = cursor.parent
+                parent = cursor.parent
+                if parent == cursor:
+                    raise MediaError("FINAL_EXPORT_SOURCE_INVALID")
+                cursor = parent
+            else:
+                raise MediaError("FINAL_EXPORT_SOURCE_INVALID")
             resolved = lexical.resolve()
             if os.path.commonpath([str(root), str(resolved)]) != str(root):
                 raise MediaError("FINAL_EXPORT_SOURCE_INVALID")
             return resolved
-        except (OSError, ValueError) as error:
+        except (OSError, RuntimeError, ValueError) as error:
             raise MediaError("FINAL_EXPORT_SOURCE_INVALID", cause=error) from error
 
     def _ensure_export_directory(self) -> None:
@@ -493,3 +503,8 @@ class FinalMp4ExportService:
 
 def _json_digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _is_junction(path: Path) -> bool:
+    is_junction = getattr(path, "is_junction", None)
+    return bool(is_junction is not None and is_junction())

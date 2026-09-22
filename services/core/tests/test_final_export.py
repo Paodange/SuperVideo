@@ -166,7 +166,7 @@ class FinalExportTests(unittest.TestCase):
             original = json.loads(manifest_path.read_text(encoding="utf-8"))
             unbound = {**original, "audioRelativePath": f"previews/aroll-cut-join-v1/{'f' * 64}.audio.m4a"}
             manifest_path.write_text(json.dumps(unbound), encoding="utf-8")
-            with patch.object(service, "_verify_audio", new=AsyncMock()), patch.object(service, "_mux_to_temp", new=AsyncMock()) as mux_again:
+            with patch.object(service, "_verify_audio", new=AsyncMock()), patch.object(service, "_verify_container", new=AsyncMock(return_value=(container, preview.timeline_duration_ms))), patch.object(service, "_mux_to_temp", new=AsyncMock()) as mux_again:
                 with self.assertRaises(MediaError) as error:
                     asyncio.run(service.export(params, asyncio.Event()))
             self.assertEqual(error.exception.code, "FINAL_EXPORT_OUTPUT_CONFLICT")
@@ -174,11 +174,46 @@ class FinalExportTests(unittest.TestCase):
 
             stale_duration = {**original, "durationMs": original["durationMs"] + 500}
             manifest_path.write_text(json.dumps(stale_duration), encoding="utf-8")
-            with patch.object(service, "_verify_audio", new=AsyncMock()), patch.object(service, "_mux_to_temp", new=AsyncMock()) as mux_again:
+            with patch.object(service, "_verify_audio", new=AsyncMock()), patch.object(service, "_verify_container", new=AsyncMock(return_value=(container, preview.timeline_duration_ms))), patch.object(service, "_mux_to_temp", new=AsyncMock()) as mux_again:
                 with self.assertRaises(MediaError) as error:
                     asyncio.run(service.export(params, asyncio.Event()))
             self.assertEqual(error.exception.code, "FINAL_EXPORT_OUTPUT_CONFLICT")
             mux_again.assert_not_awaited()
+
+    def test_cache_probe_tool_failure_is_not_rewritten_as_output_conflict(self) -> None:
+        preview, quality, audio, audio_fingerprint, payload, audio_payload = inputs()
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            self._write_preview(root, preview, payload)
+            self._write_audio(root, audio, audio_payload)
+            service = self._service(root)
+            container = FinalMp4Container(formatName="mov,mp4,m4a", videoCodec="h264", audioCodec="aac", width=1080, height=1920, frameRate=30.0)
+
+            async def mux(_video, _audio, directory, *_args):
+                temp = directory / ".mux.mp4"
+                temp.write_bytes(b"final mux bytes")
+                return temp
+
+            params = FinalMp4ExportParams(projectId=PROJECT_ID, previewResult=preview, qualityResult=quality, audioResult=audio, audioFingerprint=audio_fingerprint)
+            with patch.object(service, "_verify_audio", new=AsyncMock()), patch.object(service, "_verify_container", new=AsyncMock(return_value=(container, preview.timeline_duration_ms))), patch.object(service, "_mux_to_temp", new=mux):
+                asyncio.run(service.export(params, asyncio.Event()))
+
+            with patch.object(service, "_verify_audio", new=AsyncMock()), patch.object(service, "_verify_container", new=AsyncMock(side_effect=MediaError("FINAL_EXPORT_TOOL_UNAVAILABLE"))), patch.object(service, "_mux_to_temp", new=AsyncMock()):
+                with self.assertRaises(MediaError) as error:
+                    asyncio.run(service.export(params, asyncio.Event()))
+            self.assertEqual(error.exception.code, "FINAL_EXPORT_TOOL_UNAVAILABLE")
+
+    def test_project_root_symlink_is_rejected_without_unbounded_parent_walk(self) -> None:
+        with tempfile.TemporaryDirectory() as root_name, tempfile.TemporaryDirectory() as target_name:
+            alias = Path(root_name) / "project-link"
+            try:
+                alias.symlink_to(Path(target_name), target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("directory symlinks are unavailable on this Windows host")
+            service = self._service(alias)
+            with self.assertRaises(MediaError) as error:
+                service._resolve_project_file("exports/videos/final.mp4", expected_prefix="exports/videos/")
+            self.assertEqual(error.exception.code, "FINAL_EXPORT_SOURCE_INVALID")
 
     def test_plan_not_run_quality_warning_and_gaps_are_blocked(self) -> None:
         preview, quality, audio, audio_fingerprint, payload, audio_payload = inputs()
