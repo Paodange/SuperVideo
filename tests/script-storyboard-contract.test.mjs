@@ -126,6 +126,10 @@ test("D05 enforces complete shot priorities, fallback binding, and stable identi
   sourceGap.shots[1] = { ...sourceGap.shots[1], durationMs: 0, fallbackReason: "source-gap", visualSourcePriority: ["remotion-template", "ai-image", "text-card"] };
   assert.equal(isScriptStoryboardResult(sourceGap), true);
 
+  const forgedGapFallback = structuredClone(sourceGap);
+  forgedGapFallback.shots[1] = { ...forgedGapFallback.shots[1], fallbackReason: "no-user-material", visualSourcePriority: ["licensed-stock", "ai-image", "remotion-template", "text-card"] };
+  assert.equal(isScriptStoryboardResult(forgedGapFallback), false);
+
   for (const mutate of [
     (value) => { value.shots[1].shotId = value.shots[0].shotId; },
     (value) => { value.shots[1].segmentId = value.shots[0].segmentId; },

@@ -81,7 +81,7 @@ export function validateScriptStoryboardResult(value: unknown): ScriptStoryboard
   const provenance = validateProvenanceList(result.provenance, "$.provenance", errors);
   const facts = validateFactAudits(result.facts, "$.facts", provenance, errors);
   const script = validateScript(result.script, "$.script", provenance, facts, errors);
-  const shots = validateShots(result.shots, "$.shots", undefined, errors);
+  const shots = script ? validateShots(result.shots, "$.shots", script, errors) : undefined;
   if (script) validateResultState(result, script, facts, errors);
   if (result.toleranceLowerMs !== Math.floor(Number(result.targetDurationMs) * 0.8) || result.toleranceUpperMs !== Math.floor(Number(result.targetDurationMs) * 1.2)) add(errors, "$", "duration tolerance does not match target");
   if (script) {
@@ -327,7 +327,46 @@ function validateResultState(result: Record<string, any>, script: { hook: Script
   const expectedStatus = hasGaps ? "gaps" : hasFactAttention ? "needs-user-confirmation" : result.durationStatus === "outside-tolerance" ? "needs-duration-optimization" : "ready";
   if (result.status !== expectedStatus) add(errors, "$.status", "does not match gaps, fact, and duration state");
 }
-function validateShots(value: unknown, path: string, script: { hook: ScriptStoryboardSegment; body: ScriptStoryboardSegment[]; cta: ScriptStoryboardSegment[] } | undefined, errors: ScriptStoryboardValidationError[]): ScriptStoryboardShot[] | undefined { const values = array(value, 32, path, errors); const shotIds = new Set<string>(); const segmentIds = new Set<string>(); return values?.map((raw, index) => { const item = record(raw, `${path}[${index}]`, errors); if (!item) return undefined; only(item, ["shotId", "order", "segmentId", "durationMs", "visualSourcePriority", "fallbackReason", "visualIntent"], `${path}[${index}]`, errors); checkId(item.shotId, `${path}[${index}].shotId`, errors); checkId(item.segmentId, `${path}[${index}].segmentId`, errors); if (typeof item.shotId === "string") { if (shotIds.has(item.shotId)) add(errors, `${path}[${index}].shotId`, "must be unique"); shotIds.add(item.shotId); } if (typeof item.segmentId === "string") { if (segmentIds.has(item.segmentId)) add(errors, `${path}[${index}].segmentId`, "must be unique"); segmentIds.add(item.segmentId); } if (item.order !== index + 1) add(errors, `${path}[${index}].order`, "must be stable and contiguous"); checkInteger(item.order, 1, 32, `${path}[${index}].order`, errors); checkInteger(item.durationMs, 0, SCRIPT_STORYBOARD_MAX_DURATION_MS, `${path}[${index}].durationMs`, errors); const priority = array(item.visualSourcePriority, 5, `${path}[${index}].visualSourcePriority`, errors); if (!priority || priority.length === 0) add(errors, `${path}[${index}].visualSourcePriority`, "must not be empty"); if (priority && new Set(priority.map(String)).size !== priority.length) add(errors, `${path}[${index}].visualSourcePriority`, "must not contain duplicates"); priority?.forEach((source, sourceIndex) => { if (!(SCRIPT_STORYBOARD_VISUAL_SOURCE_PRIORITY as readonly unknown[]).includes(source)) add(errors, `${path}[${index}].visualSourcePriority[${sourceIndex}]`, "is not in the fixed allowlist"); }); const expected = item.fallbackReason === "planned" ? ["user-material", "licensed-stock", "ai-image", "remotion-template", "text-card"] : item.fallbackReason === "no-user-material" ? ["licensed-stock", "ai-image", "remotion-template", "text-card"] : item.fallbackReason === "source-gap" ? ["remotion-template", "ai-image", "text-card"] : []; if (JSON.stringify(item.visualSourcePriority) !== JSON.stringify(expected)) add(errors, `${path}[${index}].visualSourcePriority`, "must exactly match fallbackReason priority"); if (!["planned", "no-user-material", "source-gap"].includes(String(item.fallbackReason))) add(errors, `${path}[${index}].fallbackReason`, "is not allowed"); checkText(item.visualIntent, `${path}[${index}].visualIntent`, errors, 160); return item as ScriptStoryboardShot; }).filter((item): item is ScriptStoryboardShot => item !== undefined); }
+function validateShots(value: unknown, path: string, script: { hook: ScriptStoryboardSegment; body: ScriptStoryboardSegment[]; cta: ScriptStoryboardSegment }, errors: ScriptStoryboardValidationError[]): ScriptStoryboardShot[] | undefined {
+  const values = array(value, 32, path, errors);
+  const shotIds = new Set<string>();
+  const segmentIds = new Set<string>();
+  const scriptSegments = [script.hook, ...script.body, script.cta];
+  const scriptBySegmentId = new Map(scriptSegments.map((segment) => [segment.segmentId, segment]));
+  return values?.map((raw, index) => {
+    const item = record(raw, `${path}[${index}]`, errors);
+    if (!item) return undefined;
+    only(item, ["shotId", "order", "segmentId", "durationMs", "visualSourcePriority", "fallbackReason", "visualIntent"], `${path}[${index}]`, errors);
+    checkId(item.shotId, `${path}[${index}].shotId`, errors);
+    checkId(item.segmentId, `${path}[${index}].segmentId`, errors);
+    if (typeof item.shotId === "string") {
+      if (shotIds.has(item.shotId)) add(errors, `${path}[${index}].shotId`, "must be unique");
+      shotIds.add(item.shotId);
+    }
+    if (typeof item.segmentId === "string") {
+      if (segmentIds.has(item.segmentId)) add(errors, `${path}[${index}].segmentId`, "must be unique");
+      segmentIds.add(item.segmentId);
+    }
+    if (item.order !== index + 1) add(errors, `${path}[${index}].order`, "must be stable and contiguous");
+    checkInteger(item.order, 1, 32, `${path}[${index}].order`, errors);
+    checkInteger(item.durationMs, 0, SCRIPT_STORYBOARD_MAX_DURATION_MS, `${path}[${index}].durationMs`, errors);
+    const priority = array(item.visualSourcePriority, 5, `${path}[${index}].visualSourcePriority`, errors);
+    if (!priority || priority.length === 0) add(errors, `${path}[${index}].visualSourcePriority`, "must not be empty");
+    if (priority && new Set(priority.map(String)).size !== priority.length) add(errors, `${path}[${index}].visualSourcePriority`, "must not contain duplicates");
+    priority?.forEach((source, sourceIndex) => {
+      if (!(SCRIPT_STORYBOARD_VISUAL_SOURCE_PRIORITY as readonly unknown[]).includes(source)) add(errors, `${path}[${index}].visualSourcePriority[${sourceIndex}]`, "is not in the fixed allowlist");
+    });
+    const expected = item.fallbackReason === "planned" ? ["user-material", "licensed-stock", "ai-image", "remotion-template", "text-card"] : item.fallbackReason === "no-user-material" ? ["licensed-stock", "ai-image", "remotion-template", "text-card"] : item.fallbackReason === "source-gap" ? ["remotion-template", "ai-image", "text-card"] : [];
+    if (JSON.stringify(item.visualSourcePriority) !== JSON.stringify(expected)) add(errors, `${path}[${index}].visualSourcePriority`, "must exactly match fallbackReason priority");
+    if (!["planned", "no-user-material", "source-gap"].includes(String(item.fallbackReason))) add(errors, `${path}[${index}].fallbackReason`, "is not allowed");
+    const segment = typeof item.segmentId === "string" ? scriptBySegmentId.get(item.segmentId) : undefined;
+    if (!segment) add(errors, `${path}[${index}].segmentId`, "must reference a declared script segment");
+    else if (segment.status === "gap" && item.fallbackReason !== "source-gap") add(errors, `${path}[${index}].fallbackReason`, "gap segment requires source-gap fallback");
+    else if (segment.status === "matched" && item.fallbackReason === "source-gap") add(errors, `${path}[${index}].fallbackReason`, "matched segment cannot use source-gap fallback");
+    checkText(item.visualIntent, `${path}[${index}].visualIntent`, errors, 160);
+    return item as ScriptStoryboardShot;
+  }).filter((item): item is ScriptStoryboardShot => item !== undefined);
+}
 
 function validateIdArray(value: unknown, path: string, max: number, errors: ScriptStoryboardValidationError[], refs?: Map<string, unknown>): void { const items = array(value, max, path, errors); if (!items) return; if (items.length !== new Set(items.map(String)).size) add(errors, path, "must not contain duplicates"); items.forEach((item, index) => { checkId(item, `${path}[${index}]`, errors); if (refs && typeof item === "string" && !refs.has(item)) add(errors, `${path}[${index}]`, "must reference a declared identifier"); }); }
 function validateTextArray(value: unknown, path: string, maxItems: number, maxText: number, errors: ScriptStoryboardValidationError[]): void { const items = array(value, maxItems, path, errors); items?.forEach((item, index) => checkText(item, `${path}[${index}]`, errors, maxText)); }
