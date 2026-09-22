@@ -29,6 +29,7 @@ VIDEO_ASSEMBLY_CONTROLLED_URI_PATTERN = re.compile(r"^supervideo://(?:asset|gene
 UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+FORBIDDEN_KEYS = frozenset({"secret", "credential", "credentialref", "token", "command", "executable", "authorization", "password", "apikey", "provider"})
 
 
 class VideoAssemblyModel(BaseModel):
@@ -199,6 +200,7 @@ class VideoAssemblyResult(VideoAssemblyModel):
 
     @model_validator(mode="after")
     def validate_result_binding(self) -> "VideoAssemblyResult":
+        _reject_forbidden(self.model_dump(by_alias=True, exclude_none=True), "$")
         validate_timeline_size(self.timeline)
         expected_digest = hashlib.sha256(_canonical_json(self.timeline.model_dump(by_alias=True, exclude_none=True))).hexdigest()
         if expected_digest != self.timeline_digest:
@@ -234,6 +236,18 @@ def _digest(value: str, path: str) -> str:
 def _validate_controlled_uri(value: str, path: str) -> None:
     if ".." in value or "\\" in value or VIDEO_ASSEMBLY_CONTROLLED_URI_PATTERN.fullmatch(value) is None:
         raise ValueError(f"{path} must be a controlled project reference")
+
+
+def _reject_forbidden(value: Any, path: str) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("_", "").replace("-", "")
+            if normalized in FORBIDDEN_KEYS:
+                raise ValueError(f"forbidden sensitive or executable field at {path}.{key}")
+            _reject_forbidden(item, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _reject_forbidden(item, f"{path}[{index}]")
 
 
 def _canonical_json(value: Any) -> bytes:

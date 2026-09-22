@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import unittest
 from copy import deepcopy
 
 from pydantic import ValidationError
 
 from supervideo_core.media.recruitment_template_models import build_recruitment_template_render_plan
-from supervideo_core.media.video_assembly import VideoAssemblyService
-from supervideo_core.media.video_assembly_models import VideoAssemblyParams
+from supervideo_core.media.video_assembly import VideoAssemblyService, _canonical_json
+from supervideo_core.media.video_assembly_models import VideoAssemblyParams, VideoAssemblyResult
+from supervideo_core.timeline.models import TimelineProject
 
 
 PROJECT_ID = "11111111-1111-4111-8111-111111111111"
@@ -127,6 +129,21 @@ class D07VideoAssemblyTestCase(unittest.TestCase):
             with self.subTest(update=update):
                 with self.assertRaises(ValidationError):
                     VideoAssemblyParams.model_validate(candidate)
+
+    def test_result_rejects_tampered_timeline_metadata_after_digest_rebinding(self) -> None:
+        params = VideoAssemblyParams.model_validate(request_payload())
+        result = asyncio.run(VideoAssemblyService().assemble(params, asyncio.Event()))
+        candidate = result.model_dump(by_alias=True)
+        candidate["timeline"]["tracks"][0]["clips"][0]["metadata"]["secret"] = "never"
+        timeline = TimelineProject.model_validate(candidate["timeline"])
+        digest = hashlib.sha256(_canonical_json(timeline.model_dump(by_alias=True, exclude_none=True))).hexdigest()
+        candidate["timelineDigest"] = digest
+        candidate["output"]["digest"] = digest
+        candidate["output"]["relativePath"] = f"generated/video-assembly-v1/{digest}.json"
+        candidate["preview"]["timelineDigest"] = digest
+        candidate["preview"]["playbackUri"] = f"supervideo://remotion/{candidate['projectId']}/{digest}"
+        with self.assertRaises(ValueError):
+            VideoAssemblyResult.model_validate(candidate)
 
 
 if __name__ == "__main__":
