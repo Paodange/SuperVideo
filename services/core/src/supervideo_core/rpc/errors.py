@@ -142,6 +142,17 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "AROLL_CUT_JOIN_TOOL_TIMEOUT": RpcErrorDefinition(-32371, "The A-roll media tool timed out."),
     "AROLL_CUT_JOIN_CANCELLED": RpcErrorDefinition(-32372, "The A-roll cut/join operation was cancelled."),
     "AROLL_CUT_JOIN_TIMEOUT": RpcErrorDefinition(-32373, "The A-roll cut/join operation timed out."),
+    "SUBTITLE_INPUT_INVALID": RpcErrorDefinition(-32374, "The subtitle plan input is invalid or exceeds its bounds."),
+    "SUBTITLE_TIMELINE_INVALID": RpcErrorDefinition(-32375, "The Timeline IR is invalid for subtitle planning."),
+    "SUBTITLE_SOURCE_INVALID": RpcErrorDefinition(-32376, "A subtitle source reference is invalid."),
+    "SUBTITLE_TIMECODE_INVALID": RpcErrorDefinition(-32377, "A subtitle timecode is invalid or outside the timeline."),
+    "SUBTITLE_OVERLAP": RpcErrorDefinition(-32378, "Subtitle cues overlap in timeline order."),
+    "SUBTITLE_TEXT_INVALID": RpcErrorDefinition(-32379, "Subtitle text is invalid or exceeds its bounds."),
+    "SUBTITLE_LINE_COUNT_INVALID": RpcErrorDefinition(-32380, "Subtitle text exceeds the configured line count."),
+    "SUBTITLE_LINE_WIDTH_INVALID": RpcErrorDefinition(-32381, "Subtitle text exceeds the configured display width."),
+    "SUBTITLE_OUTPUT_INVALID": RpcErrorDefinition(-32382, "The generated subtitle plan was invalid."),
+    "SUBTITLE_TIMEOUT": RpcErrorDefinition(-32383, "The subtitle planning operation timed out."),
+    "SUBTITLE_CANCELLED": RpcErrorDefinition(-32384, "The subtitle planning operation was cancelled."),
 }
 
 

@@ -41,6 +41,7 @@ export const CORE_RPC_METHODS = {
   planCreateRemix: "plan.create_remix",
   planOptimizeDuration: "plan.optimize_duration",
   mediaArollCutJoin: "media.aroll.cut_join",
+  mediaSubtitlePlan: "media.subtitle.plan",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -74,6 +75,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.planCreateRemix
   | typeof CORE_RPC_METHODS.planOptimizeDuration
   | typeof CORE_RPC_METHODS.mediaArollCutJoin
+  | typeof CORE_RPC_METHODS.mediaSubtitlePlan
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -214,6 +216,17 @@ export const CORE_RPC_ERROR_CODES = {
   arollCutJoinToolTimeout: "AROLL_CUT_JOIN_TOOL_TIMEOUT",
   arollCutJoinTimeout: "AROLL_CUT_JOIN_TIMEOUT",
   arollCutJoinCancelled: "AROLL_CUT_JOIN_CANCELLED",
+  subtitleInputInvalid: "SUBTITLE_INPUT_INVALID",
+  subtitleTimelineInvalid: "SUBTITLE_TIMELINE_INVALID",
+  subtitleSourceInvalid: "SUBTITLE_SOURCE_INVALID",
+  subtitleTimecodeInvalid: "SUBTITLE_TIMECODE_INVALID",
+  subtitleOverlap: "SUBTITLE_OVERLAP",
+  subtitleTextInvalid: "SUBTITLE_TEXT_INVALID",
+  subtitleLineCountInvalid: "SUBTITLE_LINE_COUNT_INVALID",
+  subtitleLineWidthInvalid: "SUBTITLE_LINE_WIDTH_INVALID",
+  subtitleOutputInvalid: "SUBTITLE_OUTPUT_INVALID",
+  subtitleTimeout: "SUBTITLE_TIMEOUT",
+  subtitleCancelled: "SUBTITLE_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -350,6 +363,17 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   AROLL_CUT_JOIN_TOOL_TIMEOUT: -32371,
   AROLL_CUT_JOIN_CANCELLED: -32372,
   AROLL_CUT_JOIN_TIMEOUT: -32373,
+  SUBTITLE_INPUT_INVALID: -32374,
+  SUBTITLE_TIMELINE_INVALID: -32375,
+  SUBTITLE_SOURCE_INVALID: -32376,
+  SUBTITLE_TIMECODE_INVALID: -32377,
+  SUBTITLE_OVERLAP: -32378,
+  SUBTITLE_TEXT_INVALID: -32379,
+  SUBTITLE_LINE_COUNT_INVALID: -32380,
+  SUBTITLE_LINE_WIDTH_INVALID: -32381,
+  SUBTITLE_OUTPUT_INVALID: -32382,
+  SUBTITLE_TIMEOUT: -32383,
+  SUBTITLE_CANCELLED: -32384,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -484,6 +508,17 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   AROLL_CUT_JOIN_TOOL_TIMEOUT: "The A-roll media tool timed out.",
   AROLL_CUT_JOIN_CANCELLED: "The A-roll cut/join operation was cancelled.",
   AROLL_CUT_JOIN_TIMEOUT: "The A-roll cut/join operation timed out.",
+  SUBTITLE_INPUT_INVALID: "The subtitle plan input is invalid or exceeds its bounds.",
+  SUBTITLE_TIMELINE_INVALID: "The Timeline IR is invalid for subtitle planning.",
+  SUBTITLE_SOURCE_INVALID: "A subtitle source reference is invalid.",
+  SUBTITLE_TIMECODE_INVALID: "A subtitle timecode is invalid or outside the timeline.",
+  SUBTITLE_OVERLAP: "Subtitle cues overlap in timeline order.",
+  SUBTITLE_TEXT_INVALID: "Subtitle text is invalid or exceeds its bounds.",
+  SUBTITLE_LINE_COUNT_INVALID: "Subtitle text exceeds the configured line count.",
+  SUBTITLE_LINE_WIDTH_INVALID: "Subtitle text exceeds the configured display width.",
+  SUBTITLE_OUTPUT_INVALID: "The generated subtitle plan was invalid.",
+  SUBTITLE_TIMEOUT: "The subtitle planning operation timed out.",
+  SUBTITLE_CANCELLED: "The subtitle planning operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -608,6 +643,11 @@ export type ArollCutJoinSegment = Readonly<{ order: number; clipId: string; sent
 export type ArollCutJoinGap = Readonly<{ code: "timeline-gap"; beforeClipId: string | null; afterClipId: string | null; startMs: number; endMs: number; durationMs: number }>;
 export type ArollCutJoinOutput = Readonly<{ kind: "audio" | "video"; relativePath: string; sizeBytes: number }>;
 export type ArollCutJoinResult = Readonly<{ schemaVersion: 1; planVersion: "aroll-cut-join-plan-v1"; projectId: string; timelineId: string; trackId: string; mode: "audio" | "video"; executionMode: "plan" | "ffmpeg"; executionStatus: "not-run" | "completed"; status: "ready" | "gaps"; selectionPolicy: "ordered-complete-sentence-v1"; gapPolicy: "concatenate-without-timeline-gaps-v1"; planDigest: string; selectedDurationMs: number; segments: readonly ArollCutJoinSegment[]; gaps: readonly ArollCutJoinGap[]; output: ArollCutJoinOutput | null }>;
+export type SubtitleSentenceSource = Readonly<{ sentenceId: string; sourceId?: string | null; sourceInMs: number; sourceOutMs: number; text: string; language?: string | null; provenanceIds?: readonly string[] }>;
+export type SubtitlePlanParams = Readonly<{ projectId: string; timeline: TimelineProject; sentenceSources?: readonly SubtitleSentenceSource[]; trackId?: string; maxLines?: number; maxLineWidth?: number; timeoutMs?: number }>;
+export type SubtitlePlanGap = Readonly<{ code: "missing-sentence-source" | "missing-subtitle-text"; clipId: string; sentenceId: string | null; detail: string }>;
+export type SubtitleCue = Readonly<{ order: number; cueId: string; clipId: string; sentenceId: string | null; sourceId: string | null; sourceInMs: number | null; sourceOutMs: number | null; provenanceIds: readonly string[]; text: string; language: string | null; timelineStartMs: number; durationMs: number; timelineEndMs: number }>;
+export type SubtitlePlanResult = Readonly<{ schemaVersion: 1; planVersion: "subtitle-plan-v1"; projectId: string; timelineId: string; status: "ready" | "gaps"; selectionPolicy: "timeline-subtitles-or-sentence-clips-v1"; layoutPolicy: "bounded-display-width-v1"; maxLines: number; maxLineWidth: number; totalDurationMs: number; cueCount: number; planDigest: string; cues: readonly SubtitleCue[]; gaps: readonly SubtitlePlanGap[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -762,6 +802,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.planCreateRemix) return isNarrativePlanParams(value.params);
   if (value.method === CORE_RPC_METHODS.planOptimizeDuration) return isDurationOptimizationParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaArollCutJoin) return isArollCutJoinParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaSubtitlePlan) return isSubtitlePlanParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -1055,6 +1096,26 @@ export function isArollCutJoinResult(value: unknown): value is ArollCutJoinResul
   return isBoundedCoreJsonValue(value, 128 * 1024);
 }
 
+export function isSubtitlePlanResult(value: unknown): value is SubtitlePlanResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "planVersion", "projectId", "timelineId", "status", "selectionPolicy", "layoutPolicy", "maxLines", "maxLineWidth", "totalDurationMs", "cueCount", "planDigest", "cues", "gaps"])) return false;
+  if (value.schemaVersion !== 1 || value.planVersion !== "subtitle-plan-v1" || !isUuid(value.projectId) || !isTimelineId(value.timelineId)) return false;
+  if (value.status !== "ready" && value.status !== "gaps") return false;
+  if (value.selectionPolicy !== "timeline-subtitles-or-sentence-clips-v1" || value.layoutPolicy !== "bounded-display-width-v1") return false;
+  if (!isSafeInteger(value.maxLines, 1, 4) || !isSafeInteger(value.maxLineWidth, 8, 64) || !isSafeInteger(value.totalDurationMs, 0, 86_400_000) || !isSafeInteger(value.cueCount, 0, 2_048) || !isSentenceCacheKey(value.planDigest)) return false;
+  if (!Array.isArray(value.cues) || value.cues.length > 2_048 || value.cueCount !== value.cues.length || !value.cues.every((cue, index) => isSubtitleCue(cue, index + 1, value.maxLines as number, value.maxLineWidth as number))) return false;
+  if (!Array.isArray(value.gaps) || value.gaps.length > 2_048 || !value.gaps.every(isSubtitlePlanGap)) return false;
+  if (value.cues.length === 0 && value.gaps.length === 0) return false;
+  if ((value.cues as readonly SubtitleCue[]).reduce((total, cue) => total + cue.text.length, 0) > 180_000) return false;
+  if (value.status !== (value.gaps.length > 0 ? "gaps" : "ready")) return false;
+  if (value.totalDurationMs !== value.cues.reduce((total, cue) => total + (cue as SubtitleCue).durationMs, 0)) return false;
+  let cursor = 0;
+  for (const cue of value.cues as readonly SubtitleCue[]) {
+    if (cue.timelineStartMs < cursor) return false;
+    cursor = cue.timelineEndMs;
+  }
+  return isBoundedCoreJsonValue(value, 256 * 1024);
+}
+
 export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
   return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "selectedIndex", "items", "markers"])
     && value.schemaVersion === 1 && value.qaVersion === "sentence-qa-v1" && isUuid(value.projectId) && isUuid(value.assetId)
@@ -1346,6 +1407,17 @@ export function isArollCutJoinParams(value: unknown): value is ArollCutJoinParam
     && isBoundedCoreJsonValue(value, 512 * 1024);
 }
 
+export function isSubtitlePlanParams(value: unknown): value is SubtitlePlanParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "timeline", "sentenceSources", "trackId", "maxLines", "maxLineWidth", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isTimelineProject(value.timeline)) return false;
+  if (value.trackId !== undefined && !isTimelineId(value.trackId)) return false;
+  if (value.maxLines !== undefined && !isSafeInteger(value.maxLines, 1, 4)) return false;
+  if (value.maxLineWidth !== undefined && !isSafeInteger(value.maxLineWidth, 8, 64)) return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  if (value.sentenceSources !== undefined && (!Array.isArray(value.sentenceSources) || value.sentenceSources.length > 2_048 || !value.sentenceSources.every(isSubtitleSentenceSource))) return false;
+  return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1534,6 +1606,42 @@ function isArollCutJoinOutput(value: unknown): value is ArollCutJoinOutput {
     && !value.relativePath.includes("\\") && !value.relativePath.includes(":")
     && !value.relativePath.split("/").some((part) => part === "" || part === "." || part === "..")
     && isSafeInteger(value.sizeBytes, 1, 2 ** 53 - 1);
+}
+
+function isSubtitleSentenceSource(value: unknown): value is SubtitleSentenceSource {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["sentenceId", "sourceId", "sourceInMs", "sourceOutMs", "text", "language", "provenanceIds"])) return false;
+  if (!isTimelineId(value.sentenceId) || value.sourceId !== undefined && value.sourceId !== null && !isTimelineId(value.sourceId)) return false;
+  if (!isSafeInteger(value.sourceInMs, 0, 86_400_000) || !isSafeInteger(value.sourceOutMs, 1, 86_400_000) || value.sourceOutMs <= value.sourceInMs || !isBoundedText(value.text, 256)) return false;
+  if (value.language !== undefined && value.language !== null && !isSafeString(value.language, 32)) return false;
+  return value.provenanceIds === undefined || Array.isArray(value.provenanceIds) && value.provenanceIds.length <= 32 && value.provenanceIds.every(isTimelineId);
+}
+
+function isSubtitlePlanGap(value: unknown): value is SubtitlePlanGap {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["code", "clipId", "sentenceId", "detail"])
+    && (value.code === "missing-sentence-source" || value.code === "missing-subtitle-text")
+    && isTimelineId(value.clipId) && (value.sentenceId === null || isTimelineId(value.sentenceId)) && isSafeString(value.detail, 256);
+}
+
+function isSubtitleCue(value: unknown, order: number, maxLines: number, maxLineWidth: number): value is SubtitleCue {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["order", "cueId", "clipId", "sentenceId", "sourceId", "sourceInMs", "sourceOutMs", "provenanceIds", "text", "language", "timelineStartMs", "durationMs", "timelineEndMs"])) return false;
+  if (!isSafeInteger(value.order, 1, 2_048) || value.order !== order || !isTimelineId(value.cueId) || !isTimelineId(value.clipId)) return false;
+  if (value.sentenceId !== null && !isTimelineId(value.sentenceId) || value.sourceId !== null && !isTimelineId(value.sourceId)) return false;
+  if (!Array.isArray(value.provenanceIds) || value.provenanceIds.length > 32 || !value.provenanceIds.every(isTimelineId)) return false;
+  if (!isBoundedText(value.text, 256) || value.text.trim().length === 0 || (value.language !== null && !isSafeString(value.language, 32))) return false;
+  if (!isSafeInteger(value.timelineStartMs, 0, 86_400_000) || !isSafeInteger(value.durationMs, 1, 86_400_000) || !isSafeInteger(value.timelineEndMs, 1, 86_400_000) || value.timelineEndMs - value.timelineStartMs !== value.durationMs) return false;
+  if ((value.sourceInMs === null) !== (value.sourceOutMs === null)) return false;
+  if (value.sourceInMs !== null && (!isSafeInteger(value.sourceInMs, 0, 86_400_000) || !isSafeInteger(value.sourceOutMs, 1, 86_400_000) || value.sourceOutMs <= value.sourceInMs)) return false;
+  const lines = value.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  return lines.length <= maxLines && lines.every((line) => displayWidth(line) <= maxLineWidth);
+}
+
+function displayWidth(value: string): number {
+  let width = 0;
+  for (const character of value) {
+    if (/\p{Mark}/u.test(character)) continue;
+    width += /[\u1100-\u115f\u2329\u232a\u2e80-\u303e\u3040-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u.test(character) ? 2 : 1;
+  }
+  return width;
 }
 
 function isTimelineId(value: unknown): value is string {

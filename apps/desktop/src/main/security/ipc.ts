@@ -18,6 +18,7 @@ import {
   isNarrativePlanParams,
   isDurationOptimizationParams,
   isArollCutJoinParams,
+  isSubtitlePlanParams,
   isValidAgentRunId,
   isCredentialRemoveRequest,
   isCredentialReplaceRequest,
@@ -70,6 +71,8 @@ import {
   type DurationOptimizationResult,
   type ArollCutJoinParams,
   type ArollCutJoinResult,
+  type SubtitlePlanParams,
+  type SubtitlePlanResult,
 } from "@supervideo/shared";
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { isTrustedRendererUrl, sanitizeUrlForDiagnostics, type RendererTrustPolicy } from "./policies";
@@ -93,6 +96,7 @@ export type DesktopIpcDependencies = Readonly<{
   createRemixPlan: (event: IpcMainInvokeEvent, input: NarrativePlanParams) => Promise<NarrativePlanResult>;
   optimizeDuration: (event: IpcMainInvokeEvent, input: DurationOptimizationParams) => Promise<DurationOptimizationResult>;
   cutJoinAroll: (event: IpcMainInvokeEvent, input: ArollCutJoinParams) => Promise<ArollCutJoinResult>;
+  planSubtitles: (event: IpcMainInvokeEvent, input: SubtitlePlanParams) => Promise<SubtitlePlanResult>;
   startSmokeJob: (event: IpcMainInvokeEvent, input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
@@ -149,6 +153,7 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.createRemixPlan, isNarrativePlanParams, dependencies, (payload, event) => dependencies.createRemixPlan(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.optimizeDuration, isDurationOptimizationParams, dependencies, (payload, event) => dependencies.optimizeDuration(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.cutJoinAroll, isArollCutJoinParams, dependencies, (payload, event) => dependencies.cutJoinAroll(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.planSubtitles, isSubtitlePlanParams, dependencies, (payload, event) => dependencies.planSubtitles(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startSmokeJob, isValidJobSmokeStartPayload, dependencies, (payload, event) => dependencies.startSmokeJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),
