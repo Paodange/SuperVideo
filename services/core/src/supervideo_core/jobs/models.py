@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from supervideo_core.media.tts_models import TtsJobInput, TtsJobStartParams, TtsSynthesisResult
+from supervideo_core.media.remotion_models import RemotionRenderParams, RemotionRenderResult
 
 
 class JobModel(BaseModel):
@@ -28,7 +29,7 @@ class JobSmokeInput(JobModel):
 class JobSummary(JobModel):
     job_id: str = Field(alias="jobId")
     project_id: str = Field(alias="projectId")
-    job_type: Literal["smoke.countdown", "tts.synthesize"] = Field(alias="jobType")
+    job_type: Literal["smoke.countdown", "tts.synthesize", "remotion.render"] = Field(alias="jobType")
     status: JobStatus
     progress: float = Field(strict=True, ge=0, le=1)
     stage: str | None = None
@@ -50,7 +51,12 @@ class JobSummary(JobModel):
         return value
 
 
-__all__ = ["JobStatus", "JobSmokeInput", "JobSummary", "JobEventSummary", "JobPage", "JobEventPage", "TtsJobInput", "TtsJobStartParams", "TtsSynthesisResult"]
+class RemotionJobInput(JobModel):
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    render: RemotionRenderParams
+
+
+__all__ = ["JobStatus", "JobSmokeInput", "JobSummary", "JobEventSummary", "JobPage", "JobEventPage", "TtsJobInput", "TtsJobStartParams", "TtsSynthesisResult", "RemotionJobInput", "RemotionRenderParams", "RemotionRenderResult"]
 
 
 class JobEventSummary(JobModel):

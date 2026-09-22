@@ -10,6 +10,8 @@ import {
   isJobReferenceParams,
   isTtsStartRequest,
   isTtsSynthesisResult,
+  isRemotionRenderParams,
+  isRemotionRenderResult,
   isProjectSummary,
   isDesktopPublicError,
   isAgentWorkerStatusSnapshot,
@@ -91,6 +93,8 @@ import {
   type JobSummary,
   type TtsStartRequest,
   type TtsSynthesisResult,
+  type RemotionRenderParams,
+  type RemotionRenderResult,
   type CredentialListResult,
   type CredentialMetadata,
   type CredentialRemoveRequest,
@@ -178,6 +182,8 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.startTtsJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.getTtsJobResult
+    | typeof DESKTOP_IPC_CHANNELS.startRemotionJob
+    | typeof DESKTOP_IPC_CHANNELS.getRemotionJobResult
     | typeof DESKTOP_IPC_CHANNELS.listJobs
     | typeof DESKTOP_IPC_CHANNELS.listJobEvents
     | typeof DESKTOP_IPC_CHANNELS.cancelJob
@@ -352,6 +358,14 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
     getTtsJobResult: (input: JobReferenceParams) => {
       if (!isJobReferenceParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.getTtsJobResult, input, invoke, isTtsSynthesisResult);
+    },
+    startRemotionJob: (input: RemotionRenderParams) => {
+      if (!isRemotionRenderParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.startRemotionJob, input, invoke, isJobSummary);
+    },
+    getRemotionJobResult: (input: JobReferenceParams) => {
+      if (!isJobReferenceParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.getRemotionJobResult, input, invoke, isRemotionRenderResult);
     },
     listJobs: (input) => invokeValue(DESKTOP_IPC_CHANNELS.listJobs, input, invoke, isJobPage),
     listJobEvents: (input) => invokeValue(DESKTOP_IPC_CHANNELS.listJobEvents, input, invoke, isJobEventPage),

@@ -24,6 +24,8 @@ import {
   isJobReferenceParams,
   isJobSmokeStartParams,
   isJobTtsStartParams,
+  isRemotionRenderParams,
+  isRemotionRenderResult,
   isTtsResult,
   isJobPage,
   isJobSummary,
@@ -87,6 +89,8 @@ import {
   type TimelineVersionDiffResult,
   type CoreSmokeCountdownParams,
   type CoreSmokeCountdownResult,
+  type RemotionRenderParams,
+  type RemotionRenderResult,
   type AssetListParams,
   type AssetListResult,
   type AssetReferenceBatchResult,
@@ -527,10 +531,24 @@ export class PythonCoreClient {
     return result;
   }
 
+  async startRemotionJob(params: RemotionRenderParams, options: CoreRpcRequestOptions = {}): Promise<JobSummary> {
+    if (!isRemotionRenderParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobRemotionStart, params, options);
+    if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
   async getTtsJobResult(params: import("@supervideo/shared").JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<TtsSynthesisResult> {
     if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.jobTtsResult, params, options);
     if (!isTtsResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async getRemotionJobResult(params: import("@supervideo/shared").JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<RemotionRenderResult> {
+    if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobRemotionResult, params, options);
+    if (!isRemotionRenderResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 
