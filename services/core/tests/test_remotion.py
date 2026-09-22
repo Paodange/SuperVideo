@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from supervideo_core.jobs import JobManager
 from supervideo_core.jobs.models import RemotionJobInput
 from supervideo_core.media.remotion import RemotionRuntime, RemotionRuntimeError
-from supervideo_core.media.remotion_models import RemotionRenderParams, RemotionRenderResult, compute_remotion_cache_key
+from supervideo_core.media.remotion_models import RemotionPlayerContract, RemotionRenderParams, RemotionRenderResult, compute_remotion_cache_key
 from supervideo_core.storage import Database, JobCreate, JobRepository, ProjectCreate, ProjectRepository, new_id
 
 
@@ -58,6 +58,12 @@ class RemotionRuntimeTests(unittest.TestCase):
         value["inputProps"]["timeline"]["sources"][0]["metadata"]["credentialRef"] = "never"
         with self.assertRaises(ValidationError):
             RemotionRenderParams.model_validate(value)
+        with self.assertRaises(ValidationError):
+            RemotionPlayerContract.model_validate({
+                "availability": "contract-only",
+                "compositionId": "timeline-preview-v1",
+                "playbackUri": "file:///secret",
+            })
         value = make_params().model_dump(by_alias=True)
         value["inputProps"]["templateVersion"] = "attacker"
         with self.assertRaises(ValidationError):

@@ -115,7 +115,7 @@ export function isRemotionPlayerPreviewContract(value: unknown): value is Remoti
     && value.compositionId === "timeline-preview-v1"
     && isUuid(value.projectId)
     && value.templateVersion === REMOTION_TEMPLATE_VERSION
-    && typeof value.playbackUri === "string";
+    && isPreviewPlaybackUri(value.playbackUri, value.projectId);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -133,6 +133,10 @@ function isSafeInteger(value: unknown, minimum: number, maximum: number): value 
 function isCanonicalRenderPath(value: unknown, cacheKey: string, manifest: boolean): value is string {
   const expected = `generated/remotion-v1/renders/${cacheKey}${manifest ? ".manifest.json" : ".json"}`;
   return typeof value === "string" && value === expected && value.length <= 512 && SAFE_PATH.test(value);
+}
+function isPreviewPlaybackUri(value: unknown, projectId: string): value is string {
+  const prefix = `supervideo://remotion/${projectId}/`;
+  return typeof value === "string" && value.startsWith(prefix) && isSha256(value.slice(prefix.length));
 }
 function isPlaybackUri(value: unknown, projectId: string, cacheKey: string): value is string { return value === `supervideo://remotion/${projectId}/${cacheKey}`; }
 

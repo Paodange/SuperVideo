@@ -108,6 +108,13 @@ class RemotionPlayerContract(RemotionModel):
     composition_id: Literal["timeline-preview-v1"] = Field(alias="compositionId")
     playback_uri: str = Field(alias="playbackUri", min_length=1, max_length=256)
 
+    @field_validator("playback_uri")
+    @classmethod
+    def validate_playback_uri(cls, value: str) -> str:
+        if re.fullmatch(r"supervideo://remotion/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{64}", value) is None:
+            raise ValueError("invalid Remotion playback URI")
+        return value
+
 
 class RemotionRenderResult(RemotionModel):
     schema_version: Literal[1] = Field(alias="schemaVersion")

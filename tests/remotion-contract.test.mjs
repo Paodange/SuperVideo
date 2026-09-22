@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DESKTOP_IPC_CHANNELS,
+  isRemotionPlayerPreviewContract,
   isRemotionRenderParams,
   isRemotionRenderResult,
   isValidAgentWorkerCommand,
@@ -67,4 +68,18 @@ test("D03 result contract exposes only project-relative controlled outputs", () 
   assert.equal(isRemotionRenderResult({ ...result, output: { ...result.output, relativePath: `generated/remotion-v1/renders/${"e".repeat(64)}.json` } }), false);
   assert.equal(isRemotionRenderResult({ ...result, output: { ...result.output, manifestPath: `generated/remotion-v1/renders/${"e".repeat(64)}.manifest.json` } }), false);
   assert.equal(isRemotionRenderResult({ ...result, player: { ...result.player, playbackUri: "file:///secret" } }), false);
+});
+
+test("D03 Player preview contract only accepts controlled Remotion playback URIs", () => {
+  const preview = {
+    contractVersion: "remotion-runtime-v1",
+    availability: "contract-only",
+    compositionId: "timeline-preview-v1",
+    projectId,
+    templateVersion: "timeline-preview-v1",
+    playbackUri: `supervideo://remotion/${projectId}/${"a".repeat(64)}`,
+  };
+  assert.equal(isRemotionPlayerPreviewContract(preview), true);
+  assert.equal(isRemotionPlayerPreviewContract({ ...preview, playbackUri: "file:///secret" }), false);
+  assert.equal(isRemotionPlayerPreviewContract({ ...preview, playbackUri: `supervideo://remotion/${projectId}/not-a-cache-key` }), false);
 });
