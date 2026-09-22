@@ -13,6 +13,7 @@ import {
   isJobPage,
   isJobSummary,
   isTtsSynthesisResult,
+  isImageGenerationResult,
   isRemotionRenderResult,
   isValidDesktopAgentEvent,
   isProjectSummary,
@@ -51,6 +52,8 @@ import {
   type JobSummary,
   type TtsStartRequest,
   type TtsSynthesisResult,
+  type ImageStartRequest,
+  type ImageGenerationResult,
   type RemotionRenderParams,
   type RemotionRenderResult,
   type SentenceQaContextResult,
@@ -335,6 +338,10 @@ function ttsResult(value: Readonly<Record<string, unknown>>): TtsSynthesisResult
 }
 function remotionResult(value: Readonly<Record<string, unknown>>): RemotionRenderResult {
   if (!isRemotionRenderResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+  return value;
+}
+function imageResult(value: Readonly<Record<string, unknown>>): ImageGenerationResult {
+  if (!isImageGenerationResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
   return value;
 }
 function jobEventPage(value: Readonly<Record<string, unknown>>): JobEventPage {
@@ -886,8 +893,25 @@ app.whenReady().then(() => {
         },
       )));
     },
+    startImageJob: async (_event, input: ImageStartRequest) => {
+      const resolved = await providerService.resolveImage(input);
+      return rememberJob(jobSummary(await agentController.runJobOperation(
+        "job-image-start", input.projectId,
+        {
+          idempotencyKey: resolved.idempotencyKey,
+          providerId: resolved.providerId,
+          model: resolved.model,
+          shotId: resolved.shotId,
+          prompt: resolved.prompt,
+          parameters: resolved.parameters,
+          source: resolved.source,
+          provenance: resolved.provenance,
+        },
+      )));
+    },
     getJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation("job-get", input.projectId, { jobId: input.jobId }))),
     getTtsJobResult: async (_event, input): Promise<TtsSynthesisResult> => ttsResult(await agentController.runJobOperation("job-tts-result", input.projectId, { jobId: input.jobId })),
+    getImageJobResult: async (_event, input): Promise<ImageGenerationResult> => imageResult(await agentController.runJobOperation("job-image-result", input.projectId, { jobId: input.jobId })),
     startRemotionJob: async (_event, input: RemotionRenderParams) => rememberJob(jobSummary(await agentController.runJobOperation(
       "job-remotion-start", input.projectId,
       { schemaVersion: input.schemaVersion, renderVersion: input.renderVersion, idempotencyKey: input.idempotencyKey, inputProps: input.inputProps },

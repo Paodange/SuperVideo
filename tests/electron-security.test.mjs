@@ -171,7 +171,7 @@ test("Agent IPC uses explicit channels, payload schemas, and stable public error
     cancelSmokeRun: (runId) => calls.push(`cancel:${runId}`),
     log: () => {},
   });
-  assert.equal(fakeIpcMain.handlers.size, 39);
+  assert.equal(fakeIpcMain.handlers.size, 41);
   const statusHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.getAgentStatus);
   const runHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.runAgentSmokeTask);
   const cancelHandler = fakeIpcMain.handlers.get(shared.DESKTOP_IPC_CHANNELS.cancelAgentRun);
@@ -249,7 +249,7 @@ test("preload exposes one frozen typed capability and no arbitrary channel", asy
   assert.deepEqual(Object.keys(api), [
     "getEnvironment", "getAgentStatus", "runSmokeTask", "cancelSmokeRun", "onAgentEvent",
     "createProject", "openProject", "addAssetReferences", "listProjectAssets", "inspectSentenceQa", "saveSentenceQa", "retrieveSentences", "rerankSentences", "alignScript", "createRemixPlan", "optimizeDuration", "cutJoinAroll", "planSubtitles", "renderPreview", "checkPreviewQuality", "exportFinalMp4", "editTimeline", "createTimelineVersion", "applyTimelineEditVersion", "listTimelineVersions", "getTimelineVersion", "activateTimelineVersion", "undoTimelineVersion", "redoTimelineVersion", "diffTimelineVersions",
-    "startSmokeJob", "startTtsJob", "getJob", "getTtsJobResult", "startRemotionJob", "getRemotionJobResult", "listJobs", "listJobEvents", "cancelJob", "retryJob", "onJobEvent",
+    "startSmokeJob", "startTtsJob", "startImageJob", "getJob", "getTtsJobResult", "getImageJobResult", "startRemotionJob", "getRemotionJobResult", "listJobs", "listJobEvents", "cancelJob", "retryJob", "onJobEvent",
     "credentials", "diagnostics", "providers",
   ]);
   assert.equal("invoke" in api, false);

@@ -37,6 +37,7 @@ from supervideo_core.media.final_export_models import FinalMp4ExportParams
 from supervideo_core.media.edit_models import TimelineEditParams
 from supervideo_core.media.tts_models import TtsJobStartParams
 from supervideo_core.media.remotion_models import RemotionRenderParams
+from supervideo_core.media.image_models import ImageJobStartParams
 from supervideo_core.timeline.version_models import (
     TimelineVersionActivateParams, TimelineVersionApplyEditParams, TimelineVersionCreateParams,
     TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
@@ -418,6 +419,11 @@ async def job_remotion_start_handler(params: RemotionRenderParams, manager: JobM
     return result.model_dump(by_alias=True)
 
 
+async def job_image_start_handler(params: ImageJobStartParams, manager: JobManager) -> dict[str, object]:
+    result = await manager.start_image(params)
+    return result.model_dump(by_alias=True)
+
+
 class RpcRegistry:
     """Registry whose method names are all explicit source-level entries."""
 
@@ -547,6 +553,10 @@ class RpcRegistry:
                 RemotionRenderParams,
                 lambda params, _emit, _cancelled: job_remotion_start_handler(params, self.job_manager),
             ),
+            "job.image.start": (
+                ImageJobStartParams,
+                lambda params, _emit, _cancelled: job_image_start_handler(params, self.job_manager),
+            ),
             "job.tts.result": (
                 JobReferenceParams,
                 lambda params, _emit, _cancelled: _job_tts_result(params, self.job_manager),
@@ -554,6 +564,10 @@ class RpcRegistry:
             "job.remotion.result": (
                 JobReferenceParams,
                 lambda params, _emit, _cancelled: _job_remotion_result(params, self.job_manager),
+            ),
+            "job.image.result": (
+                JobReferenceParams,
+                lambda params, _emit, _cancelled: _job_image_result(params, self.job_manager),
             ),
             "job.get": (
                 JobReferenceParams,
@@ -637,3 +651,7 @@ async def _job_tts_result(params: JobReferenceParams, manager: JobManager) -> di
 
 async def _job_remotion_result(params: JobReferenceParams, manager: JobManager) -> dict[str, object]:
     return manager.get_remotion_result(params.project_id, params.job_id).model_dump(by_alias=True)
+
+
+async def _job_image_result(params: JobReferenceParams, manager: JobManager) -> dict[str, object]:
+    return manager.get_image_result(params.project_id, params.job_id).model_dump(by_alias=True)

@@ -23,6 +23,20 @@ export type ProviderTtsSynthesisResult = Readonly<{
   audioBytes: Uint8Array;
   durationMs: number;
 }>;
+/** Main-only future image seam; the secret never enters this request/result. */
+export type ProviderImageGenerationRequest = Readonly<{
+  projectId: string;
+  model: string;
+  shotId: string;
+  prompt: string;
+  parameters: Readonly<{ width: number; height: number; steps: number; seed: number }>;
+  source: Readonly<{ kind: "d05-shot" | "user-brief" | "fact"; id: string }>;
+  provenance: readonly Readonly<{ kind: "script" | "fact" | "source"; id: string }>[];
+}>;
+export type ProviderImageGenerationResult = Readonly<{
+  imageBytes: Uint8Array;
+  mimeType: "image/png";
+}>;
 export type ProviderConfigDeleteRequest = Readonly<{ projectId: string; serviceKind: ProviderServiceKind; providerId: string }>;
 export type ProviderConfigListRequest = Readonly<{ projectId: string }>;
 export type ProviderConfigListResult = Readonly<{ projectId: string; items: readonly ProviderConfig[] }>;
@@ -31,6 +45,8 @@ export interface ProviderAdapter {
   health(secret: string, config: ProviderConfig, timeoutMs: number): Promise<ProviderHealthErrorCode | null>;
   /** Optional future real-TTS seam. `secret` is available only in this Main-owned callback. */
   synthesizeTts?: (secret: string, request: ProviderTtsSynthesisRequest, timeoutMs: number) => Promise<ProviderTtsSynthesisResult>;
+  /** Optional future real-image seam. `secret` is available only in this Main-owned callback. */
+  generateImage?: (secret: string, request: ProviderImageGenerationRequest, timeoutMs: number) => Promise<ProviderImageGenerationResult>;
 }
 export interface ProviderRegistry {
   register(adapter: ProviderAdapter): void;

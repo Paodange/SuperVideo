@@ -10,6 +10,8 @@ import {
   isJobReferenceParams,
   isTtsStartRequest,
   isTtsSynthesisResult,
+  isImageStartRequest,
+  isImageGenerationResult,
   isRemotionRenderParams,
   isRemotionRenderResult,
   isProjectSummary,
@@ -93,6 +95,8 @@ import {
   type JobSummary,
   type TtsStartRequest,
   type TtsSynthesisResult,
+  type ImageStartRequest,
+  type ImageGenerationResult,
   type RemotionRenderParams,
   type RemotionRenderResult,
   type CredentialListResult,
@@ -180,8 +184,10 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.diffTimelineVersions
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
     | typeof DESKTOP_IPC_CHANNELS.startTtsJob
+    | typeof DESKTOP_IPC_CHANNELS.startImageJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.getTtsJobResult
+    | typeof DESKTOP_IPC_CHANNELS.getImageJobResult
     | typeof DESKTOP_IPC_CHANNELS.startRemotionJob
     | typeof DESKTOP_IPC_CHANNELS.getRemotionJobResult
     | typeof DESKTOP_IPC_CHANNELS.listJobs
@@ -354,10 +360,18 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
       if (!isTtsStartRequest(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.startTtsJob, input, invoke, isJobSummary);
     },
+    startImageJob: (input: ImageStartRequest) => {
+      if (!isImageStartRequest(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.startImageJob, input, invoke, isJobSummary);
+    },
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),
     getTtsJobResult: (input: JobReferenceParams) => {
       if (!isJobReferenceParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.getTtsJobResult, input, invoke, isTtsSynthesisResult);
+    },
+    getImageJobResult: (input: JobReferenceParams) => {
+      if (!isJobReferenceParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.getImageJobResult, input, invoke, isImageGenerationResult);
     },
     startRemotionJob: (input: RemotionRenderParams) => {
       if (!isRemotionRenderParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));

@@ -10,7 +10,9 @@ import { isTimelineProject, type TimelineProject } from "./timeline-ir";
 
 import { isTtsJobStartParams, isTtsSynthesisResult, type TtsJobStartParams, type TtsSynthesisResult } from "./tts-contract";
 import { isRemotionRenderParams, isRemotionRenderResult, type RemotionRenderParams, type RemotionRenderResult } from "./remotion-contract";
+import { isImageJobStartParams, isImageGenerationResult, type ImageJobStartParams, type ImageGenerationResult } from "./image-contract";
 export * from "./remotion-contract";
+export * from "./image-contract";
 export type { TtsJobStartParams, TtsJobResultParams, TtsStartRequest, TtsSentenceInput, TtsSentenceTimestamp, TtsSynthesisResult } from "./tts-contract";
 
 export const JSON_RPC_VERSION = "2.0" as const;
@@ -64,6 +66,8 @@ export const CORE_RPC_METHODS = {
   jobTtsResult: "job.tts.result",
   jobRemotionStart: "job.remotion.start",
   jobRemotionResult: "job.remotion.result",
+  jobImageStart: "job.image.start",
+  jobImageResult: "job.image.result",
   jobGet: "job.get",
   jobList: "job.list",
   jobEventsList: "job.events.list",
@@ -114,6 +118,8 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.jobTtsResult
   | typeof CORE_RPC_METHODS.jobRemotionStart
   | typeof CORE_RPC_METHODS.jobRemotionResult
+  | typeof CORE_RPC_METHODS.jobImageStart
+  | typeof CORE_RPC_METHODS.jobImageResult
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
   | typeof CORE_RPC_METHODS.jobEventsList
@@ -729,11 +735,12 @@ export type AssetScanParams = Readonly<{ projectId: string; directory: string }>
 export type AssetListParams = Readonly<{ projectId: string; limit: number }>;
 export type JobSmokeStartParams = Readonly<{ projectId: string; idempotencyKey: string; steps?: number; delayMs?: number; failAttempts?: number }>;
 export type { RemotionRenderParams, RemotionRenderResult } from "./remotion-contract";
+export type { ImageJobStartParams, ImageGenerationResult } from "./image-contract";
 export type JobReferenceParams = Readonly<{ projectId: string; jobId: string }>;
 export type JobListParams = Readonly<{ projectId: string; statuses?: readonly JobStatus[]; cursor?: string | null; limit?: number }>;
 export type JobEventsListParams = Readonly<{ projectId: string; jobId: string; afterSequence?: number; cursor?: string | null; limit?: number }>;
 export type JobSummary = Readonly<{
-  jobId: string; projectId: string; jobType: "smoke.countdown" | "tts.synthesize" | "remotion.render"; status: JobStatus; progress: number;
+  jobId: string; projectId: string; jobType: "smoke.countdown" | "tts.synthesize" | "remotion.render" | "image.generate"; status: JobStatus; progress: number;
   stage: string | null; attempt: number; revision: number; lastEventSequence: number;
   createdAtMs: number; updatedAtMs: number; startedAtMs: number | null; finishedAtMs: number | null; errorCode: string | null;
 }>;
@@ -1046,6 +1053,8 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.jobTtsResult) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobRemotionStart) return isRemotionRenderParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobRemotionResult) return isJobReferenceParams(value.params);
+  if (value.method === CORE_RPC_METHODS.jobImageStart) return isImageJobStartParams(value.params);
+  if (value.method === CORE_RPC_METHODS.jobImageResult) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobEventsList) return isJobEventsListParams(value.params);
@@ -1430,7 +1439,7 @@ export function isCoreProgress(value: unknown): value is CoreProgress {
 
 export function isJobSummary(value: unknown): value is JobSummary {
   return isPlainRecord(value) && hasOnlyKeys(value, ["jobId", "projectId", "jobType", "status", "progress", "stage", "attempt", "revision", "lastEventSequence", "createdAtMs", "updatedAtMs", "startedAtMs", "finishedAtMs", "errorCode"])
-    && isUuid(value.jobId) && isUuid(value.projectId) && (value.jobType === "smoke.countdown" || value.jobType === "tts.synthesize" || value.jobType === "remotion.render") && isJobStatus(value.status)
+    && isUuid(value.jobId) && isUuid(value.projectId) && (value.jobType === "smoke.countdown" || value.jobType === "tts.synthesize" || value.jobType === "remotion.render" || value.jobType === "image.generate") && isJobStatus(value.status)
     && isFiniteProgress(value.progress) && (value.stage === null || isSafeString(value.stage, 128))
     && isSafeInteger(value.attempt, 0, Number.MAX_SAFE_INTEGER)
     && isSafeInteger(value.revision, 0, Number.MAX_SAFE_INTEGER) && isSafeInteger(value.lastEventSequence, 0, Number.MAX_SAFE_INTEGER)

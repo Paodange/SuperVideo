@@ -11,6 +11,7 @@ import {
   isJobReferenceParams,
   isJobSmokeStartParams,
   isTtsStartRequest,
+  isImageStartRequest,
   isRemotionRenderParams,
   isSentenceQaParams,
   isSentenceQaSaveParams,
@@ -80,6 +81,8 @@ import {
   type JobSummary,
   type TtsStartRequest,
   type TtsSynthesisResult,
+  type ImageStartRequest,
+  type ImageGenerationResult,
   type RemotionRenderParams,
   type RemotionRenderResult,
   type SentenceQaParams,
@@ -158,8 +161,10 @@ export type DesktopIpcDependencies = Readonly<{
   diffTimelineVersions: (event: IpcMainInvokeEvent, input: TimelineVersionDiffParams) => Promise<TimelineVersionDiffResult>;
   startSmokeJob: (event: IpcMainInvokeEvent, input: JobSmokeStartParams) => Promise<JobSummary>;
   startTtsJob: (event: IpcMainInvokeEvent, input: TtsStartRequest) => Promise<JobSummary>;
+  startImageJob: (event: IpcMainInvokeEvent, input: ImageStartRequest) => Promise<JobSummary>;
   getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   getTtsJobResult: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<TtsSynthesisResult>;
+  getImageJobResult: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<ImageGenerationResult>;
   startRemotionJob: (event: IpcMainInvokeEvent, input: RemotionRenderParams) => Promise<JobSummary>;
   getRemotionJobResult: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<RemotionRenderResult>;
   listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
@@ -235,8 +240,10 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.diffTimelineVersions, isTimelineVersionDiffParams, dependencies, (payload, event) => dependencies.diffTimelineVersions(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startSmokeJob, isValidJobSmokeStartPayload, dependencies, (payload, event) => dependencies.startSmokeJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startTtsJob, isTtsStartRequest, dependencies, (payload, event) => dependencies.startTtsJob(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startImageJob, isImageStartRequest, dependencies, (payload, event) => dependencies.startImageJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getTtsJobResult, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getTtsJobResult(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getImageJobResult, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getImageJobResult(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startRemotionJob, isRemotionRenderParams, dependencies, (payload, event) => dependencies.startRemotionJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getRemotionJobResult, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getRemotionJobResult(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),
