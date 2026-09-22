@@ -325,21 +325,37 @@ async def timeline_version_handler(params, _emit: ProgressEmitter, _cancelled: a
         "TimelineVersionDiffParams": service.diff_timeline_versions,
     }
     result = handlers[type(params).__name__](params)
-    payload = result.model_dump(by_alias=True, exclude_none=False)
+    payload = result.model_dump(by_alias=True, exclude_none=True)
+    if "operation" in payload:
+        # Keep the result discriminators addressable even when no snapshot or
+        # edit result is returned.
+        payload.setdefault("version", None)
+        payload.setdefault("editResult", None)
     version = payload.get("version")
-    if isinstance(version, dict) and isinstance(version.get("timeline"), dict):
-        version["timeline"] = _compact_timeline_wire(version["timeline"])
+    if isinstance(version, dict):
+        _compact_version_snapshot_wire(version)
     items = payload.get("items")
     if isinstance(items, list):
         for item in items:
-            if isinstance(item, dict) and isinstance(item.get("timeline"), dict):
-                item["timeline"] = _compact_timeline_wire(item["timeline"])
+            if isinstance(item, dict):
+                _compact_version_snapshot_wire(item)
     edit_result = payload.get("editResult")
     if isinstance(edit_result, dict) and isinstance(edit_result.get("resultTimeline"), dict):
         edit_result["resultTimeline"] = _compact_timeline_wire(edit_result["resultTimeline"])
     if isinstance(edit_result, dict) and isinstance(edit_result.get("intent"), dict):
         edit_result["intent"] = _compact_timeline_wire(edit_result["intent"])
+    if isinstance(edit_result, dict):
+        edit_result.setdefault("rejection", None)
     return payload
+
+
+def _compact_version_snapshot_wire(value: dict[str, object]) -> None:
+    """Compact only embedded Timeline IR and preserve version nullable fields."""
+
+    value.setdefault("parentVersionId", None)
+    timeline = value.get("timeline")
+    if isinstance(timeline, dict):
+        value["timeline"] = _compact_timeline_wire(timeline)
 
 
 def _compact_timeline_wire(value: dict[str, object]) -> dict[str, object]:

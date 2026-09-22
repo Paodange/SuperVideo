@@ -487,6 +487,7 @@ test("real PythonCoreClient persists and navigates C10 Timeline versions", async
     assert.equal(shared.isTimelineVersionDiffResult(diff), true);
     assert.deepEqual(diff.summary.removedClipIds, ["clip-camera-a"]);
     const undone = await client.undoTimelineVersion({ ...contract, projectId: project.projectId, expectedActiveVersionId: edited.activeVersionId });
+    assert.equal(shared.isTimelineVersionResult(undone), true);
     assert.equal(undone.activeVersionId, rootVersion.activeVersionId);
   } finally {
     await client.shutdown();

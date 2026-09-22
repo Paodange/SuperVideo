@@ -102,7 +102,7 @@ class TimelineVersionService:
                 source_version_id=source.id,
                 schema_version=result_timeline.schema_version,
                 timeline_id=result_timeline.id,
-            timeline_json=result_timeline.model_dump(by_alias=True, exclude_none=True),
+                timeline_json=result_timeline.model_dump(by_alias=True, exclude_none=True),
                 edit_intent_json=edit_result.intent.model_dump(by_alias=True),
                 diff_summary_json=edit_result.diff.model_dump(by_alias=True),
                 source_type="edit",
