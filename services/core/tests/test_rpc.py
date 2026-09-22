@@ -80,6 +80,7 @@ class RpcModelTests(unittest.TestCase):
             validate_request(invalid)
         self.assertIn("media.script.align", health_result()["capabilities"])
         self.assertIn("plan.optimize_duration", health_result()["capabilities"])
+        self.assertIn("media.aroll.cut_join", health_result()["capabilities"])
         expected_codes = {
             "SLOT_INPUT_INVALID": -32346,
             "SLOT_SOURCE_INVALID": -32347,
@@ -94,10 +95,36 @@ class RpcModelTests(unittest.TestCase):
             "DURATION_OPTIMIZATION_OUTPUT_INVALID": -32363,
             "DURATION_OPTIMIZATION_TIMEOUT": -32364,
             "DURATION_OPTIMIZATION_CANCELLED": -32365,
+            "AROLL_CUT_JOIN_INPUT_INVALID": -32366,
+            "AROLL_CUT_JOIN_TIMELINE_INVALID": -32367,
+            "AROLL_CUT_JOIN_SOURCE_INVALID": -32368,
+            "AROLL_CUT_JOIN_OUTPUT_INVALID": -32369,
+            "AROLL_CUT_JOIN_TOOL_UNAVAILABLE": -32370,
+            "AROLL_CUT_JOIN_TOOL_TIMEOUT": -32371,
+            "AROLL_CUT_JOIN_CANCELLED": -32372,
+            "AROLL_CUT_JOIN_TIMEOUT": -32373,
         }
         for error_code, code in expected_codes.items():
             with self.subTest(error_code=error_code):
                 self.assertEqual(error_payload(error_code)["code"], code)
+
+    def test_c04_aroll_request_uses_timeline_source_contract(self) -> None:
+        timeline = json.loads((ROOT / "tests" / "fixtures" / "c04_aroll_cut_join_v1.json").read_text(encoding="utf-8"))
+        request = {
+            "jsonrpc": "2.0",
+            "id": "aroll-cut-join-1",
+            "method": "media.aroll.cut_join",
+            "params": {
+                "projectId": "99999999-9999-4999-8999-999999999999",
+                "timeline": timeline,
+                "mode": "video",
+                "trackId": "track-video-aroll",
+            },
+        }
+        self.assertEqual(validate_request(request).method, "media.aroll.cut_join")
+        invalid = {**request, "params": {**request["params"], "command": "ffmpeg"}}
+        with self.assertRaises(ValidationError):
+            validate_request(invalid)
 
 
 class RpcServerTests(unittest.TestCase):

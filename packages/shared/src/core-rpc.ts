@@ -1,3 +1,5 @@
+import { isTimelineProject, type TimelineProject } from "./timeline-ir";
+
 /**
  * Versioned contract shared by the Agent Worker and the Python Core.
  *
@@ -38,6 +40,7 @@ export const CORE_RPC_METHODS = {
   mediaScriptAlign: "media.script.align",
   planCreateRemix: "plan.create_remix",
   planOptimizeDuration: "plan.optimize_duration",
+  mediaArollCutJoin: "media.aroll.cut_join",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -70,6 +73,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaScriptAlign
   | typeof CORE_RPC_METHODS.planCreateRemix
   | typeof CORE_RPC_METHODS.planOptimizeDuration
+  | typeof CORE_RPC_METHODS.mediaArollCutJoin
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -202,6 +206,14 @@ export const CORE_RPC_ERROR_CODES = {
   durationOptimizationOutputInvalid: "DURATION_OPTIMIZATION_OUTPUT_INVALID",
   durationOptimizationTimeout: "DURATION_OPTIMIZATION_TIMEOUT",
   durationOptimizationCancelled: "DURATION_OPTIMIZATION_CANCELLED",
+  arollCutJoinInputInvalid: "AROLL_CUT_JOIN_INPUT_INVALID",
+  arollCutJoinTimelineInvalid: "AROLL_CUT_JOIN_TIMELINE_INVALID",
+  arollCutJoinSourceInvalid: "AROLL_CUT_JOIN_SOURCE_INVALID",
+  arollCutJoinOutputInvalid: "AROLL_CUT_JOIN_OUTPUT_INVALID",
+  arollCutJoinToolUnavailable: "AROLL_CUT_JOIN_TOOL_UNAVAILABLE",
+  arollCutJoinToolTimeout: "AROLL_CUT_JOIN_TOOL_TIMEOUT",
+  arollCutJoinTimeout: "AROLL_CUT_JOIN_TIMEOUT",
+  arollCutJoinCancelled: "AROLL_CUT_JOIN_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -330,6 +342,14 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   DURATION_OPTIMIZATION_OUTPUT_INVALID: -32363,
   DURATION_OPTIMIZATION_TIMEOUT: -32364,
   DURATION_OPTIMIZATION_CANCELLED: -32365,
+  AROLL_CUT_JOIN_INPUT_INVALID: -32366,
+  AROLL_CUT_JOIN_TIMELINE_INVALID: -32367,
+  AROLL_CUT_JOIN_SOURCE_INVALID: -32368,
+  AROLL_CUT_JOIN_OUTPUT_INVALID: -32369,
+  AROLL_CUT_JOIN_TOOL_UNAVAILABLE: -32370,
+  AROLL_CUT_JOIN_TOOL_TIMEOUT: -32371,
+  AROLL_CUT_JOIN_CANCELLED: -32372,
+  AROLL_CUT_JOIN_TIMEOUT: -32373,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -456,6 +476,14 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   DURATION_OPTIMIZATION_OUTPUT_INVALID: "The duration optimization output was invalid.",
   DURATION_OPTIMIZATION_TIMEOUT: "The duration optimization operation timed out.",
   DURATION_OPTIMIZATION_CANCELLED: "The duration optimization operation was cancelled.",
+  AROLL_CUT_JOIN_INPUT_INVALID: "The A-roll cut/join input is invalid or exceeds its bounds.",
+  AROLL_CUT_JOIN_TIMELINE_INVALID: "The Timeline IR is invalid for A-roll cut/join.",
+  AROLL_CUT_JOIN_SOURCE_INVALID: "An A-roll source reference is invalid or stale.",
+  AROLL_CUT_JOIN_OUTPUT_INVALID: "The A-roll cut/join plan or output was invalid.",
+  AROLL_CUT_JOIN_TOOL_UNAVAILABLE: "The configured A-roll media tool is unavailable.",
+  AROLL_CUT_JOIN_TOOL_TIMEOUT: "The A-roll media tool timed out.",
+  AROLL_CUT_JOIN_CANCELLED: "The A-roll cut/join operation was cancelled.",
+  AROLL_CUT_JOIN_TIMEOUT: "The A-roll cut/join operation timed out.",
 };
 
 export type CoreRpcId = string;
@@ -574,6 +602,12 @@ export type DurationOptimizationSentence = Readonly<{ sentenceId: string; senten
 export type DurationOptimizationSegment = Readonly<{ segmentId: string; order: number; role: "hook" | "body" | "cta"; slotId: string; slotKind: InformationSlot["kind"]; sourceText: string; status: "matched" | "gap"; operation: "keep" | "replace" | "add"; candidateSentenceId: string | null; candidateRank: number | null; sentenceText: string | null; source: NarrativePlanSource | null; durationMs: number; selectionReason: string | null; gapReason: NarrativePlanGap | null }>;
 export type DurationOptimizationChange = Readonly<{ segmentId: string; slotId: string; role: "hook" | "body" | "cta"; operation: "keep" | "replace" | "add" | "remove"; before: DurationOptimizationSentence | null; after: DurationOptimizationSentence | null; selectionReason: string }>;
 export type DurationOptimizationResult = Readonly<{ schemaVersion: 1; optimizationVersion: "duration-optimization-v1"; projectId: string; sourcePlanDigest: string; targetDurationMs: number; toleranceLowerMs: number; toleranceUpperMs: number; selectedDurationMs: number; durationStatus: "within-tolerance" | "outside-tolerance"; status: "optimized" | "unchanged" | "gaps" | "needs-duration-optimization"; selectionPolicy: "bounded-whole-sentence-knapsack-v1"; segments: readonly DurationOptimizationSegment[]; changes: readonly DurationOptimizationChange[]; gaps: readonly NarrativePlanGap[] }>;
+export type ArollCutJoinParams = Readonly<{ projectId: string; timeline: TimelineProject; mode: "audio" | "video"; trackId?: string; executionMode?: "plan" | "ffmpeg"; timeoutMs?: number }>;
+export type ArollSourceRef = Readonly<{ sourceId: string; uri: string; mediaType: "audio" | "video"; durationMs: number; fingerprint: string | null }>;
+export type ArollCutJoinSegment = Readonly<{ order: number; clipId: string; sentenceId: string; source: ArollSourceRef; sourceInMs: number; sourceOutMs: number; durationMs: number; timelineStartMs: number; outputStartMs: number; outputEndMs: number }>;
+export type ArollCutJoinGap = Readonly<{ code: "timeline-gap"; beforeClipId: string | null; afterClipId: string | null; startMs: number; endMs: number; durationMs: number }>;
+export type ArollCutJoinOutput = Readonly<{ kind: "audio" | "video"; relativePath: string; sizeBytes: number }>;
+export type ArollCutJoinResult = Readonly<{ schemaVersion: 1; planVersion: "aroll-cut-join-plan-v1"; projectId: string; timelineId: string; trackId: string; mode: "audio" | "video"; executionMode: "plan" | "ffmpeg"; executionStatus: "not-run" | "completed"; status: "ready" | "gaps"; selectionPolicy: "ordered-complete-sentence-v1"; gapPolicy: "concatenate-without-timeline-gaps-v1"; planDigest: string; selectedDurationMs: number; segments: readonly ArollCutJoinSegment[]; gaps: readonly ArollCutJoinGap[]; output: ArollCutJoinOutput | null }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -727,6 +761,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaScriptAlign) return isSlotAlignmentParams(value.params);
   if (value.method === CORE_RPC_METHODS.planCreateRemix) return isNarrativePlanParams(value.params);
   if (value.method === CORE_RPC_METHODS.planOptimizeDuration) return isDurationOptimizationParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaArollCutJoin) return isArollCutJoinParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -995,6 +1030,29 @@ export function isDurationOptimizationResult(value: unknown): value is DurationO
   if (!Array.isArray(value.gaps) || value.gaps.length > 33 || !value.gaps.every(isNarrativePlanGap)) return false;
   const expectedStatus = value.gaps.length > 0 ? "gaps" : value.durationStatus === "within-tolerance" ? (value.changes.some((change) => (change as DurationOptimizationChange).operation !== "keep") ? "optimized" : "unchanged") : "needs-duration-optimization";
   return value.status === expectedStatus && isBoundedCoreJsonValue(value, 60 * 1024);
+}
+
+export function isArollCutJoinResult(value: unknown): value is ArollCutJoinResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "planVersion", "projectId", "timelineId", "trackId", "mode", "executionMode", "executionStatus", "status", "selectionPolicy", "gapPolicy", "planDigest", "selectedDurationMs", "segments", "gaps", "output"])) return false;
+  if (value.schemaVersion !== 1 || value.planVersion !== "aroll-cut-join-plan-v1" || !isUuid(value.projectId) || !isTimelineId(value.timelineId) || !isTimelineId(value.trackId)) return false;
+  if (value.mode !== "audio" && value.mode !== "video") return false;
+  if (value.executionMode !== "plan" && value.executionMode !== "ffmpeg") return false;
+  if (value.executionStatus !== "not-run" && value.executionStatus !== "completed") return false;
+  if (value.status !== "ready" && value.status !== "gaps") return false;
+  if (value.selectionPolicy !== "ordered-complete-sentence-v1" || value.gapPolicy !== "concatenate-without-timeline-gaps-v1" || !isSentenceCacheKey(value.planDigest)) return false;
+  if (!isSafeInteger(value.selectedDurationMs, 1, 86_400_000)) return false;
+  if (!Array.isArray(value.segments) || value.segments.length < 1 || value.segments.length > 64 || !value.segments.every((segment, index) => isArollCutJoinSegment(segment, index + 1, value.mode as "audio" | "video"))) return false;
+  if (!Array.isArray(value.gaps) || value.gaps.length > 65 || !value.gaps.every(isArollCutJoinGap)) return false;
+  if (value.selectedDurationMs !== value.segments.reduce((total, segment) => total + (segment as ArollCutJoinSegment).durationMs, 0)) return false;
+  let outputCursor = 0;
+  for (const segment of value.segments as readonly ArollCutJoinSegment[]) {
+    if (segment.outputStartMs !== outputCursor) return false;
+    outputCursor = segment.outputEndMs;
+  }
+  if (value.status !== (value.gaps.length > 0 ? "gaps" : "ready")) return false;
+  if (value.executionMode === "plan" && (value.executionStatus !== "not-run" || value.output !== null)) return false;
+  if (value.executionMode === "ffmpeg" && (value.executionStatus !== "completed" || !isArollCutJoinOutput(value.output) || (value.output as ArollCutJoinOutput).kind !== value.mode)) return false;
+  return isBoundedCoreJsonValue(value, 128 * 1024);
 }
 
 export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
@@ -1278,6 +1336,16 @@ export function isDurationOptimizationParams(value: unknown): value is DurationO
   return (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000)) && isBoundedCoreJsonValue(value, 120 * 1024);
 }
 
+export function isArollCutJoinParams(value: unknown): value is ArollCutJoinParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "timeline", "mode", "trackId", "executionMode", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isTimelineProject(value.timeline) || (value.mode !== "audio" && value.mode !== "video")) return false;
+  if (value.trackId !== undefined && !isTimelineId(value.trackId)) return false;
+  if (value.executionMode !== undefined && value.executionMode !== "plan" && value.executionMode !== "ffmpeg") return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  return isArollTimelineInput(value.timeline as TimelineProject, value.mode as "audio" | "video", value.trackId as string | undefined)
+    && isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1412,6 +1480,61 @@ function isRerankCandidate(value: unknown, rank: number): value is RerankCandida
   return isSafeInteger(value.explanation.selectedSourceAssetCount, 1, 50)
     && (value.explanation.visualQualityStatus === "measured" || value.explanation.visualQualityStatus === "degraded")
     && isSafeString(value.explanation.visualQualityReason, 96);
+}
+
+function isArollTimelineInput(timeline: TimelineProject, mode: "audio" | "video", trackId?: string): boolean {
+  const tracks = timeline.tracks.filter((track) => track.kind === mode && (trackId === undefined || track.id === trackId));
+  const track = tracks[0];
+  if (tracks.length !== 1 || track === undefined || track.clips.length < 1 || track.clips.length > 64) return false;
+  const sources = new Map(timeline.sources.map((source) => [source.id, source]));
+  const clips = [...track.clips].sort((left, right) => left.timelineStartMs - right.timelineStartMs || left.id.localeCompare(right.id));
+  let previousEnd = 0;
+  for (const clip of clips) {
+    if (clip.kind !== mode || clip.sourceId === undefined || clip.sentenceId === undefined || clip.sourceInMs === undefined || clip.sourceOutMs === undefined) return false;
+    if (clip.sourceOutMs - clip.sourceInMs !== clip.durationMs || clip.timelineStartMs < previousEnd) return false;
+    const metadata = clip.metadata;
+    if (!isPlainRecord(metadata) || metadata.sentenceStatus !== "complete") return false;
+    const source = sources.get(clip.sourceId);
+    if (!source || source.kind !== "asset" || source.mediaType !== mode || source.durationMs === undefined || clip.sourceOutMs > source.durationMs) return false;
+    if (!isSafeString(source.uri, 32_767) || !/^supervideo:\/\/asset\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(source.uri)) return false;
+    if (!isPlainRecord(source.metadata) || source.metadata.role !== "a-roll") return false;
+    previousEnd = clip.timelineStartMs + clip.durationMs;
+  }
+  return true;
+}
+
+function isArollCutJoinSegment(value: unknown, order: number, mode: "audio" | "video"): value is ArollCutJoinSegment {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["order", "clipId", "sentenceId", "source", "sourceInMs", "sourceOutMs", "durationMs", "timelineStartMs", "outputStartMs", "outputEndMs"])) return false;
+  if (!isSafeInteger(value.order, 1, 64) || value.order !== order || !isTimelineId(value.clipId) || !isSafeString(value.sentenceId, 128)) return false;
+  if (!isArollSourceRef(value.source, mode)) return false;
+  if (!isSafeInteger(value.sourceInMs, 0, 86_400_000) || !isSafeInteger(value.sourceOutMs, 1, 86_400_000) || !isSafeInteger(value.durationMs, 1, 86_400_000)) return false;
+  if (!isSafeInteger(value.timelineStartMs, 0, 86_400_000) || !isSafeInteger(value.outputStartMs, 0, 86_400_000) || !isSafeInteger(value.outputEndMs, 1, 86_400_000)) return false;
+  return value.sourceOutMs > value.sourceInMs && value.sourceOutMs - value.sourceInMs === value.durationMs && value.outputEndMs - value.outputStartMs === value.durationMs;
+}
+
+function isArollSourceRef(value: unknown, mode: "audio" | "video"): value is ArollSourceRef {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["sourceId", "uri", "mediaType", "durationMs", "fingerprint"])) return false;
+  return isTimelineId(value.sourceId) && isSafeString(value.uri, 32_767) && new RegExp(`^supervideo://asset/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).test(value.uri)
+    && value.mediaType === mode && isSafeInteger(value.durationMs, 1, 86_400_000) && (value.fingerprint === null || isSentenceCacheKey(value.fingerprint));
+}
+
+function isArollCutJoinGap(value: unknown): value is ArollCutJoinGap {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["code", "beforeClipId", "afterClipId", "startMs", "endMs", "durationMs"])) return false;
+  if (value.code !== "timeline-gap" || (value.beforeClipId === null && value.afterClipId === null)) return false;
+  if (value.beforeClipId !== null && !isTimelineId(value.beforeClipId) || value.afterClipId !== null && !isTimelineId(value.afterClipId)) return false;
+  return isSafeInteger(value.startMs, 0, 86_400_000) && isSafeInteger(value.endMs, 1, 86_400_000) && isSafeInteger(value.durationMs, 1, 86_400_000)
+    && value.endMs > value.startMs && value.endMs - value.startMs === value.durationMs;
+}
+
+function isArollCutJoinOutput(value: unknown): value is ArollCutJoinOutput {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["kind", "relativePath", "sizeBytes"])
+    && (value.kind === "audio" || value.kind === "video") && isSafeString(value.relativePath, 512)
+    && !value.relativePath.includes("\\") && !value.relativePath.includes(":") && !value.relativePath.split("/").includes("..")
+    && isSafeInteger(value.sizeBytes, 1, 2 ** 53 - 1);
+}
+
+function isTimelineId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 }
 
 function isNarrativePlanGap(value: unknown): value is NarrativePlanGap {

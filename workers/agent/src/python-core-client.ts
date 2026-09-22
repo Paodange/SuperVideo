@@ -41,6 +41,8 @@ import {
   isSlotAlignmentResult,
   isNarrativePlanResult,
   isDurationOptimizationResult,
+  isArollCutJoinParams,
+  isArollCutJoinResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -76,6 +78,8 @@ import {
   type NarrativePlanResult,
   type DurationOptimizationParams,
   type DurationOptimizationResult,
+  type ArollCutJoinParams,
+  type ArollCutJoinResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -373,6 +377,13 @@ export class PythonCoreClient {
   async optimizeDuration(params: DurationOptimizationParams, options: CoreRpcRequestOptions = {}): Promise<DurationOptimizationResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.planOptimizeDuration, params, options);
     if (!isDurationOptimizationResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async cutJoinAroll(params: ArollCutJoinParams, options: CoreRpcRequestOptions = {}): Promise<ArollCutJoinResult> {
+    if (!isArollCutJoinParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaArollCutJoin, params, options);
+    if (!isArollCutJoinResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

@@ -22,8 +22,10 @@ import type {
   NarrativePlanResult,
   DurationOptimizationParams,
   DurationOptimizationResult,
+  ArollCutJoinParams,
+  ArollCutJoinResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -48,7 +50,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -72,6 +74,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaSentenceRetrieve: "media-sentence-retrieve",
   planCreateRemix: "plan-create-remix",
   planOptimizeDuration: "plan-optimize-duration",
+  mediaArollCutJoin: "media-aroll-cut-join",
   mediaScriptAlign: "media-script-align",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
@@ -116,7 +119,9 @@ export type AgentProjectOperationType =
   | "media-sentence-rerank"
   | "media-script-align"
   | "plan-create-remix"
-  | "plan-optimize-duration";
+  | "plan-optimize-duration"
+  | "media-aroll-cut-join";
+
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -162,7 +167,8 @@ export type ProjectOperationErrorCode =
   | "RERANK_RETRIEVAL_INVALID" | "RERANK_SOURCE_INVALID" | "RERANK_SOURCE_STALE" | "RERANK_QA_STORAGE_INVALID" | "RERANK_OUTPUT_INVALID" | "RERANK_TIMEOUT" | "RERANK_CANCELLED"
   | "SLOT_INPUT_INVALID" | "SLOT_SOURCE_INVALID" | "SLOT_SOURCE_STALE" | "SLOT_RETRIEVAL_INVALID" | "SLOT_OUTPUT_INVALID" | "SLOT_TIMEOUT" | "SLOT_CANCELLED"
   | "PLAN_INPUT_INVALID" | "PLAN_SOURCE_INVALID" | "PLAN_SOURCE_STALE" | "PLAN_ALIGNMENT_INVALID" | "PLAN_OUTPUT_INVALID" | "PLAN_TIMEOUT" | "PLAN_CANCELLED"
-  | "DURATION_OPTIMIZATION_INPUT_INVALID" | "DURATION_OPTIMIZATION_SOURCE_INVALID" | "DURATION_OPTIMIZATION_ALIGNMENT_INVALID" | "DURATION_OPTIMIZATION_OUTPUT_INVALID" | "DURATION_OPTIMIZATION_TIMEOUT" | "DURATION_OPTIMIZATION_CANCELLED";
+  | "DURATION_OPTIMIZATION_INPUT_INVALID" | "DURATION_OPTIMIZATION_SOURCE_INVALID" | "DURATION_OPTIMIZATION_ALIGNMENT_INVALID" | "DURATION_OPTIMIZATION_OUTPUT_INVALID" | "DURATION_OPTIMIZATION_TIMEOUT" | "DURATION_OPTIMIZATION_CANCELLED"
+  | "AROLL_CUT_JOIN_INPUT_INVALID" | "AROLL_CUT_JOIN_TIMELINE_INVALID" | "AROLL_CUT_JOIN_SOURCE_INVALID" | "AROLL_CUT_JOIN_OUTPUT_INVALID" | "AROLL_CUT_JOIN_TOOL_UNAVAILABLE" | "AROLL_CUT_JOIN_TOOL_TIMEOUT" | "AROLL_CUT_JOIN_TIMEOUT" | "AROLL_CUT_JOIN_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -361,6 +367,7 @@ export const DESKTOP_IPC_CHANNELS = {
   alignScript: "desktop:v2:align-script",
   createRemixPlan: "desktop:v2:create-remix-plan",
   optimizeDuration: "desktop:v2:optimize-duration",
+  cutJoinAroll: "desktop:v2:cut-join-aroll",
   startSmokeJob: "desktop:v2:start-smoke-job",
   getJob: "desktop:v2:get-job",
   listJobs: "desktop:v2:list-jobs",
@@ -432,6 +439,7 @@ export type DesktopApi = Readonly<{
   alignScript: (input: SlotAlignmentParams) => Promise<SlotAlignmentResult>;
   createRemixPlan: (input: NarrativePlanParams) => Promise<NarrativePlanResult>;
   optimizeDuration: (input: DurationOptimizationParams) => Promise<DurationOptimizationResult>;
+  cutJoinAroll: (input: ArollCutJoinParams) => Promise<ArollCutJoinResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -571,6 +579,14 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   DURATION_OPTIMIZATION_OUTPUT_INVALID: "The duration optimization output was invalid.",
   DURATION_OPTIMIZATION_TIMEOUT: "The duration optimization operation timed out.",
   DURATION_OPTIMIZATION_CANCELLED: "The duration optimization operation was cancelled.",
+  AROLL_CUT_JOIN_INPUT_INVALID: "The A-roll cut/join input is invalid or exceeds its bounds.",
+  AROLL_CUT_JOIN_TIMELINE_INVALID: "The Timeline IR is invalid for A-roll cut/join.",
+  AROLL_CUT_JOIN_SOURCE_INVALID: "An A-roll source reference is invalid or stale.",
+  AROLL_CUT_JOIN_OUTPUT_INVALID: "The A-roll cut/join plan or output was invalid.",
+  AROLL_CUT_JOIN_TOOL_UNAVAILABLE: "The configured A-roll media tool is unavailable.",
+  AROLL_CUT_JOIN_TOOL_TIMEOUT: "The A-roll media tool timed out.",
+  AROLL_CUT_JOIN_TIMEOUT: "The A-roll cut/join operation timed out.",
+  AROLL_CUT_JOIN_CANCELLED: "The A-roll cut/join operation was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -869,7 +885,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "media-sentence-rerank"
     || value === "media-script-align"
     || value === "plan-create-remix"
-    || value === "plan-optimize-duration";
+    || value === "plan-optimize-duration"
+    || value === "media-aroll-cut-join";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -950,6 +967,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
   if (type === "media-script-align") return isSlotAlignmentParams(value);
   if (type === "plan-create-remix") return isNarrativePlanParams(value);
   if (type === "plan-optimize-duration") return isDurationOptimizationParams(value);
+  if (type === "media-aroll-cut-join") return isArollCutJoinParams(value);
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
     if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
@@ -1051,6 +1069,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "SLOT_INPUT_INVALID", "SLOT_SOURCE_INVALID", "SLOT_SOURCE_STALE", "SLOT_RETRIEVAL_INVALID", "SLOT_OUTPUT_INVALID", "SLOT_TIMEOUT", "SLOT_CANCELLED",
   "PLAN_INPUT_INVALID", "PLAN_SOURCE_INVALID", "PLAN_SOURCE_STALE", "PLAN_ALIGNMENT_INVALID", "PLAN_OUTPUT_INVALID", "PLAN_TIMEOUT", "PLAN_CANCELLED",
   "DURATION_OPTIMIZATION_INPUT_INVALID", "DURATION_OPTIMIZATION_SOURCE_INVALID", "DURATION_OPTIMIZATION_ALIGNMENT_INVALID", "DURATION_OPTIMIZATION_OUTPUT_INVALID", "DURATION_OPTIMIZATION_TIMEOUT", "DURATION_OPTIMIZATION_CANCELLED",
+  "AROLL_CUT_JOIN_INPUT_INVALID", "AROLL_CUT_JOIN_TIMELINE_INVALID", "AROLL_CUT_JOIN_SOURCE_INVALID", "AROLL_CUT_JOIN_OUTPUT_INVALID", "AROLL_CUT_JOIN_TOOL_UNAVAILABLE", "AROLL_CUT_JOIN_TOOL_TIMEOUT", "AROLL_CUT_JOIN_TIMEOUT", "AROLL_CUT_JOIN_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -1093,6 +1112,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-script-align") return isSlotAlignmentResult(value);
   if (type === "plan-create-remix") return isNarrativePlanResult(value);
   if (type === "plan-optimize-duration") return isDurationOptimizationResult(value);
+  if (type === "media-aroll-cut-join") return isArollCutJoinResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;
