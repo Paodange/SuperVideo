@@ -118,6 +118,18 @@ class ArollCutJoinTests(unittest.IsolatedAsyncioTestCase):
             "outputStartMs": 0,
             "outputEndMs": 2_000,
         })
+        normalized_args = ArollCutJoinService._ffmpeg_args(
+            "C:\\Program Files\\ffmpeg\\ffmpeg.exe",
+            [(Path("C:\\input.mp4"), (1, 2), "a" * 64)],
+            [audio_segment],
+            Path("C:\\project\\previews\\output.mp4"),
+            "video",
+            width=1_080,
+            height=1_920,
+            fps=30,
+        )
+        self.assertIn("scale=1080:1920", normalized_args[normalized_args.index("-filter_complex") + 1])
+
         audio_args = ArollCutJoinService._ffmpeg_args(
             "C:\\Program Files\\ffmpeg\\ffmpeg.exe",
             [(Path("C:\\input.m4a"), (1, 2), "b" * 64)],
