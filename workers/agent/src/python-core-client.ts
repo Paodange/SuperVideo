@@ -23,6 +23,8 @@ import {
   isJobListParams,
   isJobReferenceParams,
   isJobSmokeStartParams,
+  isJobTtsStartParams,
+  isTtsResult,
   isJobPage,
   isJobSummary,
   isAssetListResult,
@@ -128,6 +130,8 @@ import {
   type JobPage,
   type JobReferenceParams,
   type JobSmokeStartParams,
+  type TtsJobStartParams,
+  type TtsSynthesisResult,
   type JobSummary,
 } from "@supervideo/shared";
 
@@ -513,6 +517,20 @@ export class PythonCoreClient {
     if (!isJobSmokeStartParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.jobSmokeStart, params, options);
     if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async startTtsJob(params: TtsJobStartParams, options: CoreRpcRequestOptions = {}): Promise<JobSummary> {
+    if (!isJobTtsStartParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobTtsStart, params, options);
+    if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async getTtsJobResult(params: import("@supervideo/shared").JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<TtsSynthesisResult> {
+    if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobTtsResult, params, options);
+    if (!isTtsResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

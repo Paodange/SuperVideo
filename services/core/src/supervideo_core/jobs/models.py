@@ -1,10 +1,12 @@
-"""Strict public models for job RPC results and the smoke input."""
+"""Strict public models for job RPC results and fixed job inputs."""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from supervideo_core.media.tts_models import TtsJobInput, TtsJobStartParams, TtsSynthesisResult
 
 
 class JobModel(BaseModel):
@@ -26,7 +28,7 @@ class JobSmokeInput(JobModel):
 class JobSummary(JobModel):
     job_id: str = Field(alias="jobId")
     project_id: str = Field(alias="projectId")
-    job_type: Literal["smoke.countdown"] = Field(alias="jobType")
+    job_type: Literal["smoke.countdown", "tts.synthesize"] = Field(alias="jobType")
     status: JobStatus
     progress: float = Field(strict=True, ge=0, le=1)
     stage: str | None = None
@@ -46,6 +48,9 @@ class JobSummary(JobModel):
         if re.fullmatch(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value) is None:
             raise ValueError("invalid job id")
         return value
+
+
+__all__ = ["JobStatus", "JobSmokeInput", "JobSummary", "JobEventSummary", "JobPage", "JobEventPage", "TtsJobInput", "TtsJobStartParams", "TtsSynthesisResult"]
 
 
 class JobEventSummary(JobModel):

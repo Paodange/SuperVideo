@@ -7,9 +7,11 @@ checkpoint 和事件的唯一事实来源。内存中的 `asyncio.Task`、cancel
 调度槽只是可丢弃的运行时缓存；Agent Worker、Electron Main 和 Renderer 不
 直接写数据库，也不能传 SQL、executor 名称、Python 模块或命令行。
 
-当前只注册一个固定的 `smoke.countdown` executor。它异步等待有限的短延迟，
+当前注册固定的 `smoke.countdown` 和 `tts.synthesize` executor。前者异步等待有限的短延迟，
 每一步把进度、阶段和 checkpoint 原子写入 SQLite，不读写外部素材、不联网、
-不启动子进程。`failAttempts: 1` 只在第一次 attempt 的固定中点失败，便于
+不启动子进程。后者使用 D02 的离线 `fake-tts-v1` 适配器，在项目受控的
+`generated/tts-v1` 目录内生成 WAV、manifest 和句子时间戳；输入不含密钥。
+`failAttempts: 1` 或 TTS 的 `fake-retry-once` 只在第一次 attempt 失败，便于
 稳定演示 retry。
 
 ## 状态与事务
@@ -43,6 +45,11 @@ job 创建或状态/进度/checkpoint 更新与对应 `job_events` append 都在
 相同 key 和相同规范化输入返回原 job；相同 key 但输入不同返回
 `IDEMPOTENCY_CONFLICT`。单 active project 最大并发为 1，队列和 incomplete
 job 数有上限 32，按 `created_at_ms, id` FIFO；超过上限返回 `JOB_QUEUE_FULL`。
+
+`job.tts.start` 使用同样的持久化语义，输入额外绑定 provider、model、voice、
+有界句子和 provenance IDs；`job.tts.result` 只在成功后返回版本化的 WAV 输出、
+cache key、句子时间戳和生成 provenance。重复提交相同语义但不同 idempotency key
+可命中项目内缓存，改变 voice/model 或项目则使用不同 cache key。
 
 Core RPC 的 `core.cancel` 只取消一个尚未完成的 RPC request，不影响已经返回
 的持久化 job。持久化任务必须使用 `job.cancel`，其状态可由 `job.get` 确认。

@@ -9,3 +9,4 @@ export * from "./diagnostics-protocol";
 export * from "./redaction-fixtures";
 export * from "./timeline-ir";
 export * from "./provider-contract";
+export * from "./tts-contract";

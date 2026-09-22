@@ -8,6 +8,9 @@ import { isTimelineProject, type TimelineProject } from "./timeline-ir";
  * both processes are started by the same application.
  */
 
+import { isTtsJobStartParams, isTtsSynthesisResult, type TtsJobStartParams, type TtsSynthesisResult } from "./tts-contract";
+export type { TtsJobStartParams, TtsJobResultParams, TtsStartRequest, TtsSentenceInput, TtsSentenceTimestamp, TtsSynthesisResult } from "./tts-contract";
+
 export const JSON_RPC_VERSION = "2.0" as const;
 export const CORE_RPC_PROTOCOL_VERSION = 1 as const;
 export const CORE_RPC_MAX_LINE_BYTES = 256 * 1024;
@@ -55,6 +58,8 @@ export const CORE_RPC_METHODS = {
   timelineVersionRedo: "timeline.version.redo",
   timelineVersionDiff: "timeline.version.diff",
   jobSmokeStart: "job.smoke.start",
+  jobTtsStart: "job.tts.start",
+  jobTtsResult: "job.tts.result",
   jobGet: "job.get",
   jobList: "job.list",
   jobEventsList: "job.events.list",
@@ -101,6 +106,8 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.timelineVersionRedo
   | typeof CORE_RPC_METHODS.timelineVersionDiff
   | typeof CORE_RPC_METHODS.jobSmokeStart
+  | typeof CORE_RPC_METHODS.jobTtsStart
+  | typeof CORE_RPC_METHODS.jobTtsResult
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
   | typeof CORE_RPC_METHODS.jobEventsList
@@ -707,7 +714,7 @@ export type JobReferenceParams = Readonly<{ projectId: string; jobId: string }>;
 export type JobListParams = Readonly<{ projectId: string; statuses?: readonly JobStatus[]; cursor?: string | null; limit?: number }>;
 export type JobEventsListParams = Readonly<{ projectId: string; jobId: string; afterSequence?: number; cursor?: string | null; limit?: number }>;
 export type JobSummary = Readonly<{
-  jobId: string; projectId: string; jobType: "smoke.countdown"; status: JobStatus; progress: number;
+  jobId: string; projectId: string; jobType: "smoke.countdown" | "tts.synthesize"; status: JobStatus; progress: number;
   stage: string | null; attempt: number; revision: number; lastEventSequence: number;
   createdAtMs: number; updatedAtMs: number; startedAtMs: number | null; finishedAtMs: number | null; errorCode: string | null;
 }>;
@@ -1016,6 +1023,8 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.timelineVersionRedo) return isTimelineVersionRedoParams(value.params);
   if (value.method === CORE_RPC_METHODS.timelineVersionDiff) return isTimelineVersionDiffParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
+  if (value.method === CORE_RPC_METHODS.jobTtsStart) return isTtsJobStartParams(value.params);
+  if (value.method === CORE_RPC_METHODS.jobTtsResult) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobEventsList) return isJobEventsListParams(value.params);
@@ -1400,7 +1409,7 @@ export function isCoreProgress(value: unknown): value is CoreProgress {
 
 export function isJobSummary(value: unknown): value is JobSummary {
   return isPlainRecord(value) && hasOnlyKeys(value, ["jobId", "projectId", "jobType", "status", "progress", "stage", "attempt", "revision", "lastEventSequence", "createdAtMs", "updatedAtMs", "startedAtMs", "finishedAtMs", "errorCode"])
-    && isUuid(value.jobId) && isUuid(value.projectId) && value.jobType === "smoke.countdown" && isJobStatus(value.status)
+    && isUuid(value.jobId) && isUuid(value.projectId) && (value.jobType === "smoke.countdown" || value.jobType === "tts.synthesize") && isJobStatus(value.status)
     && isFiniteProgress(value.progress) && (value.stage === null || isSafeString(value.stage, 128))
     && isSafeInteger(value.attempt, 0, Number.MAX_SAFE_INTEGER)
     && isSafeInteger(value.revision, 0, Number.MAX_SAFE_INTEGER) && isSafeInteger(value.lastEventSequence, 0, Number.MAX_SAFE_INTEGER)
@@ -2299,6 +2308,14 @@ export function isJobSmokeStartParams(value: unknown): value is JobSmokeStartPar
     && (value.steps === undefined || isSafeInteger(value.steps, 3, 8))
     && (value.delayMs === undefined || isSafeInteger(value.delayMs, 1, 1_000))
     && (value.failAttempts === undefined || isSafeInteger(value.failAttempts, 0, 1));
+}
+
+export function isJobTtsStartParams(value: unknown): value is TtsJobStartParams {
+  return isTtsJobStartParams(value);
+}
+
+export function isTtsResult(value: unknown): value is TtsSynthesisResult {
+  return isTtsSynthesisResult(value);
 }
 
 export function isJobReferenceParams(value: unknown): value is JobReferenceParams {

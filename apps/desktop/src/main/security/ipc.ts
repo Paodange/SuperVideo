@@ -10,6 +10,7 @@ import {
   isJobListParams,
   isJobReferenceParams,
   isJobSmokeStartParams,
+  isTtsStartRequest,
   isSentenceQaParams,
   isSentenceQaSaveParams,
   isRetrievalParams,
@@ -76,6 +77,8 @@ import {
   type JobReferenceParams,
   type JobSmokeStartParams,
   type JobSummary,
+  type TtsStartRequest,
+  type TtsSynthesisResult,
   type SentenceQaParams,
   type SentenceQaSaveParams,
   type SentenceQaContextResult,
@@ -151,7 +154,9 @@ export type DesktopIpcDependencies = Readonly<{
   redoTimelineVersion: (event: IpcMainInvokeEvent, input: TimelineVersionRedoParams) => Promise<TimelineVersionResult>;
   diffTimelineVersions: (event: IpcMainInvokeEvent, input: TimelineVersionDiffParams) => Promise<TimelineVersionDiffResult>;
   startSmokeJob: (event: IpcMainInvokeEvent, input: JobSmokeStartParams) => Promise<JobSummary>;
+  startTtsJob: (event: IpcMainInvokeEvent, input: TtsStartRequest) => Promise<JobSummary>;
   getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
+  getTtsJobResult: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<TtsSynthesisResult>;
   listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
   listJobEvents: (event: IpcMainInvokeEvent, input: JobEventsListParams) => Promise<JobEventPage>;
   cancelJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
@@ -224,7 +229,9 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.redoTimelineVersion, isTimelineVersionRedoParams, dependencies, (payload, event) => dependencies.redoTimelineVersion(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.diffTimelineVersions, isTimelineVersionDiffParams, dependencies, (payload, event) => dependencies.diffTimelineVersions(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startSmokeJob, isValidJobSmokeStartPayload, dependencies, (payload, event) => dependencies.startSmokeJob(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startTtsJob, isTtsStartRequest, dependencies, (payload, event) => dependencies.startTtsJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getTtsJobResult, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getTtsJobResult(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobEvents, isValidJobEventsListPayload, dependencies, (payload, event) => dependencies.listJobEvents(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.cancelJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.cancelJob(event, payload)),

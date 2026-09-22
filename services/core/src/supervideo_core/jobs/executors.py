@@ -8,6 +8,8 @@ from typing import Any
 
 from .errors import JobError
 from .models import JobSmokeInput
+from supervideo_core.media.tts import TtsExecutionCancelled, TtsExecutionShutdown, TtsSynthesisService
+from supervideo_core.media.tts_models import TtsJobInput
 
 
 class JobCancelled(Exception):
@@ -71,5 +73,62 @@ class SmokeCountdownExecutor:
             or not isinstance(value.get("completedSteps"), int)
             or not 0 <= value["completedSteps"] <= params.steps
             or value.get("nextStep") != value["completedSteps"] + 1
+        ):
+            raise JobError("JOB_CHECKPOINT_INVALID")
+
+
+class TtsSynthesisExecutor:
+    """A07 executor wrapper for the Core-owned offline D02 adapter."""
+
+    name = "tts.synthesize"
+    executor_version = 1
+    checkpoint_version = 1
+
+    def __init__(self, service: TtsSynthesisService | None = None) -> None:
+        self.service = service or TtsSynthesisService()
+
+    async def run(
+        self,
+        project_id: str,
+        params: TtsJobInput,
+        *,
+        attempt: int,
+        checkpoint: dict[str, Any] | None,
+        cancel_event: asyncio.Event,
+        shutdown_event: asyncio.Event,
+        persist: Callable[[int, str, dict[str, Any]], Awaitable[None]],
+    ) -> dict[str, object]:
+        # A deterministic one-shot failure keeps the offline smoke path able
+        # to exercise A07 retry semantics without a network or provider.
+        if params.model == "fake-retry-once" and attempt == 1:
+            raise JobError("JOB_EXECUTION_FAILED")
+        completed = 0 if checkpoint is None else int(checkpoint["completedSentences"])
+        try:
+            result = await self.service.synthesize(
+                project_id,
+                params,
+                cancel_event=cancel_event,
+                shutdown_event=shutdown_event,
+                completed_sentences=completed,
+                persist=persist,
+            )
+        except TtsExecutionCancelled as error:
+            raise JobCancelled() from error
+        except TtsExecutionShutdown as error:
+            raise JobShutdown() from error
+        except ValueError as error:
+            raise JobError("JOB_EXECUTION_FAILED", cause=error) from error
+        return result.model_dump(by_alias=True)
+
+    def validate_checkpoint(self, value: dict[str, Any], params: TtsJobInput) -> None:
+        if (
+            value.get("executor") != self.name
+            or value.get("executorVersion") != self.executor_version
+            or value.get("checkpointVersion") != self.checkpoint_version
+            or value.get("sentenceCount") != len(params.sentences)
+            or not isinstance(value.get("cacheKey"), str)
+            or not isinstance(value.get("completedSentences"), int)
+            or not 0 <= value["completedSentences"] <= len(params.sentences)
+            or value.get("nextSentence") != value["completedSentences"] + 1
         ):
             raise JobError("JOB_CHECKPOINT_INVALID")

@@ -7,6 +7,9 @@ import {
   isJobEventPage,
   isJobPage,
   isJobSummary,
+  isJobReferenceParams,
+  isTtsStartRequest,
+  isTtsSynthesisResult,
   isProjectSummary,
   isDesktopPublicError,
   isAgentWorkerStatusSnapshot,
@@ -86,6 +89,8 @@ import {
   type JobSmokeStartParams,
   type JobPage,
   type JobSummary,
+  type TtsStartRequest,
+  type TtsSynthesisResult,
   type CredentialListResult,
   type CredentialMetadata,
   type CredentialRemoveRequest,
@@ -170,7 +175,9 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.redoTimelineVersion
     | typeof DESKTOP_IPC_CHANNELS.diffTimelineVersions
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
+    | typeof DESKTOP_IPC_CHANNELS.startTtsJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
+    | typeof DESKTOP_IPC_CHANNELS.getTtsJobResult
     | typeof DESKTOP_IPC_CHANNELS.listJobs
     | typeof DESKTOP_IPC_CHANNELS.listJobEvents
     | typeof DESKTOP_IPC_CHANNELS.cancelJob
@@ -337,7 +344,15 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
       return invokeValue(DESKTOP_IPC_CHANNELS.diffTimelineVersions, input, invoke, isTimelineVersionDiffResult);
     },
     startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
+    startTtsJob: (input: TtsStartRequest) => {
+      if (!isTtsStartRequest(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.startTtsJob, input, invoke, isJobSummary);
+    },
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),
+    getTtsJobResult: (input: JobReferenceParams) => {
+      if (!isJobReferenceParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.getTtsJobResult, input, invoke, isTtsSynthesisResult);
+    },
     listJobs: (input) => invokeValue(DESKTOP_IPC_CHANNELS.listJobs, input, invoke, isJobPage),
     listJobEvents: (input) => invokeValue(DESKTOP_IPC_CHANNELS.listJobEvents, input, invoke, isJobEventPage),
     cancelJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.cancelJob, input, invoke, isJobSummary),

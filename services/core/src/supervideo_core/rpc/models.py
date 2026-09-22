@@ -31,6 +31,7 @@ from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.final_export_models import FinalMp4ExportParams
 from supervideo_core.media.edit_models import TimelineEditParams
+from supervideo_core.media.tts_models import TtsJobStartParams
 from supervideo_core.timeline.version_models import (
     TimelineVersionActivateParams, TimelineVersionApplyEditParams, TimelineVersionCreateParams,
     TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
@@ -347,7 +348,9 @@ def validate_request(value: Any) -> RpcRequest:
         TimelineVersionDiffParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
-    elif request.method in {"job.get", "job.cancel", "job.retry"}:
+    elif request.method == "job.tts.start":
+        TtsJobStartParams.model_validate(request.params)
+    elif request.method in {"job.get", "job.tts.result", "job.cancel", "job.retry"}:
         JobReferenceParams.model_validate(request.params)
     elif request.method == "job.list":
         JobListParams.model_validate(request.params)
@@ -430,6 +433,8 @@ def health_result() -> dict[str, object]:
             "timeline.version.redo",
             "timeline.version.diff",
             "job.smoke.start",
+            "job.tts.start",
+            "job.tts.result",
             "job.get",
             "job.list",
             "job.events.list",

@@ -9,3 +9,5 @@ The fixed Desktop IPC channels are `providers-list`, `providers-upsert`, `provid
 `InMemoryProviderRegistry` is the adapter/registry seam. The default registry contains four offline deterministic `fake` adapters. Their model values `fake-fail`, `fake-auth`, and `fake-timeout` exercise failure, authentication failure, and timeout without network access or API keys. Real providers will register an adapter with a fixed provider ID and capability set; adapters, not user configuration, own transport behavior and endpoint policy.
 
 D02 consumes the service-kind/capability negotiation and `credentialRef` without moving secrets into jobs or Core. D03 consumes the same non-sensitive provider selection when choosing a render/TTS input, while Remotion remains a local renderer and is not a provider adapter.
+
+For D02, `ProviderConfigService.resolveTts` returns only the validated model and non-sensitive TTS selection. The optional `ProviderAdapter.synthesizeTts` method is a Main-only future seam; `ProviderConfigService.synthesizeTts` invokes it inside `CredentialVault.runWithSecret`, so the decrypted value is available only to that adapter callback.

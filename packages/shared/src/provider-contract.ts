@@ -11,12 +11,26 @@ export const PROVIDER_PUBLIC_ERROR_CODES = ["PROVIDER_INVALID_CONFIG", "PROVIDER
 export type ProviderPublicErrorCode = (typeof PROVIDER_PUBLIC_ERROR_CODES)[number];
 export type ProviderConfig = Readonly<{ schemaVersion: 1; protocolVersion: 1; projectId: string; serviceKind: ProviderServiceKind; providerId: string; displayName: string; model: string; endpoint: string | null; credentialRef: string | null; capabilities: readonly ProviderCapability[]; enabled: boolean; createdAtMs: number; updatedAtMs: number }>;
 export type ProviderConfigInput = Readonly<{ projectId: string; serviceKind: ProviderServiceKind; providerId: string; displayName: string; model: string; endpoint?: string | null; credentialRef?: string | null; capabilities?: readonly ProviderCapability[]; enabled?: boolean }>;
+/** Main-only adapter input. It is never serialized into a Renderer/Core job. */
+export type ProviderTtsSynthesisRequest = Readonly<{
+  projectId: string;
+  model: string;
+  voice: string;
+  sentences: readonly Readonly<{ sentenceId: string; text: string; provenanceIds: readonly string[] }>[];
+}>;
+/** Main-only adapter output. A real provider adapter may replace the offline Core adapter later. */
+export type ProviderTtsSynthesisResult = Readonly<{
+  audioBytes: Uint8Array;
+  durationMs: number;
+}>;
 export type ProviderConfigDeleteRequest = Readonly<{ projectId: string; serviceKind: ProviderServiceKind; providerId: string }>;
 export type ProviderConfigListRequest = Readonly<{ projectId: string }>;
 export type ProviderConfigListResult = Readonly<{ projectId: string; items: readonly ProviderConfig[] }>;
 export interface ProviderAdapter {
   readonly descriptor: Readonly<{ providerId: string; serviceKind: ProviderServiceKind; capabilities: ProviderConfig["capabilities"] }>;
   health(secret: string, config: ProviderConfig, timeoutMs: number): Promise<ProviderHealthErrorCode | null>;
+  /** Optional future real-TTS seam. `secret` is available only in this Main-owned callback. */
+  synthesizeTts?: (secret: string, request: ProviderTtsSynthesisRequest, timeoutMs: number) => Promise<ProviderTtsSynthesisResult>;
 }
 export interface ProviderRegistry {
   register(adapter: ProviderAdapter): void;

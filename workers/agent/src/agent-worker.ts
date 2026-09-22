@@ -189,11 +189,13 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
+    case "job-tts-start":
     case "job-get":
     case "job-list":
     case "job-events-list":
     case "job-cancel":
     case "job-retry":
+    case "job-tts-result":
       await handleJobOperation(command.type, command.operationId, command.projectId, command.payload);
       return;
     default:
@@ -310,11 +312,13 @@ async function handleJobOperation(
     const runtime = await ensureRuntime();
     let result: unknown;
     if (operation === "job-smoke-start") result = await runtime.coreClient.startSmokeJob({ projectId, ...payload } as never);
+    else if (operation === "job-tts-start") result = await runtime.coreClient.startTtsJob({ projectId, ...payload } as never);
     else if (operation === "job-get") result = await runtime.coreClient.getJob({ projectId, ...payload } as never);
     else if (operation === "job-list") result = await runtime.coreClient.listJobs({ projectId, ...payload } as never);
     else if (operation === "job-events-list") result = await runtime.coreClient.listJobEvents({ projectId, ...payload } as never);
     else if (operation === "job-cancel") result = await runtime.coreClient.cancelJob({ projectId, ...payload } as never);
-    else result = await runtime.coreClient.retryJob({ projectId, ...payload } as never);
+    else if (operation === "job-retry") result = await runtime.coreClient.retryJob({ projectId, ...payload } as never);
+    else result = await runtime.coreClient.getTtsJobResult({ projectId, ...payload } as never);
     send({
       protocolVersion: AGENT_WORKER_PROTOCOL_VERSION,
       type: "job-operation-result",
