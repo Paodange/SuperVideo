@@ -15,3 +15,4 @@ export * from "./remotion-contract";
 export * from "./recruitment-template-contract";
 export * from "./script-storyboard-contract";
 export * from "./video-assembly-contract";
+export * from "./generation-fallback-contract";
