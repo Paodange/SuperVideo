@@ -103,6 +103,10 @@ class RecruitmentTemplateTestCase(unittest.TestCase):
     def test_layout_plan_rejects_out_of_safe_area_and_overlap(self) -> None:
         plan = build_recruitment_template_render_plan(props())
         invalid = plan.model_dump(by_alias=True)
+        invalid["provenanceIds"] = []
+        with self.assertRaises(ValidationError):
+            validate_recruitment_template_render_plan(invalid)
+        invalid = plan.model_dump(by_alias=True)
         invalid["components"][1]["box"]["x"] = 0
         with self.assertRaises(ValidationError):
             validate_recruitment_template_render_plan(invalid)
@@ -114,6 +118,11 @@ class RecruitmentTemplateTestCase(unittest.TestCase):
         invalid["secret"] = "never"
         with self.assertRaises(ValidationError):
             validate_recruitment_template_render_plan(invalid)
+        for text in ("\n", "   ", "x" * 121):
+            invalid = plan.model_dump(by_alias=True)
+            invalid["components"][0]["text"] = text
+            with self.assertRaises(ValidationError):
+                validate_recruitment_template_render_plan(invalid)
 
 
 if __name__ == "__main__":

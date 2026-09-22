@@ -345,7 +345,7 @@ function validateComponents(components: Record<string, unknown>[], definition: R
     if (!expected.includes(String(id))) { add(errors, `${path}.id`, "is not an allowlisted component"); continue; }
     only(component, ["id", "kind", "role", "box", "text", "fontSize", "lineHeight", "maxLines", "color", "backgroundColor"], path, errors);
     const role = id as RecruitmentTextComponent["role"];
-    if (component.kind !== "text" || component.role !== role || typeof component.text !== "string" || component.text.length === 0) add(errors, path, "is not a valid fixed text component");
+    if (component.kind !== "text" || component.role !== role || !isPrintableText(component.text, 120)) add(errors, path, "is not a valid fixed text component");
     if (component.fontSize !== definition.fontSizes[role] || component.lineHeight !== 1.25 || component.maxLines !== (role === "benefits" ? 4 : 2) || component.color !== definition.colors[role] || component.backgroundColor !== "#00000000") add(errors, `${path}.style`, "must use the fixed registry style");
     const textBox = readBox(component.box, `${path}.box`, errors);
     if (textBox) boxes.push({ id: role, box: textBox, kind: "text" });
@@ -392,8 +392,9 @@ function validateIdArray(value: unknown, path: string, errors: RecruitmentTempla
 }
 
 function checkText(value: unknown, maximum: number, path: string, errors: RecruitmentTemplateValidationError[]): void {
-  if (typeof value !== "string" || value.length < 1 || value.length > maximum || /[\u0000-\u001f\u007f]/.test(value) || value.trim().length === 0) add(errors, path, `must be 1-${maximum} printable characters`);
+  if (!isPrintableText(value, maximum)) add(errors, path, `must be 1-${maximum} printable characters`);
 }
+function isPrintableText(value: unknown, maximum: number): value is string { return typeof value === "string" && value.length >= 1 && value.length <= maximum && !/[\u0000-\u001f\u007f]/.test(value) && value.trim().length > 0; }
 
 function record(value: unknown, path: string, errors: RecruitmentTemplateValidationError[]): Record<string, unknown> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) { add(errors, path, "must be a plain object"); return undefined; }

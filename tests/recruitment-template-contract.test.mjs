@@ -78,3 +78,15 @@ test("D04 requires photo source/provenance binding and rejects arbitrary layout 
   forbidden.secret = "never";
   assert.equal(isRecruitmentTemplateRenderPlan(forbidden), false);
 });
+
+test("D04 render plans require provenance and printable bounded text on both runtimes", () => {
+  const plan = buildRecruitmentTemplateRenderPlan(props());
+  const noProvenance = structuredClone(plan);
+  noProvenance.provenanceIds = [];
+  assert.equal(isRecruitmentTemplateRenderPlan(noProvenance), false);
+  for (const text of ["\n", "   ", "x".repeat(121)]) {
+    const invalid = structuredClone(plan);
+    invalid.components[0].text = text;
+    assert.equal(isRecruitmentTemplateRenderPlan(invalid), false);
+  }
+});

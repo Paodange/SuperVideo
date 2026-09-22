@@ -130,6 +130,11 @@ class RecruitmentTextComponent(RecruitmentTemplateModel):
     color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$")
     background_color: str = Field(alias="backgroundColor", pattern=r"^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$")
 
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return _text(value, 120)
+
 
 class RecruitmentImagePanComponent(RecruitmentTemplateModel):
     id: Literal["image-pan"]
@@ -161,7 +166,7 @@ class RecruitmentTemplateRenderPlan(RecruitmentTemplateModel):
     safe_area: dict[str, int] = Field(alias="safeArea")
     components: list[RecruitmentLayoutComponent] = Field(max_length=7)
     source_ids: list[str] = Field(alias="sourceIds", max_length=32)
-    provenance_ids: list[str] = Field(alias="provenanceIds", max_length=32)
+    provenance_ids: list[str] = Field(alias="provenanceIds", min_length=1, max_length=32)
     overlap_rule: Literal["background-image-pan-may-overlap-foreground", "no-overlap"] = Field(alias="overlapRule")
 
     @field_validator("project_id")
