@@ -81,6 +81,7 @@ class RpcModelTests(unittest.TestCase):
         self.assertIn("media.script.align", health_result()["capabilities"])
         self.assertIn("plan.optimize_duration", health_result()["capabilities"])
         self.assertIn("media.aroll.cut_join", health_result()["capabilities"])
+        self.assertIn("media.subtitle.plan", health_result()["capabilities"])
         expected_codes = {
             "SLOT_INPUT_INVALID": -32346,
             "SLOT_SOURCE_INVALID": -32347,
@@ -103,6 +104,17 @@ class RpcModelTests(unittest.TestCase):
             "AROLL_CUT_JOIN_TOOL_TIMEOUT": -32371,
             "AROLL_CUT_JOIN_CANCELLED": -32372,
             "AROLL_CUT_JOIN_TIMEOUT": -32373,
+            "SUBTITLE_INPUT_INVALID": -32374,
+            "SUBTITLE_TIMELINE_INVALID": -32375,
+            "SUBTITLE_SOURCE_INVALID": -32376,
+            "SUBTITLE_TIMECODE_INVALID": -32377,
+            "SUBTITLE_OVERLAP": -32378,
+            "SUBTITLE_TEXT_INVALID": -32379,
+            "SUBTITLE_LINE_COUNT_INVALID": -32380,
+            "SUBTITLE_LINE_WIDTH_INVALID": -32381,
+            "SUBTITLE_OUTPUT_INVALID": -32382,
+            "SUBTITLE_TIMEOUT": -32383,
+            "SUBTITLE_CANCELLED": -32384,
         }
         for error_code, code in expected_codes.items():
             with self.subTest(error_code=error_code):
@@ -123,6 +135,25 @@ class RpcModelTests(unittest.TestCase):
         }
         self.assertEqual(validate_request(request).method, "media.aroll.cut_join")
         invalid = {**request, "params": {**request["params"], "command": "ffmpeg"}}
+        with self.assertRaises(ValidationError):
+            validate_request(invalid)
+
+    def test_c05_subtitle_request_uses_versioned_timeline_contract(self) -> None:
+        timeline = json.loads((ROOT / "tests" / "fixtures" / "c01_timeline_ir_v1.json").read_text(encoding="utf-8"))
+        request = {
+            "jsonrpc": "2.0",
+            "id": "subtitle-plan-1",
+            "method": "media.subtitle.plan",
+            "params": {
+                "projectId": "99999999-9999-4999-8999-999999999999",
+                "timeline": timeline,
+                "maxLines": 2,
+                "maxLineWidth": 32,
+                "sentenceSources": [],
+            },
+        }
+        self.assertEqual(validate_request(request).method, "media.subtitle.plan")
+        invalid = {**request, "params": {**request["params"], "command": "render"}}
         with self.assertRaises(ValidationError):
             validate_request(invalid)
 
@@ -242,6 +273,35 @@ class RpcServerTests(unittest.TestCase):
         duplicate = next(message for message in messages if message.get("id") == request["id"] and "error" in message)
         self.assertEqual(duplicate["error"]["data"]["errorCode"], "DUPLICATE_REQUEST_ID")
         self.assertEqual([item["params"]["sequence"] for item in messages if item.get("method") == "core.progress"], [1, 2, 3])
+
+    def test_c05_subtitle_plan_is_active_busy_and_cancelable(self) -> None:
+        async def scenario() -> list[dict[str, Any]]:
+            output = BytesIO()
+            server = RpcServer(stdin=BytesIO(), stdout=output)
+            started = asyncio.Event()
+
+            async def waiting_invoke(_method: str, _params: object, _emit: Any, cancelled: asyncio.Event) -> dict[str, object]:
+                started.set()
+                await cancelled.wait()
+                raise MediaError("SUBTITLE_CANCELLED")
+
+            server.registry.invoke = waiting_invoke  # type: ignore[method-assign]
+            first = RpcRequest.model_validate({"jsonrpc": "2.0", "id": "subtitle-active", "method": "media.subtitle.plan", "params": {}})
+            second = RpcRequest.model_validate({"jsonrpc": "2.0", "id": "subtitle-busy", "method": "media.subtitle.plan", "params": {}})
+            await server.dispatch(first)
+            await started.wait()
+            self.assertEqual(server.active_request_id, first.id)
+            await server.dispatch(second)
+            self.assertTrue(server.cancel(first.id))
+            active_task = server.active_task
+            assert active_task is not None
+            await active_task
+            await server.close()
+            return [json.loads(line) for line in output.getvalue().decode("utf-8").splitlines()]
+
+        messages = asyncio.run(scenario())
+        self.assertEqual(next(item for item in messages if item.get("id") == "subtitle-busy")["error"]["data"]["errorCode"], "BUSY")
+        self.assertEqual(next(item for item in messages if item.get("id") == "subtitle-active")["error"]["data"]["errorCode"], "SUBTITLE_CANCELLED")
 
     def test_project_and_asset_methods_use_a_scoped_session(self) -> None:
         import shutil
