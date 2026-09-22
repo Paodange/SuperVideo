@@ -52,7 +52,11 @@ class ScriptStoryboardPlannerService:
                     sourceSegmentId=source_segment.segment_id,
                     verified=selected_segment.status == "matched",
                 ))
-                fact_ids = [fact_id for fact_id in fact_bindings.get(source_segment.segment_id, ()) if fact_id in facts_by_id]
+                fact_ids = [
+                    fact_id
+                    for fact_id in fact_bindings.get(source_segment.segment_id, ())
+                    if selected_segment.status == "matched" and fact_id in facts_by_id
+                ]
                 for fact_id in fact_ids:
                     output_fact_segments[fact_id].append(source_segment.segment_id)
                 provenance_ids = [derived_provenance_id]
@@ -102,7 +106,7 @@ class ScriptStoryboardPlannerService:
             upper = int(request.target.duration_ms * 1.2)
             duration_status = "within-tolerance" if lower <= selected_duration <= upper else "outside-tolerance"
             has_gaps = any(segment.status == "gap" for segment in output_segments)
-            needs_confirmation = any(item.status == "needs-user-confirmation" for item in audits)
+            needs_confirmation = any(item.status != "bound" for item in audits)
             status = (
                 "gaps" if has_gaps else
                 "needs-user-confirmation" if needs_confirmation else

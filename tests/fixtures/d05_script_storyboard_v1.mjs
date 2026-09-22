@@ -98,7 +98,7 @@ function outputSegment(segment, index, factIds) {
     durationMs: segment.durationMs,
     provenanceIds: [...new Set([derived, ...factIds.flatMap((factId) => facts.find((item) => item.id === factId).provenanceIds)])],
     factIds,
-    confirmation: "verified",
+    confirmation: factIds.length > 0 ? "verified" : "not-required",
   };
 }
 

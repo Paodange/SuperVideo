@@ -275,7 +275,7 @@ class ScriptStoryboardSegment(ScriptStoryboardModel):
                 raise ValueError("matched storyboard segment must retain a complete sentence and source")
             if self.duration_ms != self.source.timecode.end_ms - self.source.timecode.start_ms:
                 raise ValueError("storyboard sentence duration mismatch")
-        elif self.sentence_id is not None or self.text is not None or self.source is not None or self.duration_ms != 0:
+        elif self.sentence_id is not None or self.text is not None or self.source is not None or self.duration_ms != 0 or self.fact_ids:
             raise ValueError("gap storyboard segment cannot contain source or duration")
         return self
 
@@ -298,6 +298,17 @@ class ScriptStoryboardShot(ScriptStoryboardModel):
         if len(value) != len(set(value)):
             raise ValueError("visual source priority must not contain duplicates")
         return value
+
+    @model_validator(mode="after")
+    def validate_priority_for_fallback(self) -> "ScriptStoryboardShot":
+        expected = {
+            "planned": ["user-material", "licensed-stock", "ai-image", "remotion-template", "text-card"],
+            "no-user-material": ["licensed-stock", "ai-image", "remotion-template", "text-card"],
+            "source-gap": ["remotion-template", "ai-image", "text-card"],
+        }[self.fallback_reason]
+        if self.visual_source_priority != expected:
+            raise ValueError("visual source priority does not match fallback reason")
+        return self
 
 
 class ScriptStoryboardScript(ScriptStoryboardModel):
@@ -346,6 +357,10 @@ class ScriptStoryboardResult(ScriptStoryboardModel):
             raise ValueError("storyboard must contain bounded segments")
         if [segment.order for segment in segments] != list(range(1, len(segments) + 1)):
             raise ValueError("storyboard segment order is not stable")
+        if len({segment.segment_id for segment in segments}) != len(segments):
+            raise ValueError("storyboard segment ids must be unique")
+        if len({segment.source_segment_id for segment in segments}) != len(segments):
+            raise ValueError("storyboard source segment ids must be unique")
         if segments[0].role != "hook" or segments[-1].role != "cta" or any(item.role != "body" for item in segments[1:-1]):
             raise ValueError("storyboard role order is invalid")
         if self.selected_duration_ms != sum(item.duration_ms for item in segments):
@@ -355,11 +370,15 @@ class ScriptStoryboardResult(ScriptStoryboardModel):
             raise ValueError("storyboard duration status mismatch")
         if len(self.shots) != len(segments) or [shot.order for shot in self.shots] != list(range(1, len(segments) + 1)):
             raise ValueError("storyboard shots must map one-to-one to segments")
+        if len({shot.shot_id for shot in self.shots}) != len(self.shots) or len({shot.segment_id for shot in self.shots}) != len(self.shots):
+            raise ValueError("storyboard shot ids and segment ids must be unique")
         for segment, shot in zip(segments, self.shots, strict=True):
             if shot.segment_id != segment.segment_id or shot.duration_ms != segment.duration_ms:
                 raise ValueError("storyboard shot binding mismatch")
             if segment.status == "gap" and shot.fallback_reason != "source-gap":
                 raise ValueError("gap storyboard segment requires a source-gap fallback")
+            if segment.status == "matched" and shot.fallback_reason == "source-gap":
+                raise ValueError("matched storyboard segment cannot use a source-gap fallback")
         provenance_ids = {item.id for item in self.provenance}
         for segment in segments:
             if any(item not in provenance_ids for item in segment.provenance_ids):
@@ -369,6 +388,41 @@ class ScriptStoryboardResult(ScriptStoryboardModel):
             raise ValueError("storyboard facts must be unique")
         if any(item not in fact_ids for segment in segments for item in segment.fact_ids):
             raise ValueError("storyboard segment references undeclared fact")
+        segment_by_id = {segment.segment_id: segment for segment in segments}
+        audit_by_fact = {item.fact_id: item for item in self.facts}
+        for audit in self.facts:
+            if len(audit.segment_ids) != len(set(audit.segment_ids)):
+                raise ValueError("storyboard fact audit segment ids must be unique")
+            if any(segment_id not in segment_by_id for segment_id in audit.segment_ids):
+                raise ValueError("storyboard fact audit references an unknown segment")
+            if audit.status == "unbound" and audit.segment_ids:
+                raise ValueError("unbound fact audit cannot reference segments")
+            if audit.status != "unbound" and not audit.segment_ids:
+                raise ValueError("bound fact audit must reference at least one segment")
+        for segment in segments:
+            referenced = [audit_by_fact[fact_id] for fact_id in segment.fact_ids]
+            expected_confirmation = (
+                "not-required" if not referenced else
+                "verified" if all(audit.status == "bound" for audit in referenced) else
+                "needs-user-confirmation"
+            )
+            if segment.confirmation != expected_confirmation:
+                raise ValueError("storyboard segment confirmation does not match fact audits")
+            for audit in referenced:
+                if segment.segment_id not in audit.segment_ids:
+                    raise ValueError("storyboard fact audit and segment binding are inconsistent")
+        for audit in self.facts:
+            for segment_id in audit.segment_ids:
+                if audit.fact_id not in segment_by_id[segment_id].fact_ids:
+                    raise ValueError("storyboard segment and fact audit binding are inconsistent")
+        expected_status = (
+            "gaps" if any(segment.status == "gap" for segment in segments) else
+            "needs-user-confirmation" if any(audit.status != "bound" for audit in self.facts) else
+            "needs-duration-optimization" if self.duration_status == "outside-tolerance" else
+            "ready"
+        )
+        if self.status != expected_status:
+            raise ValueError("storyboard status does not match gaps, fact, and duration state")
         payload = self.model_dump_json(by_alias=True).encode("utf-8")
         if len(payload) > SCRIPT_STORYBOARD_MAX_OUTPUT_BYTES:
             raise ValueError("script/storyboard result is too large")

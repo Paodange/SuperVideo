@@ -90,6 +90,10 @@ class ScriptStoryboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.facts[0].status, "bound")
         self.assertEqual(result.facts[1].status, "needs-user-confirmation")
 
+        planned = await ScriptStoryboardPlannerService().plan(request(visualContext={"hasUserMaterial": True}), asyncio.Event())
+        self.assertEqual(planned.shots[0].fallback_reason, "planned")
+        self.assertEqual(planned.shots[0].visual_source_priority, ["user-material", "licensed-stock", "ai-image", "remotion-template", "text-card"])
+
     async def test_rejects_extra_keys_paths_and_unbound_fact_refs(self) -> None:
         with self.assertRaises(ValidationError):
             request(credentialRef="should-never-cross-boundary")
@@ -130,6 +134,24 @@ class ScriptStoryboardTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(Exception) as context:
             await ScriptStoryboardPlannerService().plan(request(), cancelled)
         self.assertEqual(context.exception.code, "SCRIPT_STORYBOARD_CANCELLED")
+
+    async def test_result_rejects_forged_status_fact_bindings_identity_and_priority(self) -> None:
+        result = await ScriptStoryboardPlannerService().plan(request(), asyncio.Event())
+        payload = result.model_dump(by_alias=True)
+        mutations = [
+            lambda value: value.update(status="ready"),
+            lambda value: value["script"]["body"][0].update(confirmation="verified"),
+            lambda value: value["facts"][1].update(segmentIds=[]),
+            lambda value: value["facts"][1].update(status="unbound"),
+            lambda value: value["script"]["body"][0].update(sourceSegmentId=value["script"]["hook"]["sourceSegmentId"]),
+            lambda value: value["shots"][0].update(visualSourcePriority=["remotion-template", "ai-image", "text-card"]),
+            lambda value: value["shots"][1].update(order=3),
+        ]
+        for mutate in mutations:
+            candidate = __import__("copy").deepcopy(payload)
+            mutate(candidate)
+            with self.assertRaises(ValidationError):
+                type(result).model_validate(candidate)
 
 
 if __name__ == "__main__":
