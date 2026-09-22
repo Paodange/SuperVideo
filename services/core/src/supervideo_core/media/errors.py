@@ -80,6 +80,17 @@ MediaErrorCode = Literal[
     "AROLL_CUT_JOIN_TOOL_TIMEOUT",
     "AROLL_CUT_JOIN_TIMEOUT",
     "AROLL_CUT_JOIN_CANCELLED",
+    "SUBTITLE_INPUT_INVALID",
+    "SUBTITLE_TIMELINE_INVALID",
+    "SUBTITLE_SOURCE_INVALID",
+    "SUBTITLE_TIMECODE_INVALID",
+    "SUBTITLE_OVERLAP",
+    "SUBTITLE_TEXT_INVALID",
+    "SUBTITLE_LINE_COUNT_INVALID",
+    "SUBTITLE_LINE_WIDTH_INVALID",
+    "SUBTITLE_OUTPUT_INVALID",
+    "SUBTITLE_TIMEOUT",
+    "SUBTITLE_CANCELLED",
 ]
 
 
@@ -163,6 +174,17 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "AROLL_CUT_JOIN_TOOL_TIMEOUT": MediaErrorDefinition("The A-roll media tool timed out."),
     "AROLL_CUT_JOIN_TIMEOUT": MediaErrorDefinition("The A-roll cut/join operation timed out."),
     "AROLL_CUT_JOIN_CANCELLED": MediaErrorDefinition("The A-roll cut/join operation was cancelled."),
+    "SUBTITLE_INPUT_INVALID": MediaErrorDefinition("The subtitle plan input is invalid or exceeds its bounds."),
+    "SUBTITLE_TIMELINE_INVALID": MediaErrorDefinition("The Timeline IR is invalid for subtitle planning."),
+    "SUBTITLE_SOURCE_INVALID": MediaErrorDefinition("A subtitle source reference is invalid."),
+    "SUBTITLE_TIMECODE_INVALID": MediaErrorDefinition("A subtitle timecode is invalid or outside the timeline."),
+    "SUBTITLE_OVERLAP": MediaErrorDefinition("Subtitle cues overlap in timeline order."),
+    "SUBTITLE_TEXT_INVALID": MediaErrorDefinition("Subtitle text is invalid or exceeds its bounds."),
+    "SUBTITLE_LINE_COUNT_INVALID": MediaErrorDefinition("Subtitle text exceeds the configured line count."),
+    "SUBTITLE_LINE_WIDTH_INVALID": MediaErrorDefinition("Subtitle text exceeds the configured display width."),
+    "SUBTITLE_OUTPUT_INVALID": MediaErrorDefinition("The generated subtitle plan was invalid."),
+    "SUBTITLE_TIMEOUT": MediaErrorDefinition("The subtitle planning operation timed out."),
+    "SUBTITLE_CANCELLED": MediaErrorDefinition("The subtitle planning operation was cancelled."),
 }
 
 

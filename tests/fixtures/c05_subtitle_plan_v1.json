@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "planVersion": "subtitle-plan-v1",
+  "selectionPolicy": "timeline-subtitles-or-sentence-clips-v1",
+  "layoutPolicy": "bounded-display-width-v1",
+  "maxLines": 2,
+  "maxLineWidth": 32,
+  "sentenceSources": [
+    {
+      "sentenceId": "sentence-0001",
+      "sourceId": "source-camera-a",
+      "sourceInMs": 1000,
+      "sourceOutMs": 5000,
+      "text": "这是来自 B03 的完整句子。",
+      "provenanceIds": ["prov-camera-a"]
+    }
+  ]
+}

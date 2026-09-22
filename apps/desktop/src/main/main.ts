@@ -22,6 +22,7 @@ import {
   isNarrativePlanResult,
   isDurationOptimizationResult,
   isArollCutJoinResult,
+  isSubtitlePlanResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -53,6 +54,8 @@ import {
   type DurationOptimizationResult,
   type ArollCutJoinParams,
   type ArollCutJoinResult,
+  type SubtitlePlanParams,
+  type SubtitlePlanResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -738,6 +741,11 @@ app.whenReady().then(() => {
     cutJoinAroll: async (_event, input: ArollCutJoinParams): Promise<ArollCutJoinResult> => {
       const result = await agentController.runProjectOperation("media-aroll-cut-join", input, input.projectId);
       if (!isArollCutJoinResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    planSubtitles: async (_event, input: SubtitlePlanParams): Promise<SubtitlePlanResult> => {
+      const result = await agentController.runProjectOperation("media-subtitle-plan", input, input.projectId);
+      if (!isSubtitlePlanResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(

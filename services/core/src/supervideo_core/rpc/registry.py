@@ -30,6 +30,7 @@ from supervideo_core.media.slot_alignment_models import SlotAlignmentParams
 from supervideo_core.media.narrative_planner_models import NarrativePlanParams
 from supervideo_core.media.duration_optimizer_models import DurationOptimizationParams
 from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams
+from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -251,6 +252,15 @@ async def media_aroll_cut_join_handler(
     return (await service.cut_join_aroll(params, cancelled)).model_dump(by_alias=True)
 
 
+async def media_subtitle_plan_handler(
+    params: SubtitlePlanParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.plan_subtitles(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -374,6 +384,10 @@ class RpcRegistry:
             "media.aroll.cut_join": (
                 ArollCutJoinParams,
                 lambda params, emit, cancelled: media_aroll_cut_join_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.subtitle.plan": (
+                SubtitlePlanParams,
+                lambda params, emit, cancelled: media_subtitle_plan_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,
