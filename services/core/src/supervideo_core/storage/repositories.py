@@ -21,6 +21,8 @@ from .models import (
     MessageRecord,
     ProjectCreate,
     ProjectRecord,
+    ResearchSearchRecord,
+    SourceRecord,
     TimelineVersionCreate,
     TimelineVersionRecord,
     STORAGE_DEFAULT_LIST_LIMIT,
@@ -364,6 +366,152 @@ class AssetRepository:
         except sqlite3.Error as error:
             raise _write_error(error) from error
         return [_asset_from_row(row) for row in rows]
+
+
+class ResearchRepository:
+    """Fixed, project-scoped persistence for research replays and sources."""
+
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def create_search(self, record: ResearchSearchRecord) -> ResearchSearchRecord:
+        value = _require_model(record, ResearchSearchRecord)
+        _ensure_no_secret_keys(value.result_json)
+        try:
+            with self.database.transaction() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO research_searches(
+                        id, project_id, request_id, idempotency_key,
+                        request_digest, result_json, created_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        value.id,
+                        value.project_id,
+                        value.request_id,
+                        value.idempotency_key,
+                        value.request_digest,
+                        _stored_json(value.result_json),
+                        value.created_at_ms,
+                    ),
+                )
+        except StorageError:
+            raise
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return value
+
+    def get_search_by_idempotency(self, project_id: str, idempotency_key: str) -> ResearchSearchRecord | None:
+        scope = _project_id(project_id)
+        _bounded_key(idempotency_key, 128)
+        try:
+            row = self.database.connection.execute(
+                _RESEARCH_SEARCH_SELECT + " WHERE project_id = ? AND idempotency_key = ?",
+                (scope, idempotency_key),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _research_search_from_row(row)
+
+    def get_search_by_request_id(self, project_id: str, request_id: str) -> ResearchSearchRecord | None:
+        scope = _project_id(project_id)
+        _bounded_key(request_id, 64)
+        try:
+            row = self.database.connection.execute(
+                _RESEARCH_SEARCH_SELECT + " WHERE project_id = ? AND request_id = ?",
+                (scope, request_id),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _research_search_from_row(row)
+
+    def create_source(self, record: SourceRecord) -> SourceRecord:
+        value = _require_model(record, SourceRecord)
+        _ensure_no_secret_keys(value.evidence_json)
+        _ensure_no_secret_keys(value.provenance_json)
+        try:
+            with self.database.transaction() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO source_records(
+                        id, project_id, url, title, summary, site_name, author,
+                        fetched_at_ms, content_digest, source_digest, evidence_json,
+                        provenance_json, idempotency_key, created_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        value.id,
+                        value.project_id,
+                        value.url,
+                        value.title,
+                        value.summary,
+                        value.site_name,
+                        value.author,
+                        value.fetched_at_ms,
+                        value.content_digest,
+                        value.source_digest,
+                        _stored_json(value.evidence_json),
+                        _stored_json(value.provenance_json),
+                        value.idempotency_key,
+                        value.created_at_ms,
+                    ),
+                )
+        except StorageError:
+            raise
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return value
+
+    def get_source_by_idempotency(self, project_id: str, idempotency_key: str) -> SourceRecord | None:
+        scope = _project_id(project_id)
+        _bounded_key(idempotency_key, 128)
+        try:
+            row = self.database.connection.execute(
+                _SOURCE_SELECT + " WHERE project_id = ? AND idempotency_key = ?",
+                (scope, idempotency_key),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _source_from_row(row)
+
+    def get_source_by_digest(self, project_id: str, source_digest: str) -> SourceRecord | None:
+        scope = _project_id(project_id)
+        _bounded_key(source_digest, 64)
+        try:
+            row = self.database.connection.execute(
+                _SOURCE_SELECT + " WHERE project_id = ? AND source_digest = ?",
+                (scope, source_digest),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _source_from_row(row)
+
+    def get_source(self, project_id: str, source_id: str) -> SourceRecord:
+        scope = _project_id(project_id)
+        record_id = _record_id(source_id)
+        try:
+            row = self.database.connection.execute(
+                _SOURCE_SELECT + " WHERE project_id = ? AND id = ?",
+                (scope, record_id),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        if row is None:
+            raise StorageError("RECORD_NOT_FOUND")
+        return _source_from_row(row)
+
+    def list_sources(self, project_id: str, limit: int = STORAGE_DEFAULT_LIST_LIMIT) -> list[SourceRecord]:
+        scope = _project_id(project_id)
+        bounded_limit = _limit(limit)
+        try:
+            rows = self.database.connection.execute(
+                _SOURCE_SELECT + " WHERE project_id = ? ORDER BY created_at_ms ASC, id ASC LIMIT ?",
+                (scope, bounded_limit),
+            ).fetchall()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return [_source_from_row(row) for row in rows]
 
 
 class JobRepository:
@@ -941,6 +1089,19 @@ SELECT id, project_id, version_number, parent_version_id, schema_version,
 FROM timeline_versions
 """
 
+_RESEARCH_SEARCH_SELECT = """
+SELECT id, project_id, request_id, idempotency_key, request_digest,
+       result_json, created_at_ms
+FROM research_searches
+"""
+
+_SOURCE_SELECT = """
+SELECT id, project_id, url, title, summary, site_name, author,
+       fetched_at_ms, content_digest, source_digest, evidence_json,
+       provenance_json, idempotency_key, created_at_ms
+FROM source_records
+"""
+
 
 def _project_from_row(row: Sequence[object]) -> ProjectRecord:
     config = _json_from_row(row[4])
@@ -979,6 +1140,52 @@ def _asset_from_row(row: Sequence[object]) -> AssetRecord:
             "metadata_json": _json_from_row(row[9]),
             "created_at_ms": row[10],
             "updated_at_ms": row[11],
+        },
+    )
+
+
+def _bounded_key(value: str, maximum: int) -> None:
+    if not isinstance(value, str) or not value or len(value) > maximum:
+        raise StorageError("INVALID_RECORD")
+
+
+def _research_search_from_row(row: Sequence[object]) -> ResearchSearchRecord:
+    return _model_from_row(
+        ResearchSearchRecord,
+        {
+            "id": row[0],
+            "project_id": row[1],
+            "request_id": row[2],
+            "idempotency_key": row[3],
+            "request_digest": row[4],
+            "result_json": _json_from_row(row[5]),
+            "created_at_ms": row[6],
+        },
+    )
+
+
+def _source_from_row(row: Sequence[object]) -> SourceRecord:
+    evidence = _json_from_row(row[10])
+    provenance = _json_from_row(row[11])
+    if not isinstance(evidence, dict) or not isinstance(provenance, dict):
+        raise StorageError("INVALID_RECORD")
+    return _model_from_row(
+        SourceRecord,
+        {
+            "id": row[0],
+            "project_id": row[1],
+            "url": row[2],
+            "title": row[3],
+            "summary": row[4],
+            "site_name": row[5],
+            "author": row[6],
+            "fetched_at_ms": row[7],
+            "content_digest": row[8],
+            "source_digest": row[9],
+            "evidence_json": evidence,
+            "provenance_json": provenance,
+            "idempotency_key": row[12],
+            "created_at_ms": row[13],
         },
     )
 

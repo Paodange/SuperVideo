@@ -54,6 +54,13 @@ from supervideo_core.timeline.version_models import (
     TimelineVersionResult, TimelineVersionUndoParams,
 )
 from supervideo_core.timeline.version_errors import TimelineVersionError
+from supervideo_core.research import (
+    ResearchSaveSourceParams,
+    ResearchSaveSourceResult,
+    ResearchSearchParams,
+    ResearchSearchResult,
+    ResearchService,
+)
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -106,7 +113,7 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None, preview_render_service: PreviewRenderService | None = None, preview_quality_check_service: PreviewQualityCheckService | None = None, final_export_service: FinalMp4ExportService | None = None, edit_service: TimelineEditService | None = None, version_service: TimelineVersionService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None, preview_render_service: PreviewRenderService | None = None, preview_quality_check_service: PreviewQualityCheckService | None = None, final_export_service: FinalMp4ExportService | None = None, edit_service: TimelineEditService | None = None, version_service: TimelineVersionService | None = None, research_service: ResearchService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
         self.transcription_service = transcription_service or TranscriptionService()
@@ -126,6 +133,7 @@ class ProjectService:
         self.final_export_service = final_export_service or FinalMp4ExportService()
         self.edit_service = edit_service or TimelineEditService()
         self.version_service = version_service or TimelineVersionService(self.edit_service)
+        self.research_service = research_service or ResearchService()
 
     @property
     def active_project_id(self) -> str | None:
@@ -244,6 +252,16 @@ class ProjectService:
         self._require_active(request.project_id)
         del cancelled
         return self.edit_service.edit(request)
+
+    async def research_search(self, request: ResearchSearchParams, cancelled: asyncio.Event) -> ResearchSearchResult:
+        active = self._require_active(request.project_id)
+        self.research_service.bind_session(active.database)
+        return await self.research_service.search(request, cancelled)
+
+    def save_research_source(self, request: ResearchSaveSourceParams) -> ResearchSaveSourceResult:
+        active = self._require_active(request.project_id)
+        self.research_service.bind_session(active.database)
+        return self.research_service.save_source(request)
 
     def _version_call(self, project_id: str, operation):
         active = self._require_active(project_id)

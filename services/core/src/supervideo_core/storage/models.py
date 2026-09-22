@@ -329,3 +329,39 @@ class TimelineVersionRecord(StorageModel):
 
 
 TimelineVersion = TimelineVersionRecord
+
+
+class ResearchSearchRecord(StorageModel):
+    id: str = Field(default_factory=new_id)
+    project_id: str
+    request_id: str = Field(min_length=1, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+    request_digest: str = Field(min_length=64, max_length=64)
+    result_json: dict[str, Any]
+    created_at_ms: int = Field(default_factory=utc_now_ms, strict=True, ge=0)
+
+    _id = field_validator("id")(validate_id)
+    _project_id = field_validator("project_id")(validate_id)
+    _result = field_validator("result_json", mode="before")(_json_field)
+
+
+class SourceRecord(StorageModel):
+    id: str = Field(default_factory=new_id)
+    project_id: str
+    url: str = Field(min_length=1, max_length=2_048)
+    title: str = Field(min_length=1, max_length=240)
+    summary: str = Field(min_length=1, max_length=4_000)
+    site_name: str | None = Field(default=None, max_length=160)
+    author: str | None = Field(default=None, max_length=160)
+    fetched_at_ms: int = Field(strict=True, ge=0)
+    content_digest: str = Field(min_length=64, max_length=64)
+    source_digest: str = Field(min_length=64, max_length=64)
+    evidence_json: dict[str, Any]
+    provenance_json: dict[str, Any]
+    idempotency_key: str = Field(min_length=1, max_length=128)
+    created_at_ms: int = Field(default_factory=utc_now_ms, strict=True, ge=0)
+
+    _id = field_validator("id")(validate_id)
+    _project_id = field_validator("project_id")(validate_id)
+    _evidence = field_validator("evidence_json", mode="before")(_json_field)
+    _provenance = field_validator("provenance_json", mode="before")(_json_field)

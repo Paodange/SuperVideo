@@ -11,8 +11,10 @@ import { isTimelineProject, type TimelineProject } from "./timeline-ir";
 import { isTtsJobStartParams, isTtsSynthesisResult, type TtsJobStartParams, type TtsSynthesisResult } from "./tts-contract";
 import { isRemotionRenderParams, isRemotionRenderResult, type RemotionRenderParams, type RemotionRenderResult } from "./remotion-contract";
 import { isImageJobStartParams, isImageGenerationResult, type ImageJobStartParams, type ImageGenerationResult } from "./image-contract";
+import { isResearchSaveSourceParams, isResearchSaveSourceResult, isResearchSearchParams, isResearchSearchResult, type ResearchSaveSourceParams, type ResearchSaveSourceResult, type ResearchSearchParams, type ResearchSearchResult } from "./research-contract";
 export * from "./remotion-contract";
 export * from "./image-contract";
+export * from "./research-contract";
 export type { TtsJobStartParams, TtsJobResultParams, TtsStartRequest, TtsSentenceInput, TtsSentenceTimestamp, TtsSynthesisResult } from "./tts-contract";
 
 export const JSON_RPC_VERSION = "2.0" as const;
@@ -73,6 +75,8 @@ export const CORE_RPC_METHODS = {
   jobEventsList: "job.events.list",
   jobCancel: "job.cancel",
   jobRetry: "job.retry",
+  researchSearch: "research.search",
+  researchSaveSource: "research.save_source",
   jobEvent: "core.job.event",
 } as const;
 
@@ -124,7 +128,9 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.jobList
   | typeof CORE_RPC_METHODS.jobEventsList
   | typeof CORE_RPC_METHODS.jobCancel
-  | typeof CORE_RPC_METHODS.jobRetry;
+  | typeof CORE_RPC_METHODS.jobRetry
+  | typeof CORE_RPC_METHODS.researchSearch
+  | typeof CORE_RPC_METHODS.researchSaveSource;
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "retrying" | "cancelling" | "cancelled" | "needs_attention";
 
 export const CORE_RPC_ERROR_CODES = {
@@ -173,6 +179,14 @@ export const CORE_RPC_ERROR_CODES = {
   constraintViolation: "CONSTRAINT_VIOLATION",
   recordNotFound: "RECORD_NOT_FOUND",
   invalidRecord: "INVALID_RECORD",
+  researchInputInvalid: "RESEARCH_INPUT_INVALID",
+  researchUrlInvalid: "RESEARCH_URL_INVALID",
+  researchSourceInvalid: "RESEARCH_SOURCE_INVALID",
+  researchIdempotencyConflict: "RESEARCH_IDEMPOTENCY_CONFLICT",
+  researchTransportUnavailable: "RESEARCH_TRANSPORT_UNAVAILABLE",
+  researchTimeout: "RESEARCH_TIMEOUT",
+  researchCancelled: "RESEARCH_CANCELLED",
+  researchStorageInvalid: "RESEARCH_STORAGE_INVALID",
   jobNotFound: "JOB_NOT_FOUND",
   jobStateConflict: "JOB_STATE_CONFLICT",
   jobNotCancellable: "JOB_NOT_CANCELLABLE",
@@ -367,6 +381,14 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   CONSTRAINT_VIOLATION: -32128,
   RECORD_NOT_FOUND: -32129,
   INVALID_RECORD: -32130,
+  RESEARCH_INPUT_INVALID: -32500,
+  RESEARCH_URL_INVALID: -32501,
+  RESEARCH_SOURCE_INVALID: -32502,
+  RESEARCH_IDEMPOTENCY_CONFLICT: -32503,
+  RESEARCH_TRANSPORT_UNAVAILABLE: -32504,
+  RESEARCH_TIMEOUT: -32505,
+  RESEARCH_CANCELLED: -32506,
+  RESEARCH_STORAGE_INVALID: -32507,
   JOB_NOT_FOUND: -32200,
   JOB_STATE_CONFLICT: -32201,
   JOB_NOT_CANCELLABLE: -32202,
@@ -559,6 +581,14 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   CONSTRAINT_VIOLATION: "Storage constraint was violated.",
   RECORD_NOT_FOUND: "Storage record was not found.",
   INVALID_RECORD: "Storage record is invalid.",
+  RESEARCH_INPUT_INVALID: "The research input is invalid.",
+  RESEARCH_URL_INVALID: "The research source URL is not allowed.",
+  RESEARCH_SOURCE_INVALID: "The research source record is invalid.",
+  RESEARCH_IDEMPOTENCY_CONFLICT: "The research idempotency key conflicts with another request.",
+  RESEARCH_TRANSPORT_UNAVAILABLE: "The research transport is unavailable.",
+  RESEARCH_TIMEOUT: "The research transport timed out.",
+  RESEARCH_CANCELLED: "The research operation was cancelled.",
+  RESEARCH_STORAGE_INVALID: "The research storage record is invalid.",
   JOB_NOT_FOUND: "The job was not found.",
   JOB_STATE_CONFLICT: "The job state changed concurrently.",
   JOB_NOT_CANCELLABLE: "The job cannot be cancelled.",
@@ -1039,6 +1069,8 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaPreviewRender) return isPreviewRenderParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaPreviewQualityCheck) return isPreviewQualityCheckParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaFinalExport) return isFinalMp4ExportParams(value.params);
+  if (value.method === CORE_RPC_METHODS.researchSearch) return isResearchSearchParams(value.params);
+  if (value.method === CORE_RPC_METHODS.researchSaveSource) return isResearchSaveSourceParams(value.params);
   if (value.method === CORE_RPC_METHODS.timelineEdit) return isTimelineEditParams(value.params);
   if (value.method === CORE_RPC_METHODS.timelineVersionCreate) return isTimelineVersionCreateParams(value.params);
   if (value.method === CORE_RPC_METHODS.timelineVersionApplyEdit) return isTimelineVersionApplyEditParams(value.params);

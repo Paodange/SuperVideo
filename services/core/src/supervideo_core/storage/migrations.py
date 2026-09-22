@@ -14,7 +14,7 @@ from .errors import StorageError, map_sqlite_error
 from .models import utc_now_ms
 
 
-DATABASE_SCHEMA_VERSION = 3
+DATABASE_SCHEMA_VERSION = 4
 _MIGRATION_NAME_PATTERN = re.compile(r"^(?P<version>[0-9]{4})_(?P<name>[a-z][a-z0-9_]*)$")
 _SCHEMA_MIGRATIONS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS schema_migrations (

@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from supervideo_core.project.errors import ProjectError
 from supervideo_core.jobs.errors import JobError
 from supervideo_core.media.errors import MediaError
+from supervideo_core.research.errors import ResearchError
 from supervideo_core.observability import StructuredDiagnosticLogger
 
 from .errors import RpcServiceError, error_response
@@ -118,7 +119,7 @@ class RpcServer:
 
     async def dispatch(self, request: RpcRequest) -> None:
         self.logger.emit("core-request-started", request_id=request.id, details={"method": request.method})
-        if request.method in {"core.smoke.countdown", "media.probe", "media.proxy", "media.transcribe", "media.vad", "media.sentences", "media.sentences.index", "media.sentences.retrieve", "media.script.align", "plan.create_remix", "media.aroll.cut_join", "media.subtitle.plan", "media.preview.render", "media.preview.quality_check", "media.final.export"}:
+        if request.method in {"core.smoke.countdown", "media.probe", "media.proxy", "media.transcribe", "media.vad", "media.sentences", "media.sentences.index", "media.sentences.retrieve", "media.script.align", "plan.create_remix", "media.aroll.cut_join", "media.subtitle.plan", "media.preview.render", "media.preview.quality_check", "media.final.export", "research.search"}:
             if self.active_request_id == request.id:
                 await self.send_error(request.id, "DUPLICATE_REQUEST_ID")
                 return
@@ -143,6 +144,9 @@ class RpcServer:
         except MediaError as error:
             self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
             await self.send_error(request.id, error.code)
+        except ResearchError as error:
+            self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
+            await self.send_error(request.id, error.code)
         except Exception:
             self.logger.emit("core-request-failed", request_id=request.id, error_code="INTERNAL_ERROR", level="error")
             await self.send_error(request.id, "INTERNAL_ERROR")
@@ -165,6 +169,10 @@ class RpcServer:
                 self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
                 await self.send_error(request.id, error.code)
         except ProjectError as error:
+            if not self.closing:
+                self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
+                await self.send_error(request.id, error.code)
+        except ResearchError as error:
             if not self.closing:
                 self.logger.emit("core-request-failed", request_id=request.id, error_code=error.code, level="warn")
                 await self.send_error(request.id, error.code)

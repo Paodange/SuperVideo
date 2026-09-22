@@ -43,6 +43,7 @@ from supervideo_core.timeline.version_models import (
     TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
     TimelineVersionReferenceParams, TimelineVersionUndoParams,
 )
+from supervideo_core.research import ResearchSaveSourceParams, ResearchSearchParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -291,6 +292,24 @@ async def media_preview_quality_check_handler(
     return (await service.check_preview_quality(params, cancelled)).model_dump(by_alias=True)
 
 
+async def research_search_handler(
+    params: ResearchSearchParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.research_search(params, cancelled)).model_dump(by_alias=True)
+
+
+async def research_save_source_handler(
+    params: ResearchSaveSourceParams,
+    _emit: ProgressEmitter,
+    _cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return service.save_research_source(params).model_dump(by_alias=True)
+
+
 async def media_final_export_handler(
     params: FinalMp4ExportParams,
     _emit: ProgressEmitter,
@@ -524,6 +543,14 @@ class RpcRegistry:
             "media.preview.quality_check": (
                 PreviewQualityCheckParams,
                 lambda params, emit, cancelled: media_preview_quality_check_handler(params, emit, cancelled, self.project_service),
+            ),
+            "research.search": (
+                ResearchSearchParams,
+                lambda params, emit, cancelled: research_search_handler(params, emit, cancelled, self.project_service),
+            ),
+            "research.save_source": (
+                ResearchSaveSourceParams,
+                lambda params, emit, cancelled: research_save_source_handler(params, emit, cancelled, self.project_service),
             ),
             "media.final.export": (
                 FinalMp4ExportParams,

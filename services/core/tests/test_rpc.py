@@ -377,7 +377,7 @@ class RpcServerTests(unittest.TestCase):
                 }
             )
             created = self.read_line()["result"]
-            self.assertEqual(created["databaseSchemaVersion"], 3)
+            self.assertEqual(created["databaseSchemaVersion"], 4)
             self.send(
                 {
                     "jsonrpc": "2.0",

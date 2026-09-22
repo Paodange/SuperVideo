@@ -92,6 +92,10 @@ The first migration creates these tables and fixed indexes:
 - `timeline_active` stores one active-version pointer per project. Pointer
   changes are transactional and use a compare-and-swap revision, so stale
   undo/redo or activation requests fail without changing the active version.
+- `research_searches` stores bounded, immutable research request/result
+  snapshots for project-scoped replay. `source_records` stores immutable,
+  project-scoped URL provenance and digests. Both tables have project-scoped
+  idempotency/deduplication constraints and fixed indexes.
 
 All resource IDs are application-generated lowercase UUID strings. Timestamps
 use UTC Unix epoch milliseconds and end in `_at_ms`. JSON is validated as
@@ -122,7 +126,7 @@ The public Python API is deliberately small and typed:
 ```python
 from supervideo_core.storage import (
     AssetRepository, Database, JobRepository, MessageRepository,
-    ProjectRepository, TimelineVersionRepository,
+    ProjectRepository, ResearchRepository, TimelineVersionRepository,
 )
 
 database = Database.open(database_path)  # absolute path from trusted A06
@@ -164,10 +168,11 @@ with the temporary tree.
 
 ## Version boundaries and current limits
 
-`DATABASE_SCHEMA_VERSION` is currently 3 and versions SQLite migrations. It is independent from
+`DATABASE_SCHEMA_VERSION` is currently 4 and versions SQLite migrations. It is independent from
 A04 `CORE_RPC_PROTOCOL_VERSION` and from the Timeline IR `schemaVersion` stored
-in `timeline_versions`. None of these constants may be reused for another
-boundary.
+in `timeline_versions`. Migration `0004_research_sources.sql` is forward-only;
+`0001`–`0003` remain immutable. None of these constants may be reused for
+another boundary.
 
 A05's base tables and A07's job migration remain immutable. C10's `0003` is a
 forward-only migration for the active pointer and version metadata; it also

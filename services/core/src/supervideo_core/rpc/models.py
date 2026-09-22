@@ -39,6 +39,7 @@ from supervideo_core.timeline.version_models import (
     TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
     TimelineVersionReferenceParams, TimelineVersionUndoParams,
 )
+from supervideo_core.research import ResearchSaveSourceParams, ResearchSearchParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -324,6 +325,10 @@ def validate_request(value: Any) -> RpcRequest:
         SubtitlePlanParams.model_validate(request.params)
     elif request.method == "media.preview.render":
         PreviewRenderParams.model_validate(request.params)
+    elif request.method == "research.search":
+        ResearchSearchParams.model_validate(request.params)
+    elif request.method == "research.save_source":
+        ResearchSaveSourceParams.model_validate(request.params)
     elif request.method == "media.preview.quality_check":
         from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
 
@@ -429,6 +434,8 @@ def health_result() -> dict[str, object]:
             "media.preview.render",
             "media.preview.quality_check",
             "media.final.export",
+            "research.search",
+            "research.save_source",
             "timeline.edit",
             "timeline.version.create",
             "timeline.version.apply_edit",
