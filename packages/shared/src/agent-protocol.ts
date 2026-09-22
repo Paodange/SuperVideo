@@ -61,6 +61,15 @@ import {
   type CredentialStorageStatus,
   type DiagnosticExportResult,
 } from "./diagnostics-protocol";
+import type {
+  ProviderConfig,
+  ProviderConfigDeleteRequest,
+  ProviderConfigInput,
+  ProviderConfigListRequest,
+  ProviderHealth,
+  ProviderDeleteResult,
+} from "./provider-contract";
+import { PROVIDER_PUBLIC_ERROR_CODES, type ProviderPublicErrorCode } from "./provider-contract";
 
 /**
  * The protocol between Electron Main and the isolated Agent utility process.
@@ -454,6 +463,10 @@ export const DESKTOP_IPC_CHANNELS = {
   credentialsReplace: "desktop:v2:credentials-replace",
   credentialsRemove: "desktop:v2:credentials-remove",
   diagnosticsExport: "desktop:v2:diagnostics-export",
+  providersList: "desktop:v2:providers-list",
+  providersUpsert: "desktop:v2:providers-upsert",
+  providersRemove: "desktop:v2:providers-remove",
+  providersHealth: "desktop:v2:providers-health",
 } as const;
 
 export type DesktopIpcChannel = (typeof DESKTOP_IPC_CHANNELS)[keyof typeof DESKTOP_IPC_CHANNELS];
@@ -486,7 +499,7 @@ export type CredentialsStatusRequest = Record<string, never>;
 export type CredentialsListRequest = Record<string, never>;
 export type ProjectDialogResult<T> = Readonly<{ cancelled: true }> | Readonly<{ cancelled: false; value: T }>;
 
-export type DesktopPublicErrorCode = AgentPublicErrorCode | JobOperationErrorCode | A08PublicErrorCode;
+export type DesktopPublicErrorCode = AgentPublicErrorCode | JobOperationErrorCode | A08PublicErrorCode | ProviderPublicErrorCode;
 export type DesktopPublicError = Readonly<{
   code: DesktopPublicErrorCode;
   message: string;
@@ -542,6 +555,12 @@ export type DesktopApi = Readonly<{
     remove: (input: CredentialRemoveRequest) => Promise<CredentialRemoveResult>;
   }>;
   diagnostics: Readonly<{ export: () => Promise<DiagnosticExportResult> }>;
+  providers: Readonly<{
+    list: (input: ProviderConfigListRequest) => Promise<import("./provider-contract").ProviderConfigListResult>;
+    upsert: (input: ProviderConfigInput) => Promise<ProviderConfig>;
+    remove: (input: ProviderConfigDeleteRequest) => Promise<ProviderDeleteResult>;
+    health: (input: ProviderConfigDeleteRequest) => Promise<ProviderHealth>;
+  }>;
 }>;
 
 const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = {
@@ -727,6 +746,19 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   CREDENTIAL_WRITE_FAILED: "Secure credential storage could not be updated.",
   DIAGNOSTIC_EXPORT_CANCELLED: "The diagnostics export was cancelled.",
   DIAGNOSTIC_EXPORT_FAILED: "Diagnostics could not be exported.",
+  PROVIDER_INVALID_CONFIG: "The provider configuration is invalid.",
+  PROVIDER_UNKNOWN: "The provider is not registered.",
+  PROVIDER_CONFIG_NOT_FOUND: "The provider configuration was not found.",
+  PROVIDER_CONFIG_CORRUPT: "The provider configuration store is corrupt.",
+  PROVIDER_CONFIG_WRITE_FAILED: "The provider configuration could not be saved.",
+  PROVIDER_PROJECT_MISMATCH: "The provider does not belong to this project.",
+  PROVIDER_CREDENTIAL_NOT_FOUND: "The provider credential was not found.",
+  PROVIDER_CREDENTIAL_KIND_MISMATCH: "The provider credential does not match the provider.",
+  PROVIDER_HEALTH_TIMEOUT: "The provider health check timed out.",
+  PROVIDER_AUTH_FAILED: "The provider authentication check failed.",
+  PROVIDER_UNAVAILABLE: "The provider is unavailable.",
+  PROVIDER_ADAPTER_FAILED: "The provider adapter failed.",
+  PROVIDER_REGISTRY_CONFLICT: "The provider is already registered.",
 };
 
 export function createDesktopPublicError(code: DesktopPublicErrorCode): DesktopPublicError {
@@ -754,7 +786,7 @@ export function isAgentPublicErrorCode(value: unknown): value is AgentPublicErro
 }
 
 export function isDesktopPublicErrorCode(value: unknown): value is DesktopPublicErrorCode {
-  return isAgentPublicErrorCode(value) || isJobOperationErrorCode(value) || (typeof value === "string" && (PUBLIC_A08_ERROR_CODES as readonly string[]).includes(value));
+  return isAgentPublicErrorCode(value) || isJobOperationErrorCode(value) || (typeof value === "string" && (PUBLIC_A08_ERROR_CODES as readonly string[]).includes(value)) || (typeof value === "string" && (PROVIDER_PUBLIC_ERROR_CODES as readonly string[]).includes(value));
 }
 
 export function isValidAgentRunId(value: unknown): value is string {
