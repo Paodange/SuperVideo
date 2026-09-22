@@ -20,8 +20,10 @@ import type {
   SlotAlignmentResult,
   NarrativePlanParams,
   NarrativePlanResult,
+  DurationOptimizationParams,
+  DurationOptimizationResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -46,7 +48,7 @@ export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -69,6 +71,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaSentenceIndex: "media-sentence-index",
   mediaSentenceRetrieve: "media-sentence-retrieve",
   planCreateRemix: "plan-create-remix",
+  planOptimizeDuration: "plan-optimize-duration",
   mediaScriptAlign: "media-script-align",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
@@ -112,7 +115,8 @@ export type AgentProjectOperationType =
   | "media-sentence-retrieve"
   | "media-sentence-rerank"
   | "media-script-align"
-  | "plan-create-remix";
+  | "plan-create-remix"
+  | "plan-optimize-duration";
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
@@ -157,7 +161,8 @@ export type ProjectOperationErrorCode =
   | "RETRIEVAL_INDEX_NOT_FOUND" | "RETRIEVAL_INDEX_INVALID" | "RETRIEVAL_INDEX_STALE" | "RETRIEVAL_STORAGE_INVALID" | "RETRIEVAL_OUTPUT_INVALID" | "RETRIEVAL_TIMEOUT" | "RETRIEVAL_CANCELLED"
   | "RERANK_RETRIEVAL_INVALID" | "RERANK_SOURCE_INVALID" | "RERANK_SOURCE_STALE" | "RERANK_QA_STORAGE_INVALID" | "RERANK_OUTPUT_INVALID" | "RERANK_TIMEOUT" | "RERANK_CANCELLED"
   | "SLOT_INPUT_INVALID" | "SLOT_SOURCE_INVALID" | "SLOT_SOURCE_STALE" | "SLOT_RETRIEVAL_INVALID" | "SLOT_OUTPUT_INVALID" | "SLOT_TIMEOUT" | "SLOT_CANCELLED"
-  | "PLAN_INPUT_INVALID" | "PLAN_SOURCE_INVALID" | "PLAN_SOURCE_STALE" | "PLAN_ALIGNMENT_INVALID" | "PLAN_OUTPUT_INVALID" | "PLAN_TIMEOUT" | "PLAN_CANCELLED";
+  | "PLAN_INPUT_INVALID" | "PLAN_SOURCE_INVALID" | "PLAN_SOURCE_STALE" | "PLAN_ALIGNMENT_INVALID" | "PLAN_OUTPUT_INVALID" | "PLAN_TIMEOUT" | "PLAN_CANCELLED"
+  | "DURATION_OPTIMIZATION_INPUT_INVALID" | "DURATION_OPTIMIZATION_SOURCE_INVALID" | "DURATION_OPTIMIZATION_ALIGNMENT_INVALID" | "DURATION_OPTIMIZATION_OUTPUT_INVALID" | "DURATION_OPTIMIZATION_TIMEOUT" | "DURATION_OPTIMIZATION_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -355,6 +360,7 @@ export const DESKTOP_IPC_CHANNELS = {
   rerankSentences: "desktop:v2:rerank-sentences",
   alignScript: "desktop:v2:align-script",
   createRemixPlan: "desktop:v2:create-remix-plan",
+  optimizeDuration: "desktop:v2:optimize-duration",
   startSmokeJob: "desktop:v2:start-smoke-job",
   getJob: "desktop:v2:get-job",
   listJobs: "desktop:v2:list-jobs",
@@ -425,6 +431,7 @@ export type DesktopApi = Readonly<{
   rerankSentences: (input: RerankParams) => Promise<RerankResult>;
   alignScript: (input: SlotAlignmentParams) => Promise<SlotAlignmentResult>;
   createRemixPlan: (input: NarrativePlanParams) => Promise<NarrativePlanResult>;
+  optimizeDuration: (input: DurationOptimizationParams) => Promise<DurationOptimizationResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -558,6 +565,12 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   PLAN_OUTPUT_INVALID: "The narrative plan output was invalid.",
   PLAN_TIMEOUT: "The narrative planning operation timed out.",
   PLAN_CANCELLED: "The narrative planning operation was cancelled.",
+  DURATION_OPTIMIZATION_INPUT_INVALID: "The duration optimization input is invalid or exceeds its bounds.",
+  DURATION_OPTIMIZATION_SOURCE_INVALID: "The C02 source plan is invalid for duration optimization.",
+  DURATION_OPTIMIZATION_ALIGNMENT_INVALID: "The B10 candidate pool is invalid for duration optimization.",
+  DURATION_OPTIMIZATION_OUTPUT_INVALID: "The duration optimization output was invalid.",
+  DURATION_OPTIMIZATION_TIMEOUT: "The duration optimization operation timed out.",
+  DURATION_OPTIMIZATION_CANCELLED: "The duration optimization operation was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -855,7 +868,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "media-sentence-retrieve"
     || value === "media-sentence-rerank"
     || value === "media-script-align"
-    || value === "plan-create-remix";
+    || value === "plan-create-remix"
+    || value === "plan-optimize-duration";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -935,6 +949,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
   if (type === "media-sentence-rerank") return isRerankParams(value);
   if (type === "media-script-align") return isSlotAlignmentParams(value);
   if (type === "plan-create-remix") return isNarrativePlanParams(value);
+  if (type === "plan-optimize-duration") return isDurationOptimizationParams(value);
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
     if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
@@ -1035,6 +1050,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "RERANK_RETRIEVAL_INVALID", "RERANK_SOURCE_INVALID", "RERANK_SOURCE_STALE", "RERANK_QA_STORAGE_INVALID", "RERANK_OUTPUT_INVALID", "RERANK_TIMEOUT", "RERANK_CANCELLED",
   "SLOT_INPUT_INVALID", "SLOT_SOURCE_INVALID", "SLOT_SOURCE_STALE", "SLOT_RETRIEVAL_INVALID", "SLOT_OUTPUT_INVALID", "SLOT_TIMEOUT", "SLOT_CANCELLED",
   "PLAN_INPUT_INVALID", "PLAN_SOURCE_INVALID", "PLAN_SOURCE_STALE", "PLAN_ALIGNMENT_INVALID", "PLAN_OUTPUT_INVALID", "PLAN_TIMEOUT", "PLAN_CANCELLED",
+  "DURATION_OPTIMIZATION_INPUT_INVALID", "DURATION_OPTIMIZATION_SOURCE_INVALID", "DURATION_OPTIMIZATION_ALIGNMENT_INVALID", "DURATION_OPTIMIZATION_OUTPUT_INVALID", "DURATION_OPTIMIZATION_TIMEOUT", "DURATION_OPTIMIZATION_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -1076,6 +1092,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-sentence-rerank") return isRerankResult(value);
   if (type === "media-script-align") return isSlotAlignmentResult(value);
   if (type === "plan-create-remix") return isNarrativePlanResult(value);
+  if (type === "plan-optimize-duration") return isDurationOptimizationResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;

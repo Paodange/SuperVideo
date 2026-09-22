@@ -20,6 +20,7 @@ import {
   isRerankResult,
   isSlotAlignmentResult,
   isNarrativePlanResult,
+  isDurationOptimizationResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -47,6 +48,8 @@ import {
   type SlotAlignmentResult,
   type NarrativePlanParams,
   type NarrativePlanResult,
+  type DurationOptimizationParams,
+  type DurationOptimizationResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -722,6 +725,11 @@ app.whenReady().then(() => {
     createRemixPlan: async (_event, input: NarrativePlanParams): Promise<NarrativePlanResult> => {
       const result = await agentController.runProjectOperation("plan-create-remix", input, input.projectId);
       if (!isNarrativePlanResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    optimizeDuration: async (_event, input: DurationOptimizationParams): Promise<DurationOptimizationResult> => {
+      const result = await agentController.runProjectOperation("plan-optimize-duration", input, input.projectId);
+      if (!isDurationOptimizationResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(

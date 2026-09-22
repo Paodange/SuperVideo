@@ -37,6 +37,7 @@ export const CORE_RPC_METHODS = {
   mediaSentenceRerank: "media.sentences.rerank",
   mediaScriptAlign: "media.script.align",
   planCreateRemix: "plan.create_remix",
+  planOptimizeDuration: "plan.optimize_duration",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -68,6 +69,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaSentenceRerank
   | typeof CORE_RPC_METHODS.mediaScriptAlign
   | typeof CORE_RPC_METHODS.planCreateRemix
+  | typeof CORE_RPC_METHODS.planOptimizeDuration
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -194,6 +196,12 @@ export const CORE_RPC_ERROR_CODES = {
   planOutputInvalid: "PLAN_OUTPUT_INVALID",
   planTimeout: "PLAN_TIMEOUT",
   planCancelled: "PLAN_CANCELLED",
+  durationOptimizationInputInvalid: "DURATION_OPTIMIZATION_INPUT_INVALID",
+  durationOptimizationSourceInvalid: "DURATION_OPTIMIZATION_SOURCE_INVALID",
+  durationOptimizationAlignmentInvalid: "DURATION_OPTIMIZATION_ALIGNMENT_INVALID",
+  durationOptimizationOutputInvalid: "DURATION_OPTIMIZATION_OUTPUT_INVALID",
+  durationOptimizationTimeout: "DURATION_OPTIMIZATION_TIMEOUT",
+  durationOptimizationCancelled: "DURATION_OPTIMIZATION_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -316,6 +324,12 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   PLAN_OUTPUT_INVALID: -32357,
   PLAN_TIMEOUT: -32358,
   PLAN_CANCELLED: -32359,
+  DURATION_OPTIMIZATION_INPUT_INVALID: -32360,
+  DURATION_OPTIMIZATION_SOURCE_INVALID: -32361,
+  DURATION_OPTIMIZATION_ALIGNMENT_INVALID: -32362,
+  DURATION_OPTIMIZATION_OUTPUT_INVALID: -32363,
+  DURATION_OPTIMIZATION_TIMEOUT: -32364,
+  DURATION_OPTIMIZATION_CANCELLED: -32365,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -436,6 +450,12 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   PLAN_OUTPUT_INVALID: "The narrative plan output was invalid.",
   PLAN_TIMEOUT: "The narrative planning operation timed out.",
   PLAN_CANCELLED: "The narrative planning operation was cancelled.",
+  DURATION_OPTIMIZATION_INPUT_INVALID: "The duration optimization input is invalid or exceeds its bounds.",
+  DURATION_OPTIMIZATION_SOURCE_INVALID: "The C02 source plan is invalid for duration optimization.",
+  DURATION_OPTIMIZATION_ALIGNMENT_INVALID: "The B10 candidate pool is invalid for duration optimization.",
+  DURATION_OPTIMIZATION_OUTPUT_INVALID: "The duration optimization output was invalid.",
+  DURATION_OPTIMIZATION_TIMEOUT: "The duration optimization operation timed out.",
+  DURATION_OPTIMIZATION_CANCELLED: "The duration optimization operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -549,6 +569,11 @@ export type NarrativePlanSource = Readonly<{ sourceAssetId: string; sourceSenten
 export type NarrativePlanGap = Readonly<{ segmentId: string; slotId: string; role: "hook" | "body" | "cta"; code: "alignment-gap" | "missing-narrative-role" | "duration-outside-tolerance"; detail: string }>;
 export type NarrativePlanSegment = Readonly<{ segmentId: string; order: number; role: "hook" | "body" | "cta"; slotId: string; slotKind: InformationSlot["kind"]; sourceText: string; status: "matched" | "gap"; candidateSentenceId: string | null; candidateRank: number | null; sentenceText: string | null; source: NarrativePlanSource | null; durationMs: number; selectionReason: string | null; gapReason: NarrativePlanGap | null }>;
 export type NarrativePlanResult = Readonly<{ schemaVersion: 1; planVersion: "narrative-remix-plan-v1"; inputVersion: "deterministic-narrative-input-v1"; projectId: string; theme: string; audience: string; outline: string | null; targetDurationMs: number; toleranceLowerMs: number; toleranceUpperMs: number; selectedDurationMs: number; durationStatus: "within-tolerance" | "outside-tolerance"; status: "ready" | "gaps" | "needs-duration-optimization"; selectionPolicy: "b10-first-complete-candidate-v1"; alignmentVersion: "information-slot-alignment-v1"; planDigest: string; segments: readonly NarrativePlanSegment[]; gaps: readonly NarrativePlanGap[] }>;
+export type DurationOptimizationParams = Readonly<{ projectId: string; sourcePlan: NarrativePlanResult; alignment: SlotAlignmentResult; timeoutMs?: number }>;
+export type DurationOptimizationSentence = Readonly<{ sentenceId: string; sentenceText: string; source: NarrativePlanSource; durationMs: number; candidateRank: number }>;
+export type DurationOptimizationSegment = Readonly<{ segmentId: string; order: number; role: "hook" | "body" | "cta"; slotId: string; slotKind: InformationSlot["kind"]; sourceText: string; status: "matched" | "gap"; operation: "keep" | "replace" | "add"; candidateSentenceId: string | null; candidateRank: number | null; sentenceText: string | null; source: NarrativePlanSource | null; durationMs: number; selectionReason: string | null; gapReason: NarrativePlanGap | null }>;
+export type DurationOptimizationChange = Readonly<{ segmentId: string; slotId: string; role: "hook" | "body" | "cta"; operation: "keep" | "replace" | "add" | "remove"; before: DurationOptimizationSentence | null; after: DurationOptimizationSentence | null; selectionReason: string }>;
+export type DurationOptimizationResult = Readonly<{ schemaVersion: 1; optimizationVersion: "duration-optimization-v1"; projectId: string; sourcePlanDigest: string; targetDurationMs: number; toleranceLowerMs: number; toleranceUpperMs: number; selectedDurationMs: number; durationStatus: "within-tolerance" | "outside-tolerance"; status: "optimized" | "unchanged" | "gaps" | "needs-duration-optimization"; selectionPolicy: "bounded-whole-sentence-knapsack-v1"; segments: readonly DurationOptimizationSegment[]; changes: readonly DurationOptimizationChange[]; gaps: readonly NarrativePlanGap[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -701,6 +726,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaSentenceRerank) return isRerankParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaScriptAlign) return isSlotAlignmentParams(value.params);
   if (value.method === CORE_RPC_METHODS.planCreateRemix) return isNarrativePlanParams(value.params);
+  if (value.method === CORE_RPC_METHODS.planOptimizeDuration) return isDurationOptimizationParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -951,6 +977,23 @@ export function isNarrativePlanResult(value: unknown): value is NarrativePlanRes
   const segmentGaps = value.segments.filter((segment) => (segment as NarrativePlanSegment).gapReason !== null).map((segment) => (segment as NarrativePlanSegment).gapReason);
   if (value.gaps.length !== segmentGaps.length || value.gaps.some((gap, index) => JSON.stringify(gap) !== JSON.stringify(segmentGaps[index]))) return false;
   const expectedStatus = value.gaps.length > 0 ? "gaps" : value.durationStatus === "within-tolerance" ? "ready" : "needs-duration-optimization";
+  return value.status === expectedStatus && isBoundedCoreJsonValue(value, 60 * 1024);
+}
+
+export function isDurationOptimizationResult(value: unknown): value is DurationOptimizationResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "optimizationVersion", "projectId", "sourcePlanDigest", "targetDurationMs", "toleranceLowerMs", "toleranceUpperMs", "selectedDurationMs", "durationStatus", "status", "selectionPolicy", "segments", "changes", "gaps"])) return false;
+  if (value.schemaVersion !== 1 || value.optimizationVersion !== "duration-optimization-v1" || !isUuid(value.projectId) || !isSentenceCacheKey(value.sourcePlanDigest)) return false;
+  if (!isSafeInteger(value.targetDurationMs, 1_000, 600_000) || !isSafeInteger(value.toleranceLowerMs, 800, 600_000) || !isSafeInteger(value.toleranceUpperMs, 800, 720_000)) return false;
+  if (value.toleranceLowerMs !== Math.floor(value.targetDurationMs * 0.8) || value.toleranceUpperMs !== Math.floor(value.targetDurationMs * 1.2)) return false;
+  if (!isSafeInteger(value.selectedDurationMs, 0, 86_400_000) || (value.durationStatus !== "within-tolerance" && value.durationStatus !== "outside-tolerance")) return false;
+  if (!["optimized", "unchanged", "gaps", "needs-duration-optimization"].includes(value.status as string) || value.selectionPolicy !== "bounded-whole-sentence-knapsack-v1") return false;
+  if (!Array.isArray(value.segments) || value.segments.length > 32 || !value.segments.every((segment, index) => isDurationOptimizationSegment(segment, index + 1))) return false;
+  if (value.selectedDurationMs !== value.segments.reduce((total, segment) => total + (segment as DurationOptimizationSegment).durationMs, 0)) return false;
+  const expectedDurationStatus = value.toleranceLowerMs <= value.selectedDurationMs && value.selectedDurationMs <= value.toleranceUpperMs ? "within-tolerance" : "outside-tolerance";
+  if (value.durationStatus !== expectedDurationStatus) return false;
+  if (!Array.isArray(value.changes) || value.changes.length > 64 || !value.changes.every(isDurationOptimizationChange)) return false;
+  if (!Array.isArray(value.gaps) || value.gaps.length > 33 || !value.gaps.every(isNarrativePlanGap)) return false;
+  const expectedStatus = value.gaps.length > 0 ? "gaps" : value.durationStatus === "within-tolerance" ? (value.changes.some((change) => (change as DurationOptimizationChange).operation !== "keep") ? "optimized" : "unchanged") : "needs-duration-optimization";
   return value.status === expectedStatus && isBoundedCoreJsonValue(value, 60 * 1024);
 }
 
@@ -1228,6 +1271,13 @@ export function isNarrativePlanParams(value: unknown): value is NarrativePlanPar
     && value.assetIds.length === new Set(value.assetIds).size && value.assetIds.every(isUuid);
 }
 
+export function isDurationOptimizationParams(value: unknown): value is DurationOptimizationParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "sourcePlan", "alignment", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isNarrativePlanResult(value.sourcePlan) || !isSlotAlignmentResult(value.alignment)) return false;
+  if ((value.sourcePlan as NarrativePlanResult).projectId !== value.projectId || (value.alignment as SlotAlignmentResult).projectId !== value.projectId) return false;
+  return (value.timeoutMs === undefined || isSafeInteger(value.timeoutMs, 1_000, 120_000)) && isBoundedCoreJsonValue(value, 120 * 1024);
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1388,6 +1438,38 @@ function isNarrativePlanSegment(value: unknown, order: number): value is Narrati
       && isNarrativePlanSource(value.source) && value.durationMs > 0 && isSafeString(value.selectionReason, 160) && value.gapReason === null;
   }
   return value.status === "gap" && value.candidateSentenceId === null && value.candidateRank === null && value.sentenceText === null && value.source === null && value.durationMs === 0 && value.selectionReason === null && isNarrativePlanGap(value.gapReason);
+}
+
+function isDurationOptimizationSentence(value: unknown): value is DurationOptimizationSentence {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["sentenceId", "sentenceText", "source", "durationMs", "candidateRank"])) return false;
+  return isSentenceCacheKey(value.sentenceId) && isBoundedText(value.sentenceText, 2_048) && isNarrativePlanSource(value.source)
+    && isSafeInteger(value.durationMs, 1, 86_400_000) && value.durationMs === value.source.timecode.endMs - value.source.timecode.startMs
+    && isSafeInteger(value.candidateRank, 1, 8);
+}
+
+function isDurationOptimizationSegment(value: unknown, order: number): value is DurationOptimizationSegment {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["segmentId", "order", "role", "slotId", "slotKind", "sourceText", "status", "operation", "candidateSentenceId", "candidateRank", "sentenceText", "source", "durationMs", "selectionReason", "gapReason"])) return false;
+  if (!isSafeString(value.segmentId, 64) || value.order !== order || !["hook", "body", "cta"].includes(value.role as string) || !isSafeString(value.slotId, 32) || !["hook", "context", "claim", "evidence", "benefit", "requirement", "process", "cta", "closing", "other"].includes(value.slotKind as string) || !isBoundedText(value.sourceText, 512)) return false;
+  if (!isSafeInteger(value.durationMs, 0, 86_400_000) || !isNarrativePlanGap(value.gapReason) && value.gapReason !== null) return false;
+  if (value.status === "matched") {
+    return ["keep", "replace", "add"].includes(value.operation as string) && isSentenceCacheKey(value.candidateSentenceId) && isSafeInteger(value.candidateRank, 1, 8)
+      && isBoundedText(value.sentenceText, 2_048) && isNarrativePlanSource(value.source) && value.durationMs > 0 && isSafeString(value.selectionReason, 160) && value.gapReason === null;
+  }
+  return value.status === "gap" && value.operation === "keep" && value.candidateSentenceId === null && value.candidateRank === null && value.sentenceText === null && value.source === null && value.durationMs === 0 && value.selectionReason === null && isNarrativePlanGap(value.gapReason);
+}
+
+function isDurationOptimizationChange(value: unknown): value is DurationOptimizationChange {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["segmentId", "slotId", "role", "operation", "before", "after", "selectionReason"])) return false;
+  if (!isSafeString(value.segmentId, 64) || !isSafeString(value.slotId, 32) || !["hook", "body", "cta"].includes(value.role as string) || !isSafeString(value.selectionReason, 160)) return false;
+  const before = value.before === null || isDurationOptimizationSentence(value.before);
+  const after = value.after === null || isDurationOptimizationSentence(value.after);
+  if (!before || !after) return false;
+  const beforeSentence = value.before as DurationOptimizationSentence | null;
+  const afterSentence = value.after as DurationOptimizationSentence | null;
+  if (value.operation === "keep") return beforeSentence !== null && afterSentence !== null && JSON.stringify(beforeSentence) === JSON.stringify(afterSentence);
+  if (value.operation === "replace") return beforeSentence !== null && afterSentence !== null && beforeSentence.sentenceId !== afterSentence.sentenceId;
+  if (value.operation === "add") return value.before === null && value.after !== null;
+  return value.operation === "remove" && value.before !== null && value.after === null;
 }
 
 function isInformationSlot(value: unknown, order: number): value is InformationSlot {

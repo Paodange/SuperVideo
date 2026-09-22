@@ -40,6 +40,7 @@ import {
   isRerankResult,
   isSlotAlignmentResult,
   isNarrativePlanResult,
+  isDurationOptimizationResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -73,6 +74,8 @@ import {
   type SlotAlignmentResult,
   type NarrativePlanParams,
   type NarrativePlanResult,
+  type DurationOptimizationParams,
+  type DurationOptimizationResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -364,6 +367,12 @@ export class PythonCoreClient {
   async createRemixPlan(params: NarrativePlanParams, options: CoreRpcRequestOptions = {}): Promise<NarrativePlanResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.planCreateRemix, params, options);
     if (!isNarrativePlanResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async optimizeDuration(params: DurationOptimizationParams, options: CoreRpcRequestOptions = {}): Promise<DurationOptimizationResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.planOptimizeDuration, params, options);
+    if (!isDurationOptimizationResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

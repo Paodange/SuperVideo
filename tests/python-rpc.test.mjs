@@ -125,6 +125,24 @@ test("C02 narrative plan validators keep hook-body-CTA provenance and determinis
   assert.equal(shared.isNarrativePlanResult({ ...result, segments: [{ ...segments[0], source: { ...segments[0].source, timecode: { startMs: 0, endMs: 900 } } }, ...segments.slice(1)] }), false);
 });
 
+test("C03 duration optimization validators preserve whole-sentence operations and provenance", () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const assetId = "22222222-2222-4222-8222-222222222222";
+  const sentenceId = "a".repeat(64);
+  const cacheKey = "b".repeat(64);
+  const source = { sourceAssetId: assetId, sourceSentenceCacheKey: cacheKey, sentenceIndex: 0, timecode: { startMs: 0, endMs: 1000 }, previewUri: `supervideo://asset/${assetId}?kind=audio&startMs=0&endMs=1000` };
+  const candidate = { rank: 1, origin: "b09-quality-rerank", sentenceId, sourceAssetId: assetId, sourceSentenceCacheKey: cacheKey, sentenceIndex: 0, timecode: { startMs: 0, endMs: 1000 }, text: "完整句子。", score: 1, quality: "complete", previewUri: source.previewUri, selectionReason: "complete", preservedFacts: [] };
+  const alignment = { schemaVersion: 1, alignmentVersion: "information-slot-alignment-v1", splitterVersion: "deterministic-slot-split-v1", projectId, inputKind: "outline", inputText: "完整句子。", sourceDigest: "c".repeat(64), slotCount: 1, matchedCount: 1, slots: [{ slotId: "slot-1", order: 1, kind: "hook", sourceText: "完整句子。", query: "完整句子。", keyFacts: [], status: "matched", selectedCandidateRank: 1, candidates: [candidate], selectionReason: "complete", gapReason: null }] };
+  const plan = { schemaVersion: 1, planVersion: "narrative-remix-plan-v1", inputVersion: "deterministic-narrative-input-v1", projectId, theme: "招聘", audience: "求职者", outline: "完整句子。", targetDurationMs: 1000, toleranceLowerMs: 800, toleranceUpperMs: 1200, selectedDurationMs: 1000, durationStatus: "within-tolerance", status: "ready", selectionPolicy: "b10-first-complete-candidate-v1", alignmentVersion: "information-slot-alignment-v1", planDigest: "d".repeat(64), segments: [{ segmentId: "segment-1", order: 1, role: "hook", slotId: "slot-1", slotKind: "hook", sourceText: "完整句子。", status: "matched", candidateSentenceId: sentenceId, candidateRank: 1, sentenceText: "完整句子。", source, durationMs: 1000, selectionReason: "complete", gapReason: null }], gaps: [] };
+  const params = { projectId, sourcePlan: plan, alignment, timeoutMs: 120000 };
+  assert.equal(shared.isDurationOptimizationParams(params), true);
+  const sentence = { sentenceId, sentenceText: "完整句子。", source, durationMs: 1000, candidateRank: 1 };
+  const result = { schemaVersion: 1, optimizationVersion: "duration-optimization-v1", projectId, sourcePlanDigest: plan.planDigest, targetDurationMs: 1000, toleranceLowerMs: 800, toleranceUpperMs: 1200, selectedDurationMs: 1000, durationStatus: "within-tolerance", status: "unchanged", selectionPolicy: "bounded-whole-sentence-knapsack-v1", segments: [{ segmentId: "segment-1", order: 1, role: "hook", slotId: "slot-1", slotKind: "hook", sourceText: "完整句子。", status: "matched", operation: "keep", candidateSentenceId: sentenceId, candidateRank: 1, sentenceText: "完整句子。", source, durationMs: 1000, selectionReason: "complete", gapReason: null }], changes: [{ segmentId: "segment-1", slotId: "slot-1", role: "hook", operation: "keep", before: sentence, after: sentence, selectionReason: "complete" }], gaps: [] };
+  assert.equal(shared.isDurationOptimizationResult(result), true);
+  assert.equal(shared.isDurationOptimizationResult({ ...result, changes: [{ ...result.changes[0], after: { ...sentence, source: { ...source, timecode: { startMs: 0, endMs: 900 }, previewUri: `supervideo://asset/${assetId}?kind=audio&startMs=0&endMs=900` }, durationMs: 900 } }] }), false);
+  assert.equal(shared.isDurationOptimizationParams({ ...params, alignment: { ...alignment, projectId: "33333333-3333-4333-8333-333333333333" } }), false);
+});
+
 test("VAD runtime validator rejects a gap between otherwise valid intervals", () => {
   const base = {
     schemaVersion: 1,
