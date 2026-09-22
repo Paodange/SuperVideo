@@ -26,6 +26,8 @@ from .models import (
     Project,
     ProjectCreate,
     ProjectRecord,
+    ResearchSearchRecord,
+    SourceRecord,
     TimelineVersion,
     TimelineVersionCreate,
     TimelineVersionRecord,
@@ -39,6 +41,7 @@ from .repositories import (
     JobRepository,
     MessageRepository,
     ProjectRepository,
+    ResearchRepository,
     TimelineVersionRepository,
 )
 
@@ -69,6 +72,9 @@ __all__ = [
     "ProjectCreate",
     "ProjectRecord",
     "ProjectRepository",
+    "ResearchRepository",
+    "ResearchSearchRecord",
+    "SourceRecord",
     "StorageError",
     "StorageErrorCode",
     "TimelineVersion",

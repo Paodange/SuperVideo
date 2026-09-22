@@ -34,6 +34,10 @@ import {
   isAssetListResult,
   isAssetReferenceBatchResult,
   isAssetScanResult,
+  isResearchSearchParams,
+  isResearchSearchResult,
+  isResearchSaveSourceParams,
+  isResearchSaveSourceResult,
   isMediaProbeResult,
   isMediaProxyResult,
   isTranscriptionResult,
@@ -99,6 +103,10 @@ import {
   type AssetReferenceParams,
   type AssetScanParams,
   type AssetScanResult,
+  type ResearchSearchParams,
+  type ResearchSearchResult,
+  type ResearchSaveSourceParams,
+  type ResearchSaveSourceResult,
   type MediaParams,
   type MediaProbeResult,
   type MediaProxyResult,
@@ -349,6 +357,20 @@ export class PythonCoreClient {
   async scanAssets(params: AssetScanParams, options: CoreRpcRequestOptions = {}): Promise<AssetScanResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.assetScan, params, options);
     if (!isAssetScanResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async searchResearch(params: ResearchSearchParams, options: CoreRpcRequestOptions = {}): Promise<ResearchSearchResult> {
+    if (!isResearchSearchParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.researchSearch, params, options);
+    if (!isResearchSearchResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async saveResearchSource(params: ResearchSaveSourceParams, options: CoreRpcRequestOptions = {}): Promise<ResearchSaveSourceResult> {
+    if (!isResearchSaveSourceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.researchSaveSource, params, options);
+    if (!isResearchSaveSourceResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

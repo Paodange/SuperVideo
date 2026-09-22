@@ -14,6 +14,10 @@ import type {
   ImageStartRequest,
   ImageGenerationResult,
   ProjectSummary,
+  ResearchSearchParams,
+  ResearchSearchResult,
+  ResearchSaveSourceParams,
+  ResearchSaveSourceResult,
   SentenceQaParams,
   SentenceQaSaveParams,
   RetrievalParams,
@@ -52,7 +56,7 @@ import type {
   TimelineVersionListResult,
   TimelineVersionDiffResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isJobTtsStartParams, isImageStartRequest, isImageJobStartParams, isImageGenerationResult, isTtsResult, isRemotionRenderParams, isRemotionRenderResult, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult, isTimelineVersionCreateParams, isTimelineVersionApplyEditParams, isTimelineVersionListParams, isTimelineVersionReferenceParams, isTimelineVersionActivateParams, isTimelineVersionUndoParams, isTimelineVersionRedoParams, isTimelineVersionDiffParams, isTimelineVersionResult, isTimelineVersionListResult, isTimelineVersionDiffResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isJobTtsStartParams, isImageStartRequest, isImageJobStartParams, isImageGenerationResult, isTtsResult, isRemotionRenderParams, isRemotionRenderResult, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult, isTimelineVersionCreateParams, isTimelineVersionApplyEditParams, isTimelineVersionListParams, isTimelineVersionReferenceParams, isTimelineVersionActivateParams, isTimelineVersionUndoParams, isTimelineVersionRedoParams, isTimelineVersionDiffParams, isTimelineVersionResult, isTimelineVersionListResult, isTimelineVersionDiffResult, isResearchSearchParams, isResearchSearchResult, isResearchSaveSourceParams, isResearchSaveSourceResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -87,7 +91,7 @@ export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_MAX_CAPABILITIES = 32;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "timeline-versions", "tts", "image", "remotion-runtime", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "research", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "timeline-versions", "tts", "image", "remotion-runtime", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -138,6 +142,8 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   jobImageResult: "job-image-result",
   jobRemotionStart: "job-remotion-start",
   jobRemotionResult: "job-remotion-result",
+  researchSearch: "research-search",
+  researchSaveSource: "research-save-source",
 } as const;
 
 export const AGENT_WORKER_MESSAGE_TYPES = {
@@ -189,7 +195,9 @@ export type AgentProjectOperationType =
   | "timeline-version-activate"
   | "timeline-version-undo"
   | "timeline-version-redo"
-  | "timeline-version-diff";
+  | "timeline-version-diff"
+  | "research-search"
+  | "research-save-source";
 
 export type AgentJobOperationType = "job-smoke-start" | "job-tts-start" | "job-image-start" | "job-remotion-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry" | "job-tts-result" | "job-image-result" | "job-remotion-result";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
@@ -225,6 +233,8 @@ export type ProjectOperationErrorCode =
   | "CONSTRAINT_VIOLATION"
   | "RECORD_NOT_FOUND"
   | "INVALID_RECORD"
+  | "RESEARCH_INPUT_INVALID" | "RESEARCH_URL_INVALID" | "RESEARCH_SOURCE_INVALID" | "RESEARCH_IDEMPOTENCY_CONFLICT"
+  | "RESEARCH_TRANSPORT_UNAVAILABLE" | "RESEARCH_TIMEOUT" | "RESEARCH_CANCELLED" | "RESEARCH_STORAGE_INVALID"
   | "TIMELINE_VERSION_NOT_FOUND"
   | "TIMELINE_VERSION_PROJECT_MISMATCH"
   | "TIMELINE_ACTIVE_VERSION_MISSING"
@@ -638,6 +648,14 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   CONSTRAINT_VIOLATION: "Storage constraint was violated.",
   RECORD_NOT_FOUND: "Storage record was not found.",
   INVALID_RECORD: "Storage record is invalid.",
+  RESEARCH_INPUT_INVALID: "The research request is invalid.",
+  RESEARCH_URL_INVALID: "The research source URL is not allowed.",
+  RESEARCH_SOURCE_INVALID: "The research source record is invalid.",
+  RESEARCH_IDEMPOTENCY_CONFLICT: "The research idempotency key conflicts with another request.",
+  RESEARCH_TRANSPORT_UNAVAILABLE: "The research transport is unavailable.",
+  RESEARCH_TIMEOUT: "The research request timed out.",
+  RESEARCH_CANCELLED: "The research request was cancelled.",
+  RESEARCH_STORAGE_INVALID: "The research storage record is invalid.",
   TIMELINE_VERSION_NOT_FOUND: "The requested Timeline version was not found.",
   TIMELINE_VERSION_PROJECT_MISMATCH: "The Timeline version does not belong to the requested project.",
   TIMELINE_ACTIVE_VERSION_MISSING: "The project has no active Timeline version.",
@@ -1099,7 +1117,9 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "timeline-version-activate"
     || value === "timeline-version-undo"
     || value === "timeline-version-redo"
-    || value === "timeline-version-diff";
+    || value === "timeline-version-diff"
+    || value === "research-search"
+    || value === "research-save-source";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -1139,6 +1159,8 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
   if (type === "project-open" || type === "project-inspect") {
     return hasOnlyKeys(value, ["projectRoot"]) && isAbsolutePath(value.projectRoot);
   }
+  if (type === "research-search") return isResearchSearchParams(value);
+  if (type === "research-save-source") return isResearchSaveSourceParams(value);
   if (type === "asset-reference") {
     return hasOnlyKeys(value, ["projectId", "paths"])
       && isUuid(value.projectId)
@@ -1298,6 +1320,8 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "CONSTRAINT_VIOLATION",
   "RECORD_NOT_FOUND",
   "INVALID_RECORD",
+  "RESEARCH_INPUT_INVALID", "RESEARCH_URL_INVALID", "RESEARCH_SOURCE_INVALID", "RESEARCH_IDEMPOTENCY_CONFLICT",
+  "RESEARCH_TRANSPORT_UNAVAILABLE", "RESEARCH_TIMEOUT", "RESEARCH_CANCELLED", "RESEARCH_STORAGE_INVALID",
   "TIMELINE_VERSION_NOT_FOUND", "TIMELINE_VERSION_PROJECT_MISMATCH", "TIMELINE_ACTIVE_VERSION_MISSING",
   "TIMELINE_NO_UNDO", "TIMELINE_NO_REDO", "TIMELINE_REDO_AMBIGUOUS", "TIMELINE_VERSION_CONFLICT",
   "TIMELINE_VERSION_INVALID", "TIMELINE_DIFF_NOT_AVAILABLE",
@@ -1372,6 +1396,8 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "timeline-version-diff") return isTimelineVersionDiffResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
+  if (type === "research-search") return isResearchSearchResult(value);
+  if (type === "research-save-source") return isResearchSaveSourceResult(value);
   return true;
 }
 

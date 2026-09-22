@@ -32,6 +32,8 @@ import {
   isTimelineVersionResult,
   isTimelineVersionListResult,
   isTimelineVersionDiffResult,
+  isResearchSearchResult,
+  isResearchSaveSourceResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -186,6 +188,8 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "timeline-version-undo":
     case "timeline-version-redo":
     case "timeline-version-diff":
+    case "research-search":
+    case "research-save-source":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -261,6 +265,10 @@ async function handleProjectOperation(
                   ? isPreviewQualityCheckResult(result)
                 : operation === "media-final-export"
                   ? isFinalMp4ExportResult(result)
+                : operation === "research-search"
+                  ? isResearchSearchResult(result)
+                : operation === "research-save-source"
+                  ? isResearchSaveSourceResult(result)
                 : operation === "timeline-edit"
                   ? isTimelineEditResult(result)
                 : operation === "timeline-version-list"
@@ -396,6 +404,8 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-preview-render") return CORE_RPC_METHODS.mediaPreviewRender;
   if (operation === "media-preview-quality-check") return CORE_RPC_METHODS.mediaPreviewQualityCheck;
   if (operation === "media-final-export") return CORE_RPC_METHODS.mediaFinalExport;
+  if (operation === "research-search") return CORE_RPC_METHODS.researchSearch;
+  if (operation === "research-save-source") return CORE_RPC_METHODS.researchSaveSource;
   if (operation === "timeline-edit") return CORE_RPC_METHODS.timelineEdit;
   if (operation === "timeline-version-create") return CORE_RPC_METHODS.timelineVersionCreate;
   if (operation === "timeline-version-apply-edit") return CORE_RPC_METHODS.timelineVersionApplyEdit;
