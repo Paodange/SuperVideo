@@ -69,6 +69,7 @@ import type {
   ProviderHealth,
   ProviderDeleteResult,
 } from "./provider-contract";
+import { PROVIDER_PUBLIC_ERROR_CODES, type ProviderPublicErrorCode } from "./provider-contract";
 
 /**
  * The protocol between Electron Main and the isolated Agent utility process.
@@ -498,7 +499,7 @@ export type CredentialsStatusRequest = Record<string, never>;
 export type CredentialsListRequest = Record<string, never>;
 export type ProjectDialogResult<T> = Readonly<{ cancelled: true }> | Readonly<{ cancelled: false; value: T }>;
 
-export type DesktopPublicErrorCode = AgentPublicErrorCode | JobOperationErrorCode | A08PublicErrorCode | "PROVIDER_INVALID_CONFIG" | "PROVIDER_UNKNOWN" | "PROVIDER_CONFIG_NOT_FOUND" | "PROVIDER_CONFIG_CORRUPT" | "PROVIDER_CONFIG_WRITE_FAILED" | "PROVIDER_PROJECT_MISMATCH" | "PROVIDER_CREDENTIAL_NOT_FOUND" | "PROVIDER_CREDENTIAL_KIND_MISMATCH" | "PROVIDER_HEALTH_TIMEOUT" | "PROVIDER_AUTH_FAILED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_ADAPTER_FAILED" | "PROVIDER_REGISTRY_CONFLICT";
+export type DesktopPublicErrorCode = AgentPublicErrorCode | JobOperationErrorCode | A08PublicErrorCode | ProviderPublicErrorCode;
 export type DesktopPublicError = Readonly<{
   code: DesktopPublicErrorCode;
   message: string;
@@ -785,7 +786,7 @@ export function isAgentPublicErrorCode(value: unknown): value is AgentPublicErro
 }
 
 export function isDesktopPublicErrorCode(value: unknown): value is DesktopPublicErrorCode {
-  return isAgentPublicErrorCode(value) || isJobOperationErrorCode(value) || (typeof value === "string" && (PUBLIC_A08_ERROR_CODES as readonly string[]).includes(value)) || (typeof value === "string" && value.startsWith("PROVIDER_"));
+  return isAgentPublicErrorCode(value) || isJobOperationErrorCode(value) || (typeof value === "string" && (PUBLIC_A08_ERROR_CODES as readonly string[]).includes(value)) || (typeof value === "string" && (PROVIDER_PUBLIC_ERROR_CODES as readonly string[]).includes(value));
 }
 
 export function isValidAgentRunId(value: unknown): value is string {

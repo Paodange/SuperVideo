@@ -10,6 +10,7 @@ import {
   isProviderConfig,
   isProviderHealth,
   isProviderConfigListResult,
+  isDesktopPublicErrorCode,
 } from "../packages/shared/dist/index.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
@@ -81,4 +82,25 @@ test("Main provider service isolates projects and classifies offline health outc
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("provider configs may be saved without a credential and report unconfigured health", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "supervideo-d01-no-credential-"));
+  try {
+    const vault = { list: async () => ({ items: [] }), runWithSecret: async () => { throw new Error("must not decrypt"); } };
+    const service = new ProviderConfigService(vault, new ProviderConfigStore(path.join(directory, "providers.v1.json")), createDeterministicProviderRegistry());
+    const config = { ...input, credentialRef: undefined };
+    const saved = await service.upsert(config);
+    assert.equal(saved.credentialRef, null);
+    const health = await service.health({ projectId, serviceKind: "llm", providerId: "fake" });
+    assert.equal(health.status, "unconfigured");
+    assert.equal(health.error.code, "MISSING_CREDENTIAL");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("unknown provider public error codes are rejected", () => {
+  assert.equal(isDesktopPublicErrorCode("PROVIDER_NOT_DEFINED"), false);
+  assert.equal(isDesktopPublicErrorCode("PROVIDER_UNKNOWN"), true);
 });

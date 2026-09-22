@@ -63,8 +63,8 @@ export class ProviderConfigService {
     const adapter = this.registry.get(input.providerId, input.serviceKind);
     if (!adapter) throw new ProviderServiceError("PROVIDER_UNKNOWN");
     const credential = input.credentialRef ? await this.findCredential(input.credentialRef) : undefined;
-    if (!credential) throw new ProviderServiceError("PROVIDER_CREDENTIAL_NOT_FOUND");
-    if (credential.providerId !== input.providerId || credential.serviceKind !== input.serviceKind) throw new ProviderServiceError("PROVIDER_CREDENTIAL_KIND_MISMATCH");
+    if (input.credentialRef && !credential) throw new ProviderServiceError("PROVIDER_CREDENTIAL_NOT_FOUND");
+    if (credential && (credential.providerId !== input.providerId || credential.serviceKind !== input.serviceKind)) throw new ProviderServiceError("PROVIDER_CREDENTIAL_KIND_MISMATCH");
     const current = this.store.get(input.projectId, input.serviceKind, input.providerId);
     const config: ProviderConfig = Object.freeze({ schemaVersion: 1, protocolVersion: PROVIDER_CONTRACT_VERSION, projectId: input.projectId, serviceKind: input.serviceKind, providerId: input.providerId, displayName: input.displayName, model: input.model, endpoint: input.endpoint ?? null, credentialRef: input.credentialRef ?? null, capabilities: Object.freeze([...adapter.descriptor.capabilities]), enabled: input.enabled ?? true, createdAtMs: current?.createdAtMs ?? this.now(), updatedAtMs: this.now() });
     return this.store.save(config);
