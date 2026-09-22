@@ -134,6 +134,14 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "DURATION_OPTIMIZATION_OUTPUT_INVALID": RpcErrorDefinition(-32363, "The duration optimization output was invalid."),
     "DURATION_OPTIMIZATION_TIMEOUT": RpcErrorDefinition(-32364, "The duration optimization operation timed out."),
     "DURATION_OPTIMIZATION_CANCELLED": RpcErrorDefinition(-32365, "The duration optimization operation was cancelled."),
+    "AROLL_CUT_JOIN_INPUT_INVALID": RpcErrorDefinition(-32366, "The A-roll cut/join input is invalid or exceeds its bounds."),
+    "AROLL_CUT_JOIN_TIMELINE_INVALID": RpcErrorDefinition(-32367, "The Timeline IR is invalid for A-roll cut/join."),
+    "AROLL_CUT_JOIN_SOURCE_INVALID": RpcErrorDefinition(-32368, "An A-roll source reference is invalid or stale."),
+    "AROLL_CUT_JOIN_OUTPUT_INVALID": RpcErrorDefinition(-32369, "The A-roll cut/join plan or output was invalid."),
+    "AROLL_CUT_JOIN_TOOL_UNAVAILABLE": RpcErrorDefinition(-32370, "The configured A-roll media tool is unavailable."),
+    "AROLL_CUT_JOIN_TOOL_TIMEOUT": RpcErrorDefinition(-32371, "The A-roll media tool timed out."),
+    "AROLL_CUT_JOIN_CANCELLED": RpcErrorDefinition(-32372, "The A-roll cut/join operation was cancelled."),
+    "AROLL_CUT_JOIN_TIMEOUT": RpcErrorDefinition(-32373, "The A-roll cut/join operation timed out."),
 }
 
 

@@ -72,6 +72,14 @@ MediaErrorCode = Literal[
     "DURATION_OPTIMIZATION_OUTPUT_INVALID",
     "DURATION_OPTIMIZATION_TIMEOUT",
     "DURATION_OPTIMIZATION_CANCELLED",
+    "AROLL_CUT_JOIN_INPUT_INVALID",
+    "AROLL_CUT_JOIN_TIMELINE_INVALID",
+    "AROLL_CUT_JOIN_SOURCE_INVALID",
+    "AROLL_CUT_JOIN_OUTPUT_INVALID",
+    "AROLL_CUT_JOIN_TOOL_UNAVAILABLE",
+    "AROLL_CUT_JOIN_TOOL_TIMEOUT",
+    "AROLL_CUT_JOIN_TIMEOUT",
+    "AROLL_CUT_JOIN_CANCELLED",
 ]
 
 
@@ -147,6 +155,14 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "DURATION_OPTIMIZATION_OUTPUT_INVALID": MediaErrorDefinition("The duration optimization output was invalid."),
     "DURATION_OPTIMIZATION_TIMEOUT": MediaErrorDefinition("The duration optimization operation timed out."),
     "DURATION_OPTIMIZATION_CANCELLED": MediaErrorDefinition("The duration optimization operation was cancelled."),
+    "AROLL_CUT_JOIN_INPUT_INVALID": MediaErrorDefinition("The A-roll cut/join input is invalid or exceeds its bounds."),
+    "AROLL_CUT_JOIN_TIMELINE_INVALID": MediaErrorDefinition("The Timeline IR is invalid for A-roll cut/join."),
+    "AROLL_CUT_JOIN_SOURCE_INVALID": MediaErrorDefinition("An A-roll source reference is invalid or stale."),
+    "AROLL_CUT_JOIN_OUTPUT_INVALID": MediaErrorDefinition("The A-roll cut/join plan or output was invalid."),
+    "AROLL_CUT_JOIN_TOOL_UNAVAILABLE": MediaErrorDefinition("The configured A-roll media tool is unavailable."),
+    "AROLL_CUT_JOIN_TOOL_TIMEOUT": MediaErrorDefinition("The A-roll media tool timed out."),
+    "AROLL_CUT_JOIN_TIMEOUT": MediaErrorDefinition("The A-roll cut/join operation timed out."),
+    "AROLL_CUT_JOIN_CANCELLED": MediaErrorDefinition("The A-roll cut/join operation was cancelled."),
 }
 
 

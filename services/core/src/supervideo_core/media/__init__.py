@@ -12,7 +12,8 @@ from .rerank_models import RerankConfig, RerankParams, RerankResult
 from .slot_alignment_models import InformationSlot, SlotAlignmentCandidate, SlotAlignmentParams, SlotAlignmentResult
 from .narrative_planner_models import NarrativePlanParams, NarrativePlanResult
 from .duration_optimizer_models import DurationOptimizationParams, DurationOptimizationResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService"]
+from .aroll_cut_join_models import ArollCutJoinParams, ArollCutJoinResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService", "ArollCutJoinParams", "ArollCutJoinResult", "ArollCutJoinService"]
 
 
 def __getattr__(name: str):
@@ -60,4 +61,8 @@ def __getattr__(name: str):
         from .duration_optimizer import DurationOptimizerService
 
         return DurationOptimizerService
+    if name == "ArollCutJoinService":
+        from .aroll_cut_join import ArollCutJoinService
+
+        return ArollCutJoinService
     raise AttributeError(name)

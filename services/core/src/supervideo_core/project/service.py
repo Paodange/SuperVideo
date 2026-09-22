@@ -24,7 +24,7 @@ from supervideo_core.storage import (
     new_id,
     utc_now_ms,
 )
-from supervideo_core.media import DurationOptimizerService, InformationSlotAlignmentService, MediaService, SentenceIndexService, SentenceQaService, SentenceQualityRerankService, SentenceRetrievalService, SentenceService, TranscriptionService, VadService
+from supervideo_core.media import ArollCutJoinService, DurationOptimizerService, InformationSlotAlignmentService, MediaService, SentenceIndexService, SentenceQaService, SentenceQualityRerankService, SentenceRetrievalService, SentenceService, TranscriptionService, VadService
 from supervideo_core.media.models import MediaProbeParams, MediaProbeResult, MediaProxyParams, MediaProxyResult
 from supervideo_core.media.transcription_models import TranscriptionParams, TranscriptionResult
 from supervideo_core.media.vad_models import VadParams, VadResult
@@ -37,6 +37,7 @@ from supervideo_core.media.slot_alignment_models import SlotAlignmentParams, Slo
 from supervideo_core.media.narrative_planner import NarrativePlannerService
 from supervideo_core.media.narrative_planner_models import NarrativePlanParams, NarrativePlanResult
 from supervideo_core.media.duration_optimizer_models import DurationOptimizationParams, DurationOptimizationResult
+from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams, ArollCutJoinResult
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -89,7 +90,7 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
         self.transcription_service = transcription_service or TranscriptionService()
@@ -102,6 +103,7 @@ class ProjectService:
         self.slot_alignment_service = slot_alignment_service or InformationSlotAlignmentService(self.sentence_retrieval_service, self.sentence_rerank_service)
         self.narrative_planner_service = narrative_planner_service or NarrativePlannerService(self.slot_alignment_service)
         self.duration_optimizer_service = duration_optimizer_service or DurationOptimizerService()
+        self.aroll_cut_join_service = aroll_cut_join_service or ArollCutJoinService()
 
     @property
     def active_project_id(self) -> str | None:
@@ -185,6 +187,11 @@ class ProjectService:
         active = self._require_active(request.project_id)
         del active
         return await self.duration_optimizer_service.optimize(request, cancelled)
+
+    async def cut_join_aroll(self, request: ArollCutJoinParams, cancelled: asyncio.Event) -> ArollCutJoinResult:
+        active = self._require_active(request.project_id)
+        self.aroll_cut_join_service.bind_session(active.root, active.database)
+        return await self.aroll_cut_join_service.cut_join(request, cancelled)
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:

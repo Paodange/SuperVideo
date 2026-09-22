@@ -23,6 +23,7 @@ import {
   isSlotAlignmentResult,
   isNarrativePlanResult,
   isDurationOptimizationResult,
+  isArollCutJoinResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -163,6 +164,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-script-align":
     case "plan-create-remix":
     case "plan-optimize-duration":
+    case "media-aroll-cut-join":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -224,6 +226,8 @@ async function handleProjectOperation(
                   ? isNarrativePlanResult(result)
                 : operation === "plan-optimize-duration"
                   ? isDurationOptimizationResult(result)
+                : operation === "media-aroll-cut-join"
+                  ? isArollCutJoinResult(result)
                 : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
@@ -340,6 +344,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-script-align") return CORE_RPC_METHODS.mediaScriptAlign;
   if (operation === "plan-create-remix") return CORE_RPC_METHODS.planCreateRemix;
   if (operation === "plan-optimize-duration") return CORE_RPC_METHODS.planOptimizeDuration;
+  if (operation === "media-aroll-cut-join") return CORE_RPC_METHODS.mediaArollCutJoin;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 
