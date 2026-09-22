@@ -49,6 +49,8 @@ import {
   isPreviewQualityCheckResult,
   isFinalMp4ExportParams,
   isFinalMp4ExportResult,
+  isTimelineEditParams,
+  isTimelineEditResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -57,6 +59,8 @@ import {
   type CoreRpcServerMessage,
   type FinalMp4ExportParams,
   type FinalMp4ExportResult,
+  type TimelineEditParams,
+  type TimelineEditResult,
   type CoreSmokeCountdownParams,
   type CoreSmokeCountdownResult,
   type AssetListParams,
@@ -417,6 +421,13 @@ export class PythonCoreClient {
     if (!isFinalMp4ExportParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaFinalExport, params, options);
     if (!isFinalMp4ExportResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async editTimeline(params: TimelineEditParams, options: CoreRpcRequestOptions = {}): Promise<TimelineEditResult> {
+    if (!isTimelineEditParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineEdit, params, options);
+    if (!isTimelineEditResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

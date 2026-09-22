@@ -179,6 +179,14 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "FINAL_EXPORT_TOOL_UNAVAILABLE": RpcErrorDefinition(-32405, "The final export media verification tool is unavailable."),
     "FINAL_EXPORT_TIMEOUT": RpcErrorDefinition(-32406, "The final MP4 export timed out."),
     "FINAL_EXPORT_CANCELLED": RpcErrorDefinition(-32407, "The final MP4 export was cancelled."),
+    "EDIT_UNSUPPORTED_INSTRUCTION": RpcErrorDefinition(-32420, "The edit instruction is not a supported deterministic C09 template."),
+    "EDIT_TARGET_NOT_FOUND": RpcErrorDefinition(-32421, "The C09 edit target was not found."),
+    "EDIT_AMBIGUOUS_TARGET": RpcErrorDefinition(-32422, "The C09 edit target is ambiguous."),
+    "EDIT_REPLACEMENT_NOT_FOUND": RpcErrorDefinition(-32423, "The C09 replacement clip was not found."),
+    "EDIT_COMPLETE_SENTENCE_REQUIRED": RpcErrorDefinition(-32424, "The requested edit would violate the complete-sentence constraint."),
+    "EDIT_TIMELINE_EMPTY": RpcErrorDefinition(-32425, "The edit would produce an empty Timeline IR."),
+    "EDIT_OPERATION_UNSAFE": RpcErrorDefinition(-32426, "The requested edit cannot be applied without guessing or losing source fidelity."),
+    "EDIT_TIMELINE_INVALID": RpcErrorDefinition(-32427, "The edited Timeline IR failed validation."),
 }
 
 

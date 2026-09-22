@@ -44,6 +44,8 @@ import {
   isPreviewQualityCheckResult,
   isFinalMp4ExportParams,
   isFinalMp4ExportResult,
+  isTimelineEditParams,
+  isTimelineEditResult,
   type AgentRunHandle,
   type AgentWorkerStatusSnapshot,
   type DesktopAgentEvent,
@@ -98,6 +100,8 @@ import {
   type PreviewQualityCheckResult,
   type FinalMp4ExportParams,
   type FinalMp4ExportResult,
+  type TimelineEditParams,
+  type TimelineEditResult,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -123,6 +127,7 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.renderPreview
     | typeof DESKTOP_IPC_CHANNELS.checkPreviewQuality
     | typeof DESKTOP_IPC_CHANNELS.exportFinalMp4
+    | typeof DESKTOP_IPC_CHANNELS.editTimeline
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.listJobs
@@ -249,6 +254,10 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
     exportFinalMp4: (input: FinalMp4ExportParams) => {
       if (!isFinalMp4ExportParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.exportFinalMp4, input, invoke, isFinalMp4ExportResult);
+    },
+    editTimeline: (input: TimelineEditParams) => {
+      if (!isTimelineEditParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.editTimeline, input, invoke, isTimelineEditResult);
     },
     startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),
