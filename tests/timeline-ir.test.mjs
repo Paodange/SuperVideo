@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-const shared = await import(path.join(root, "packages", "shared", "dist", "index.js"));
+const shared = await import(pathToFileURL(path.join(root, "packages", "shared", "dist", "index.js")).href);
 const fixturePath = path.join(root, "tests", "fixtures", "c01_timeline_ir_v1.json");
 const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
 
@@ -47,4 +47,20 @@ test("Timeline IR requires subtitle payloads and rejects unknown keys", () => {
   const unknown = structuredClone(fixture);
   unknown.unexpected = true;
   assert.equal(shared.isTimelineProject(unknown), false);
+});
+
+test("Timeline IR requires source provenance references to resolve", () => {
+  const invalid = structuredClone(fixture);
+  invalid.sources[0].provenanceIds = ["not-declared"];
+  assert.equal(shared.isTimelineProject(invalid), false);
+  assert.throws(() => shared.validateTimelineProject(invalid), shared.TimelineValidationException);
+});
+
+test("Timeline validation is carried through Core RPC and Agent Worker contracts", () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const params = { projectId, timeline: fixture };
+  assert.equal(shared.isCoreRpcRequest({ jsonrpc: "2.0", id: "timeline-1", method: "timeline.validate", params }), true);
+  assert.equal(shared.isCoreRpcRequest({ jsonrpc: "2.0", id: "timeline-1", method: "timeline.validate", params: { ...params, timeline: { ...fixture, schemaVersion: 2 } } }), false);
+  assert.equal(shared.isValidAgentWorkerCommand({ protocolVersion: 1, type: "timeline-validate", operationId: "op-timeline-1", timestamp: 1, projectId, payload: params }), true);
+  assert.equal(shared.isTimelineValidateResult({ schemaVersion: 1, projectId, timelineId: fixture.id, valid: true, durationMs: fixture.durationMs, trackCount: 4, clipCount: 4 }), true);
 });

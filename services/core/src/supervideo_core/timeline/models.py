@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import math
 from datetime import datetime
 from typing import Any, Literal
 
@@ -55,6 +56,13 @@ class TimelineSubtitleStyle(TimelineModel):
     background_color: str | None = Field(default=None, alias="backgroundColor", max_length=9)
     position: Literal["top", "center", "bottom"] | None = None
     max_lines: int | None = Field(default=None, alias="maxLines", strict=True, ge=1, le=8)
+
+    @field_validator("color", "background_color")
+    @classmethod
+    def validate_color(cls, value: str | None) -> str | None:
+        if value is not None and re.fullmatch(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", value) is None:
+            raise ValueError("subtitle colors must be #RRGGBB or #RRGGBBAA")
+        return value
 
 
 class TimelineSubtitle(TimelineModel):
@@ -129,6 +137,22 @@ class TimelineClip(TimelineModel):
     _provenance_ids = field_validator("provenance_ids")(lambda value: _id_list(value, "clip.provenanceIds"))
     _metadata = field_validator("metadata")(lambda value: _metadata(value, "clip.metadata"))
 
+    @model_validator(mode="after")
+    def validate_clip_invariants(self) -> "TimelineClip":
+        if (self.source_in_ms is None) != (self.source_out_ms is None):
+            raise TimelineValidationError("TIMELINE_SOURCE_RANGE_INVALID", "clip", "sourceInMs and sourceOutMs must be provided together")
+        if self.source_in_ms is not None and self.source_out_ms is not None:
+            if self.source_out_ms <= self.source_in_ms or self.source_out_ms - self.source_in_ms != self.duration_ms:
+                raise TimelineValidationError("TIMELINE_SOURCE_RANGE_INVALID", "clip", "source span must equal clip duration")
+        if self.kind == "subtitle" and self.subtitle is None:
+            raise TimelineValidationError("TIMELINE_INVALID_VALUE", "clip.subtitle", "is required for subtitle clips")
+        if self.kind != "subtitle" and self.subtitle is not None:
+            raise TimelineValidationError("TIMELINE_INVALID_VALUE", "clip.subtitle", "is only valid for subtitle clips")
+        transition_ms = (self.transition_in.duration_ms if self.transition_in else 0) + (self.transition_out.duration_ms if self.transition_out else 0)
+        if transition_ms > self.duration_ms:
+            raise TimelineValidationError("TIMELINE_INVALID_VALUE", "clip.transition", "transition durations must fit within clip duration")
+        return self
+
 
 class TimelineTrack(TimelineModel):
     id: str
@@ -173,6 +197,10 @@ class TimelineProject(TimelineModel):
                 compatible = (track.kind == "audio" and clip.kind == "audio") or (track.kind == "subtitle" and clip.kind == "subtitle") or (track.kind == "video" and clip.kind in {"video", "image", "template"}) or (track.kind == "overlay" and clip.kind in {"image", "text", "template"})
                 if not compatible:
                     raise TimelineValidationError("TIMELINE_INVALID_VALUE", "clip.kind", "is incompatible with track kind")
+                if clip.kind == "subtitle" and clip.subtitle is None:
+                    raise TimelineValidationError("TIMELINE_INVALID_VALUE", "clip.subtitle", "is required for subtitle clips")
+                if clip.kind != "subtitle" and clip.subtitle is not None:
+                    raise TimelineValidationError("TIMELINE_INVALID_VALUE", "clip.subtitle", "is only valid for subtitle clips")
                 if clip.kind in {"video", "audio", "image", "template"} and clip.source_id is None:
                     raise TimelineValidationError("TIMELINE_REFERENCE_MISSING", "clip.sourceId", "is required for media clips")
                 if clip.source_id is not None and clip.source_id not in source_ids:
@@ -256,7 +284,7 @@ def _is_bounded_json(value: Any, depth: int) -> bool:
     if isinstance(value, str):
         return len(value) <= 2_048 and not any(ord(char) < 32 and char not in "\t\n\r" for char in value)
     if isinstance(value, (int, float)):
-        return True
+        return math.isfinite(value)
     if isinstance(value, list):
         return len(value) <= 32 and all(_is_bounded_json(item, depth + 1) for item in value)
     return isinstance(value, dict) and len(value) <= 64 and all(0 < len(key) <= 128 and _is_bounded_json(item, depth + 1) for key, item in value.items())

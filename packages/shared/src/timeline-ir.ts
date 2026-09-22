@@ -172,6 +172,13 @@ export function validateTimelineProject(value: unknown): TimelineProject {
   provenance?.forEach((item, index) => {
     checkProvenance(item, `$.provenance[${index}]`, provenanceIds, sourceIds, errors);
   });
+  sources?.forEach((source, index) => {
+    if (Array.isArray(source.provenanceIds)) {
+      for (const reference of source.provenanceIds) {
+        if (typeof reference === "string" && !provenanceIds.has(reference)) add(errors, `$.sources[${index}].provenanceIds`, "must reference declared provenance");
+      }
+    }
+  });
 
   const trackIds = new Set<string>();
   const clipIds = new Set<string>();
@@ -290,7 +297,7 @@ function checkClip(
   }
   if (typeof value.sourceId === "string" && Array.isArray(sources) && hasSourceOut) {
     const source = sources.find((item) => item.id === value.sourceId);
-    if (source?.durationMs !== undefined && typeof value.sourceOutMs === "number" && value.sourceOutMs > source.durationMs) add(errors, `${path}.sourceOutMs`, "must not exceed source duration");
+    if (typeof source?.durationMs === "number" && typeof value.sourceOutMs === "number" && value.sourceOutMs > source.durationMs) add(errors, `${path}.sourceOutMs`, "must not exceed source duration");
   }
   checkTransform(value.transform, `${path}.transform`, errors);
   if (value.volume !== undefined) checkNumber(value.volume, 0, 4, `${path}.volume`, errors);

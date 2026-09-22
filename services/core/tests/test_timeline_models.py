@@ -27,6 +27,24 @@ class TimelineIrModelTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_timeline_project(invalid)
 
+    def test_source_in_and_out_must_be_a_pair(self) -> None:
+        invalid = json.loads(json.dumps(self.fixture))
+        invalid["tracks"][0]["clips"][0].pop("sourceOutMs")
+        with self.assertRaises(ValidationError):
+            validate_timeline_project(invalid)
+
+    def test_source_range_must_be_ordered_and_within_source_duration(self) -> None:
+        reversed_range = json.loads(json.dumps(self.fixture))
+        reversed_range["tracks"][0]["clips"][0].update({"sourceInMs": 4_000, "sourceOutMs": 3_000, "durationMs": 1_000})
+        with self.assertRaises(ValidationError):
+            validate_timeline_project(reversed_range)
+
+        exceeds_source = json.loads(json.dumps(self.fixture))
+        exceeds_source["durationMs"] = 70_000
+        exceeds_source["tracks"][0]["clips"][0].update({"durationMs": 60_001, "sourceInMs": 0, "sourceOutMs": 60_001})
+        with self.assertRaises(ValidationError):
+            validate_timeline_project(exceeds_source)
+
     def test_references_and_boundaries_are_strict(self) -> None:
         invalid = json.loads(json.dumps(self.fixture))
         invalid["tracks"][1]["clips"][0]["trackId"] = "track-video"
@@ -50,6 +68,36 @@ class TimelineIrModelTests(unittest.TestCase):
         invalid_provenance["tracks"][0]["clips"][0]["provenanceIds"] = ["not-declared"]
         with self.assertRaises(ValidationError):
             validate_timeline_project(invalid_provenance)
+
+        invalid_non_subtitle = json.loads(json.dumps(self.fixture))
+        invalid_non_subtitle["tracks"][3]["clips"][0]["subtitle"] = {"text": "not allowed"}
+        with self.assertRaises(ValidationError):
+            validate_timeline_project(invalid_non_subtitle)
+
+    def test_transitions_must_fit_inside_clip_duration(self) -> None:
+        invalid = json.loads(json.dumps(self.fixture))
+        invalid["tracks"][0]["clips"][0]["transitionIn"] = {"kind": "fade", "durationMs": 2_500}
+        invalid["tracks"][0]["clips"][0]["transitionOut"] = {"kind": "dissolve", "durationMs": 2_000}
+        with self.assertRaises(ValidationError):
+            validate_timeline_project(invalid)
+
+    def test_subtitle_colors_are_hex_rgb_or_rgba(self) -> None:
+        for key, value in (("color", "#FFF"), ("backgroundColor", "#GGGGGG")):
+            invalid = json.loads(json.dumps(self.fixture))
+            invalid["tracks"][2]["clips"][0]["subtitle"]["style"][key] = value
+            with self.assertRaises(ValidationError):
+                validate_timeline_project(invalid)
+
+    def test_metadata_rejects_non_finite_float_and_keeps_bounds(self) -> None:
+        invalid = json.loads(json.dumps(self.fixture))
+        invalid["tracks"][0]["clips"][0]["metadata"]["nonFinite"] = float("nan")
+        with self.assertRaises(ValidationError):
+            validate_timeline_project(invalid)
+
+        too_deep = json.loads(json.dumps(self.fixture))
+        too_deep["tracks"][0]["clips"][0]["metadata"] = {"a": {"b": {"c": {"d": {"e": {"f": 1}}}}}}
+        with self.assertRaises(ValidationError):
+            validate_timeline_project(too_deep)
 
 
 if __name__ == "__main__":
