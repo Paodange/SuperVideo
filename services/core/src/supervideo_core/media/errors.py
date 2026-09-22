@@ -91,6 +91,14 @@ MediaErrorCode = Literal[
     "SUBTITLE_OUTPUT_INVALID",
     "SUBTITLE_TIMEOUT",
     "SUBTITLE_CANCELLED",
+    "PREVIEW_RENDER_INPUT_INVALID",
+    "PREVIEW_RENDER_SOURCE_INVALID",
+    "PREVIEW_RENDER_SUBTITLE_INVALID",
+    "PREVIEW_RENDER_OUTPUT_INVALID",
+    "PREVIEW_RENDER_TOOL_UNAVAILABLE",
+    "PREVIEW_RENDER_TOOL_TIMEOUT",
+    "PREVIEW_RENDER_TIMEOUT",
+    "PREVIEW_RENDER_CANCELLED",
 ]
 
 
@@ -185,6 +193,14 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "SUBTITLE_OUTPUT_INVALID": MediaErrorDefinition("The generated subtitle plan was invalid."),
     "SUBTITLE_TIMEOUT": MediaErrorDefinition("The subtitle planning operation timed out."),
     "SUBTITLE_CANCELLED": MediaErrorDefinition("The subtitle planning operation was cancelled."),
+    "PREVIEW_RENDER_INPUT_INVALID": MediaErrorDefinition("The preview render input is invalid or exceeds its bounds."),
+    "PREVIEW_RENDER_SOURCE_INVALID": MediaErrorDefinition("The preview source is invalid, stale, or outside the preview boundary."),
+    "PREVIEW_RENDER_SUBTITLE_INVALID": MediaErrorDefinition("The subtitle plan cannot be bound to the preview timeline."),
+    "PREVIEW_RENDER_OUTPUT_INVALID": MediaErrorDefinition("The generated preview output was invalid."),
+    "PREVIEW_RENDER_TOOL_UNAVAILABLE": MediaErrorDefinition("The configured preview media tool is unavailable."),
+    "PREVIEW_RENDER_TOOL_TIMEOUT": MediaErrorDefinition("The preview media tool timed out."),
+    "PREVIEW_RENDER_TIMEOUT": MediaErrorDefinition("The preview render operation timed out."),
+    "PREVIEW_RENDER_CANCELLED": MediaErrorDefinition("The preview render operation was cancelled."),
 }
 
 

@@ -39,6 +39,8 @@ from supervideo_core.media.narrative_planner_models import NarrativePlanParams, 
 from supervideo_core.media.duration_optimizer_models import DurationOptimizationParams, DurationOptimizationResult
 from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams, ArollCutJoinResult
 from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams, SubtitlePlanResult
+from supervideo_core.media.preview_render_models import PreviewRenderParams, PreviewRenderResult
+from supervideo_core.media.preview_render import PreviewRenderService
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -91,7 +93,7 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None, preview_render_service: PreviewRenderService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
         self.transcription_service = transcription_service or TranscriptionService()
@@ -106,6 +108,7 @@ class ProjectService:
         self.duration_optimizer_service = duration_optimizer_service or DurationOptimizerService()
         self.aroll_cut_join_service = aroll_cut_join_service or ArollCutJoinService()
         self.subtitle_plan_service = subtitle_plan_service or SubtitlePlanService()
+        self.preview_render_service = preview_render_service or PreviewRenderService()
 
     @property
     def active_project_id(self) -> str | None:
@@ -198,6 +201,11 @@ class ProjectService:
     async def plan_subtitles(self, request: SubtitlePlanParams, cancelled: asyncio.Event) -> SubtitlePlanResult:
         self._require_active(request.project_id)
         return await self.subtitle_plan_service.plan(request, cancelled)
+
+    async def render_preview(self, request: PreviewRenderParams, cancelled: asyncio.Event, emit=None) -> PreviewRenderResult:
+        active = self._require_active(request.project_id)
+        self.preview_render_service.bind_session(active.root, active.database)
+        return await self.preview_render_service.render(request, cancelled, emit)
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:

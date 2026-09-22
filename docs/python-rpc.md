@@ -61,6 +61,10 @@ batch，数组会得到 `INVALID_REQUEST`。请求 ID 只允许 ASCII 字符串�
 - `media.sentences.retrieve`：只接受当前项目、查询文本和有界资产/模式/过滤器，
   复核 B07 索引、B05 来源摘要及资产指纹后执行本地关键词、确定性向量或混合排序；
   结果不包含内部路径，不接受模型、命令或网络参数。
+- `media.preview.render`：只接受 C04 `arollPlan` 与 C05 `subtitlePlan`，生成
+  版本化预览计划或在 Core 内以固定低码率 FFmpeg 参数执行；不接受命令、过滤器、
+  可执行文件或任意路径。执行输出只允许落在项目 `previews/` 下，并通过稳定的
+  digest 文件名、超时、取消和缓存规则返回。
 
 A06 的 project/asset 方法仍使用 Core RPC protocol v1；它们不是任意路径或
 SQL 转发。Worker 只能通过固定 controller command 调用这些方法。每次

@@ -25,6 +25,7 @@ import {
   isDurationOptimizationResult,
   isArollCutJoinResult,
   isSubtitlePlanResult,
+  isPreviewRenderResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -167,6 +168,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "plan-optimize-duration":
     case "media-aroll-cut-join":
     case "media-subtitle-plan":
+    case "media-preview-render":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -232,6 +234,8 @@ async function handleProjectOperation(
                   ? isArollCutJoinResult(result)
                 : operation === "media-subtitle-plan"
                   ? isSubtitlePlanResult(result)
+                : operation === "media-preview-render"
+                  ? isPreviewRenderResult(result)
                 : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
@@ -350,6 +354,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "plan-optimize-duration") return CORE_RPC_METHODS.planOptimizeDuration;
   if (operation === "media-aroll-cut-join") return CORE_RPC_METHODS.mediaArollCutJoin;
   if (operation === "media-subtitle-plan") return CORE_RPC_METHODS.mediaSubtitlePlan;
+  if (operation === "media-preview-render") return CORE_RPC_METHODS.mediaPreviewRender;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 

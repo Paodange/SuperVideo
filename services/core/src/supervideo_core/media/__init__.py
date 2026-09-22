@@ -14,7 +14,8 @@ from .narrative_planner_models import NarrativePlanParams, NarrativePlanResult
 from .duration_optimizer_models import DurationOptimizationParams, DurationOptimizationResult
 from .aroll_cut_join_models import ArollCutJoinParams, ArollCutJoinResult
 from .subtitle_plan_models import SubtitlePlanParams, SubtitlePlanResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService", "ArollCutJoinParams", "ArollCutJoinResult", "ArollCutJoinService", "SubtitlePlanParams", "SubtitlePlanResult", "SubtitlePlanService"]
+from .preview_render_models import PreviewRenderParams, PreviewRenderResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService", "ArollCutJoinParams", "ArollCutJoinResult", "ArollCutJoinService", "SubtitlePlanParams", "SubtitlePlanResult", "SubtitlePlanService", "PreviewRenderParams", "PreviewRenderResult", "PreviewRenderService"]
 
 
 def __getattr__(name: str):
@@ -70,4 +71,8 @@ def __getattr__(name: str):
         from .subtitle_plan import SubtitlePlanService
 
         return SubtitlePlanService
+    if name == "PreviewRenderService":
+        from .preview_render import PreviewRenderService
+
+        return PreviewRenderService
     raise AttributeError(name)

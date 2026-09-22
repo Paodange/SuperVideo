@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "planVersion": "preview-render-plan-v1",
+  "projectId": "99999999-9999-4999-8999-999999999999",
+  "timelineId": "timeline-c04-demo",
+  "arollPlanDigest": "555b1067d48742aee1ee2bf864919965e7c097ef0db7842bde6ecb9e732283c1",
+  "subtitlePlanDigest": "bf31527b66f71d7217e45dfd1923d4d3e262a50dd2f54735b40648f04d44f7c8",
+  "executionMode": "plan",
+  "executionStatus": "not-run",
+  "status": "ready",
+  "renderPolicy": "ffmpeg-low-bitrate-subtitle-overlay-v1",
+  "selectedDurationMs": 3500,
+  "timelineDurationMs": 3500,
+  "cueCount": 2,
+  "planDigest": "d890648e2cb2ae85f74176054a04a1f8a5b7c15883ef91e29d6de6b1fe8acd66",
+  "sourceBindings": [
+    { "sourceId": "source-aroll-video-a", "uri": "supervideo://asset/11111111-1111-4111-8111-111111111111", "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "segmentCount": 1 },
+    { "sourceId": "source-aroll-video-b", "uri": "supervideo://asset/22222222-2222-4222-8222-222222222222", "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "segmentCount": 1 }
+  ],
+  "cues": [
+    { "order": 1, "cueId": "subtitle-clip-video-1", "clipId": "clip-video-1", "sentenceId": "sentence-video-1", "sourceId": "source-aroll-video-a", "provenanceIds": ["prov-source-0"], "text": "First complete sentence.", "timelineStartMs": 0, "durationMs": 2000, "outputStartMs": 0, "outputEndMs": 2000 },
+    { "order": 2, "cueId": "subtitle-clip-video-2", "clipId": "clip-video-2", "sentenceId": "sentence-video-2", "sourceId": "source-aroll-video-b", "provenanceIds": ["prov-source-1"], "text": "Second complete sentence.", "timelineStartMs": 2500, "durationMs": 1500, "outputStartMs": 2000, "outputEndMs": 3500 }
+  ],
+  "gaps": [],
+  "log": { "status": "not-run", "stdout": "", "stderr": "" },
+  "output": null
+}

@@ -28,6 +28,7 @@ from supervideo_core.media.slot_alignment_models import SlotAlignmentParams
 from supervideo_core.media.narrative_planner_models import NarrativePlanParams
 from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams
 from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
+from supervideo_core.media.preview_render_models import PreviewRenderParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -311,6 +312,8 @@ def validate_request(value: Any) -> RpcRequest:
         ArollCutJoinParams.model_validate(request.params)
     elif request.method == "media.subtitle.plan":
         SubtitlePlanParams.model_validate(request.params)
+    elif request.method == "media.preview.render":
+        PreviewRenderParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -383,6 +386,7 @@ def health_result() -> dict[str, object]:
             "plan.optimize_duration",
             "media.aroll.cut_join",
             "media.subtitle.plan",
+            "media.preview.render",
             "job.smoke.start",
             "job.get",
             "job.list",
