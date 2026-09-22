@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import unittest
-from copy import deepcopy
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -19,22 +18,6 @@ FIXTURE = Path(__file__).parents[3] / "tests" / "fixtures" / "c01_timeline_ir_v1
 
 def timeline() -> dict[str, object]:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
-
-
-def request(data: dict[str, object]) -> TimelineEditParams:
-    return TimelineEditParams(
-        schemaVersion=1,
-        editVersion="timeline-edit-v1",
-        policy="deterministic-natural-language-v1",
-        projectId=PROJECT_ID,
-        timeline=data,
-        intent={
-            "schemaVersion": 1,
-            "editVersion": "edit-intent-v1",
-            "policy": "deterministic-natural-language-v1",
-            **data.pop("_intent"),
-        },
-    )
 
 
 def structured(operation: str, clip_id: str, **extra: object) -> TimelineEditParams:
