@@ -123,6 +123,16 @@ MediaErrorCode = Literal[
     "FINAL_EXPORT_TOOL_UNAVAILABLE",
     "FINAL_EXPORT_TIMEOUT",
     "FINAL_EXPORT_CANCELLED",
+    "VIDEO_ASSEMBLY_INPUT_INVALID",
+    "VIDEO_ASSEMBLY_PROJECT_MISMATCH",
+    "VIDEO_ASSEMBLY_STORYBOARD_INVALID",
+    "VIDEO_ASSEMBLY_TTS_BINDING_INVALID",
+    "VIDEO_ASSEMBLY_IMAGE_BINDING_INVALID",
+    "VIDEO_ASSEMBLY_MATERIAL_INVALID",
+    "VIDEO_ASSEMBLY_LAYOUT_INVALID",
+    "VIDEO_ASSEMBLY_PLAN_INVALID",
+    "VIDEO_ASSEMBLY_TIMELINE_INVALID",
+    "VIDEO_ASSEMBLY_RESULT_INVALID",
 ]
 
 
@@ -249,6 +259,16 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "FINAL_EXPORT_TOOL_UNAVAILABLE": MediaErrorDefinition("The final export media verification tool is unavailable."),
     "FINAL_EXPORT_TIMEOUT": MediaErrorDefinition("The final MP4 export timed out."),
     "FINAL_EXPORT_CANCELLED": MediaErrorDefinition("The final MP4 export was cancelled."),
+    "VIDEO_ASSEMBLY_INPUT_INVALID": MediaErrorDefinition("The D07 assembly input is invalid or exceeds its bounds."),
+    "VIDEO_ASSEMBLY_PROJECT_MISMATCH": MediaErrorDefinition("A D07 assembly input belongs to another project or timeline."),
+    "VIDEO_ASSEMBLY_STORYBOARD_INVALID": MediaErrorDefinition("The D05 storyboard is incomplete or cannot be assembled without D08 fallback."),
+    "VIDEO_ASSEMBLY_TTS_BINDING_INVALID": MediaErrorDefinition("The D02 TTS result does not bind to the D05 storyboard."),
+    "VIDEO_ASSEMBLY_IMAGE_BINDING_INVALID": MediaErrorDefinition("The D06 image results do not bind to every required shot."),
+    "VIDEO_ASSEMBLY_MATERIAL_INVALID": MediaErrorDefinition("A user material reference is invalid or does not match the D05 selection."),
+    "VIDEO_ASSEMBLY_LAYOUT_INVALID": MediaErrorDefinition("The D04 layout plan is not bound to the D07 assembly inputs."),
+    "VIDEO_ASSEMBLY_PLAN_INVALID": MediaErrorDefinition("The D03 offline preview plan is invalid or mismatched."),
+    "VIDEO_ASSEMBLY_TIMELINE_INVALID": MediaErrorDefinition("The assembled Timeline IR failed the C01 validator."),
+    "VIDEO_ASSEMBLY_RESULT_INVALID": MediaErrorDefinition("The D07 assembly result failed its versioned contract."),
 }
 
 

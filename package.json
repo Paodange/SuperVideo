@@ -23,6 +23,7 @@
     "remotion:smoke": "node scripts/remotion-smoke.mjs",
     "recruitment-templates:smoke": "node scripts/recruitment-template-smoke.mjs",
     "script-storyboard:smoke": "node scripts/script-storyboard-smoke.mjs",
+    "video-assembly:smoke": "node scripts/video-assembly-smoke.mjs",
     "diagnostics:smoke": "node scripts/diagnostics-smoke.mjs",
     "core:setup": "node scripts/core-setup.mjs",
     "core:test": "node scripts/core-test.mjs",
