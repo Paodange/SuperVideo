@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -426,4 +427,40 @@ test("real TypeScript to Python Core integration covers health, validation, prog
     await client.shutdown();
   }
   assert.equal(client.getStatus(), "stopped");
+});
+
+test("real PythonCoreClient timeline.edit returns the shared C09 wire shape", async () => {
+  const projectRoot = mkdtempSync(path.join(os.tmpdir(), "supervideo-c09-"));
+  const timeline = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "c01_timeline_ir_v1.json"), "utf8"));
+  const client = new PythonCoreClient({ rootDir: root });
+  try {
+    await client.start();
+    const project = await client.createProject({ name: "C09 RPC", targetPlatform: "douyin", projectRoot });
+    const result = await client.editTimeline({
+      schemaVersion: 1,
+      editVersion: "timeline-edit-v1",
+      policy: "deterministic-natural-language-v1",
+      projectId: project.projectId,
+      timeline,
+      instruction: "删除 clip-camera-a",
+    });
+    assert.equal(shared.isTimelineEditResult(result), true);
+    assert.equal(result.status, "applied");
+    assert.equal(result.rejection, null);
+    assert.equal(result.resultTimeline.id.startsWith(`${timeline.id}:edit-`), true);
+    const rejected = await client.editTimeline({
+      schemaVersion: 1,
+      editVersion: "timeline-edit-v1",
+      policy: "deterministic-natural-language-v1",
+      projectId: project.projectId,
+      timeline,
+      instruction: "控制到一分钟左右，但不要截断句子",
+    });
+    assert.equal(shared.isTimelineEditResult(rejected), true);
+    assert.equal(rejected.status, "rejected");
+    assert.equal(rejected.rejection.code, "EDIT_UNSUPPORTED_INSTRUCTION");
+  } finally {
+    await client.shutdown();
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
 });

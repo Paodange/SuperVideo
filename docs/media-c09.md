@@ -39,6 +39,8 @@ C09 提供本地、确定性的 `timeline.edit` RPC，并通过 Agent Worker 与
 
 解析只做有限模板匹配。目标或替换素材不唯一、无法从当前 IR 无损执行、删除最后一个 clip，或会截断带 `sentenceId` 的完整句时返回 `status: "rejected"`，不会猜测素材或路径。
 
+技术方案中的复合示例“开头直接说工资，把前 3 秒删掉”和“控制到一分钟左右，但不要截断句子”不属于 C09 V1 的单一确定性模板：前者缺少可验证的 clip/句目标，后者需要跨片段时长规划。两者都会稳定返回 `status: "rejected"`，当前模板解析结果为 `EDIT_UNSUPPORTED_INSTRUCTION`，不会宣称已完成修改。调用方应先把它们拆成明确的结构化 intent，或交给后续版本的规划能力。
+
 ## 稳定错误码
 
 `EDIT_UNSUPPORTED_INSTRUCTION`、`EDIT_TARGET_NOT_FOUND`、`EDIT_AMBIGUOUS_TARGET`、`EDIT_REPLACEMENT_NOT_FOUND`、`EDIT_COMPLETE_SENTENCE_REQUIRED`、`EDIT_TIMELINE_EMPTY`、`EDIT_OPERATION_UNSAFE`、`EDIT_TIMELINE_INVALID`。请求 schema、未知字段、版本/policy、Timeline IR 引用或大小越界属于边界 `INVALID_PARAMS`；拒绝原因则结构化放在结果中。

@@ -298,7 +298,14 @@ async def timeline_edit_handler(
     cancelled: asyncio.Event,
     service: ProjectService,
 ) -> dict[str, object]:
-    return (await service.edit_timeline(params, cancelled)).model_dump(by_alias=True)
+    result = await service.edit_timeline(params, cancelled)
+    # Shared/Node treats optional wire fields as omitted, not explicit nulls.
+    # Keep the top-level rejection discriminator present because it is required
+    # by the versioned result contract in both applied and rejected responses.
+    payload = result.model_dump(by_alias=True, exclude_none=True)
+    if result.rejection is None:
+        payload["rejection"] = None
+    return payload
 
 
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:

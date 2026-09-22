@@ -90,6 +90,29 @@ def test_complete_sentence_and_missing_target_are_structured_rejections() -> Non
     assert missing.rejection.code == "EDIT_TARGET_NOT_FOUND"  # type: ignore[union-attr]
 
 
+def test_design_document_compound_examples_are_explicitly_rejected() -> None:
+    service = TimelineEditService()
+    first = service.edit(TimelineEditParams(
+        schemaVersion=1,
+        editVersion="timeline-edit-v1",
+        policy="deterministic-natural-language-v1",
+        projectId=PROJECT_ID,
+        timeline=timeline(),
+        instruction="开头直接说工资，把前 3 秒删掉",
+    ))
+    second = service.edit(TimelineEditParams(
+        schemaVersion=1,
+        editVersion="timeline-edit-v1",
+        policy="deterministic-natural-language-v1",
+        projectId=PROJECT_ID,
+        timeline=timeline(),
+        instruction="控制到一分钟左右，但不要截断句子",
+    ))
+    assert first.status == second.status == "rejected"
+    assert first.rejection.code == "EDIT_UNSUPPORTED_INSTRUCTION"  # type: ignore[union-attr]
+    assert second.rejection.code == "EDIT_UNSUPPORTED_INSTRUCTION"  # type: ignore[union-attr]
+
+
 def test_schema_unknown_fields_and_rpc_method_are_rejected_or_accepted_strictly() -> None:
     with unittest.TestCase().assertRaises(ValidationError):
         TimelineEditParams(
@@ -132,6 +155,9 @@ class TimelineEditTests(unittest.TestCase):
 
     def test_complete_sentence_and_missing_target_are_structured_rejections(self) -> None:
         test_complete_sentence_and_missing_target_are_structured_rejections()
+
+    def test_design_document_compound_examples_are_explicitly_rejected(self) -> None:
+        test_design_document_compound_examples_are_explicitly_rejected()
 
     def test_schema_unknown_fields_and_rpc_method_are_rejected_or_accepted_strictly(self) -> None:
         test_schema_unknown_fields_and_rpc_method_are_rejected_or_accepted_strictly()
