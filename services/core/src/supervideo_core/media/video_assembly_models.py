@@ -241,7 +241,7 @@ def _validate_controlled_uri(value: str, path: str) -> None:
 def _reject_forbidden(value: Any, path: str) -> None:
     if isinstance(value, dict):
         for key, item in value.items():
-            normalized = str(key).lower().replace("_", "").replace("-", "")
+            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
             if normalized in FORBIDDEN_KEYS:
                 raise ValueError(f"forbidden sensitive or executable field at {path}.{key}")
             _reject_forbidden(item, f"{path}.{key}")

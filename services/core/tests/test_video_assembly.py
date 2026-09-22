@@ -145,6 +145,23 @@ class D07VideoAssemblyTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             VideoAssemblyResult.model_validate(candidate)
 
+    def test_result_rejects_sensitive_key_separator_variants_after_digest_rebinding(self) -> None:
+        params = VideoAssemblyParams.model_validate(request_payload())
+        result = asyncio.run(VideoAssemblyService().assemble(params, asyncio.Event()))
+        for key in ("credential.ref", "api.key", "api key"):
+            with self.subTest(key=key):
+                candidate = result.model_dump(by_alias=True)
+                candidate["timeline"]["tracks"][0]["clips"][0]["metadata"][key] = "never"
+                timeline = TimelineProject.model_validate(candidate["timeline"])
+                digest = hashlib.sha256(_canonical_json(timeline.model_dump(by_alias=True, exclude_none=True))).hexdigest()
+                candidate["timelineDigest"] = digest
+                candidate["output"]["digest"] = digest
+                candidate["output"]["relativePath"] = f"generated/video-assembly-v1/{digest}.json"
+                candidate["preview"]["timelineDigest"] = digest
+                candidate["preview"]["playbackUri"] = f"supervideo://remotion/{candidate['projectId']}/{digest}"
+                with self.assertRaisesRegex(ValueError, "forbidden sensitive"):
+                    VideoAssemblyResult.model_validate(candidate)
+
 
 if __name__ == "__main__":
     unittest.main()
