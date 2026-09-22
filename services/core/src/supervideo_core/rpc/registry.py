@@ -35,6 +35,7 @@ from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
 from supervideo_core.media.final_export_models import FinalMp4ExportParams
 from supervideo_core.media.edit_models import TimelineEditParams
+from supervideo_core.media.tts_models import TtsJobStartParams
 from supervideo_core.timeline.version_models import (
     TimelineVersionActivateParams, TimelineVersionApplyEditParams, TimelineVersionCreateParams,
     TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
@@ -406,6 +407,11 @@ async def job_smoke_start_handler(params: JobSmokeStartParams, manager: JobManag
     return result.model_dump(by_alias=True)
 
 
+async def job_tts_start_handler(params: TtsJobStartParams, manager: JobManager) -> dict[str, object]:
+    result = await manager.start_tts(params)
+    return result.model_dump(by_alias=True)
+
+
 class RpcRegistry:
     """Registry whose method names are all explicit source-level entries."""
 
@@ -527,6 +533,14 @@ class RpcRegistry:
                 JobSmokeStartParams,
                 lambda params, _emit, _cancelled: job_smoke_start_handler(params, self.job_manager),
             ),
+            "job.tts.start": (
+                TtsJobStartParams,
+                lambda params, _emit, _cancelled: job_tts_start_handler(params, self.job_manager),
+            ),
+            "job.tts.result": (
+                JobReferenceParams,
+                lambda params, _emit, _cancelled: _job_tts_result(params, self.job_manager),
+            ),
             "job.get": (
                 JobReferenceParams,
                 lambda params, _emit, _cancelled: _job_get(params, self.job_manager),
@@ -601,3 +615,7 @@ async def _job_cancel(params: JobReferenceParams, manager: JobManager) -> dict[s
 
 async def _job_retry(params: JobReferenceParams, manager: JobManager) -> dict[str, object]:
     return (await manager.retry(params.project_id, params.job_id)).model_dump(by_alias=True)
+
+
+async def _job_tts_result(params: JobReferenceParams, manager: JobManager) -> dict[str, object]:
+    return manager.get_tts_result(params.project_id, params.job_id).model_dump(by_alias=True)

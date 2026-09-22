@@ -12,6 +12,7 @@ import {
   isJobEventPage,
   isJobPage,
   isJobSummary,
+  isTtsSynthesisResult,
   isValidDesktopAgentEvent,
   isProjectSummary,
   isSentenceQaContextResult,
@@ -47,6 +48,8 @@ import {
   type JobReferenceParams,
   type JobSmokeStartParams,
   type JobSummary,
+  type TtsStartRequest,
+  type TtsSynthesisResult,
   type SentenceQaContextResult,
   type SentenceQaSaveResult,
   type RetrievalParams,
@@ -320,6 +323,11 @@ function jobSummary(value: Readonly<Record<string, unknown>>): JobSummary {
 }
 function jobPage(value: Readonly<Record<string, unknown>>): JobPage {
   if (!isJobPage(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+  return value;
+}
+
+function ttsResult(value: Readonly<Record<string, unknown>>): TtsSynthesisResult {
+  if (!isTtsSynthesisResult(value)) throw createDesktopPublicError("CORE_UNAVAILABLE");
   return value;
 }
 function jobEventPage(value: Readonly<Record<string, unknown>>): JobEventPage {
@@ -858,7 +866,21 @@ app.whenReady().then(() => {
         ...(input.failAttempts === undefined ? {} : { failAttempts: input.failAttempts }),
       },
     ))),
+    startTtsJob: async (_event, input: TtsStartRequest) => {
+      const resolved = await providerService.resolveTts(input);
+      return rememberJob(jobSummary(await agentController.runJobOperation(
+        "job-tts-start", input.projectId,
+        {
+          idempotencyKey: resolved.idempotencyKey,
+          providerId: resolved.providerId,
+          model: resolved.model,
+          voice: resolved.voice,
+          sentences: resolved.sentences,
+        },
+      )));
+    },
     getJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation("job-get", input.projectId, { jobId: input.jobId }))),
+    getTtsJobResult: async (_event, input): Promise<TtsSynthesisResult> => ttsResult(await agentController.runJobOperation("job-tts-result", input.projectId, { jobId: input.jobId })),
     listJobs: async (_event, input) => {
       const result = jobPage(await agentController.runJobOperation(
         "job-list", input.projectId,

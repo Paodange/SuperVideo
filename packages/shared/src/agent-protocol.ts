@@ -9,6 +9,8 @@ import type {
   JobReferenceParams,
   JobSmokeStartParams,
   JobSummary,
+  TtsStartRequest,
+  TtsSynthesisResult,
   ProjectSummary,
   SentenceQaParams,
   SentenceQaSaveParams,
@@ -46,7 +48,7 @@ import type {
   TimelineVersionListResult,
   TimelineVersionDiffResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult, isTimelineVersionCreateParams, isTimelineVersionApplyEditParams, isTimelineVersionListParams, isTimelineVersionReferenceParams, isTimelineVersionActivateParams, isTimelineVersionUndoParams, isTimelineVersionRedoParams, isTimelineVersionDiffParams, isTimelineVersionResult, isTimelineVersionListResult, isTimelineVersionDiffResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isJobTtsStartParams, isTtsResult, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult, isTimelineVersionCreateParams, isTimelineVersionApplyEditParams, isTimelineVersionListParams, isTimelineVersionReferenceParams, isTimelineVersionActivateParams, isTimelineVersionUndoParams, isTimelineVersionRedoParams, isTimelineVersionDiffParams, isTimelineVersionResult, isTimelineVersionListResult, isTimelineVersionDiffResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -81,7 +83,7 @@ export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_MAX_CAPABILITIES = 32;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "timeline-versions", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "timeline-versions", "tts", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -121,11 +123,13 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   timelineVersionDiff: "timeline-version-diff",
   mediaScriptAlign: "media-script-align",
   jobSmokeStart: "job-smoke-start",
+  jobTtsStart: "job-tts-start",
   jobGet: "job-get",
   jobList: "job-list",
   jobEventsList: "job-events-list",
   jobCancel: "job-cancel",
   jobRetry: "job-retry",
+  jobTtsResult: "job-tts-result",
 } as const;
 
 export const AGENT_WORKER_MESSAGE_TYPES = {
@@ -179,7 +183,7 @@ export type AgentProjectOperationType =
   | "timeline-version-redo"
   | "timeline-version-diff";
 
-export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
+export type AgentJobOperationType = "job-smoke-start" | "job-tts-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry" | "job-tts-result";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
   | "DIALOG_CANCELLED"
@@ -452,7 +456,9 @@ export const DESKTOP_IPC_CHANNELS = {
   redoTimelineVersion: "desktop:v2:redo-timeline-version",
   diffTimelineVersions: "desktop:v2:diff-timeline-versions",
   startSmokeJob: "desktop:v2:start-smoke-job",
+  startTtsJob: "desktop:v2:start-tts-job",
   getJob: "desktop:v2:get-job",
+  getTtsJobResult: "desktop:v2:get-tts-job-result",
   listJobs: "desktop:v2:list-jobs",
   listJobEvents: "desktop:v2:list-job-events",
   cancelJob: "desktop:v2:cancel-job",
@@ -490,7 +496,9 @@ export type OpenProjectRequest = Record<string, never>;
 export type AddAssetReferencesRequest = Readonly<{ projectId: string }>;
 export type ListProjectAssetsRequest = Readonly<{ projectId: string }>;
 export type StartSmokeJobRequest = JobSmokeStartParams;
+export type StartTtsJobRequest = TtsStartRequest;
 export type GetJobRequest = JobReferenceParams;
+export type GetTtsJobResultRequest = JobReferenceParams;
 export type ListJobsRequest = JobListParams;
 export type ListJobEventsRequest = JobEventsListParams;
 export type CancelJobRequest = JobReferenceParams;
@@ -541,7 +549,9 @@ export type DesktopApi = Readonly<{
   redoTimelineVersion: (input: TimelineVersionRedoParams) => Promise<TimelineVersionResult>;
   diffTimelineVersions: (input: TimelineVersionDiffParams) => Promise<TimelineVersionDiffResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
+  startTtsJob: (input: TtsStartRequest) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
+  getTtsJobResult: (input: JobReferenceParams) => Promise<TtsSynthesisResult>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
   listJobEvents: (input: JobEventsListParams) => Promise<JobEventPage>;
   cancelJob: (input: JobReferenceParams) => Promise<JobSummary>;
@@ -1069,7 +1079,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
   return value === "job-smoke-start" || value === "job-get" || value === "job-list"
-    || value === "job-events-list" || value === "job-cancel" || value === "job-retry";
+    || value === "job-events-list" || value === "job-cancel" || value === "job-retry"
+    || value === "job-tts-start" || value === "job-tts-result";
 }
 
 function isProjectOperationError(value: unknown): value is ProjectOperationError {
@@ -1182,6 +1193,7 @@ function isJobOperationPayload(type: AgentJobOperationType, value: unknown, resu
   if (result) {
     if (type === "job-list") return isJobPage(value);
     if (type === "job-events-list") return isJobEventPage(value);
+    if (type === "job-tts-result") return isTtsResult(value);
     return isJobSummary(value);
   }
   if (type === "job-smoke-start") {
@@ -1190,6 +1202,10 @@ function isJobOperationPayload(type: AgentJobOperationType, value: unknown, resu
       && (value.steps === undefined || isSafeInteger(value.steps, 3, 8))
       && (value.delayMs === undefined || isSafeInteger(value.delayMs, 1, 1_000))
       && (value.failAttempts === undefined || isSafeInteger(value.failAttempts, 0, 1));
+  }
+  if (type === "job-tts-start") {
+    return hasOnlyKeys(value, ["idempotencyKey", "providerId", "model", "voice", "sentences"])
+      && isJobTtsStartParams({ projectId: "11111111-1111-4111-8111-111111111111", ...value });
   }
   if (type === "job-list") {
     return hasOnlyKeys(value, ["statuses", "cursor", "limit"])

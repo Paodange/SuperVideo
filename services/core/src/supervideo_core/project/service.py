@@ -137,6 +137,12 @@ class ProjectService:
 
         return self._active.database if self._active is not None else None
 
+    @property
+    def active_project_root(self) -> Path | None:
+        """The trusted active root for fixed generated-output executors."""
+
+        return self._active.root if self._active is not None else None
+
     def close(self) -> None:
         active = self._active
         self._active = None

@@ -12,7 +12,11 @@ import {
   type ProviderServiceKind,
   type ProviderAdapter,
   type ProviderRegistry,
+  type ProviderTtsSynthesisResult,
+  type TtsJobStartParams,
+  type TtsStartRequest,
 } from "@supervideo/shared";
+import { isTtsStartRequest } from "@supervideo/shared";
 import type { CredentialMetadata } from "@supervideo/shared";
 import type { CredentialVault } from "../security/credential-vault";
 import { ProviderConfigStore } from "./provider-config-store";
@@ -83,6 +87,46 @@ export class ProviderConfigService {
     if (!config.credentialRef) code = "MISSING_CREDENTIAL";
     else { try { code = await Promise.race([this.vault.runWithSecret(config.credentialRef, (secret) => adapter.health(secret, config, 500)), new Promise<ProviderHealthErrorCode>((resolve) => setTimeout(() => resolve("TIMEOUT"), 500))]); } catch { code = "CREDENTIAL_UNAVAILABLE"; } }
     return Object.freeze({ schemaVersion: 1, protocolVersion: PROVIDER_CONTRACT_VERSION, projectId: config.projectId, serviceKind: config.serviceKind, providerId: config.providerId, status: code === null ? "healthy" : code === "MISSING_CREDENTIAL" ? "unconfigured" : "unhealthy", capabilities: config.capabilities, checkedAtMs, latencyMs: Math.max(0, this.now() - started), error: code === null ? null : Object.freeze({ code, retryable: code === "TIMEOUT" || code === "NETWORK_ERROR" }) });
+  }
+  /**
+   * Resolve D02's non-sensitive provider selection in Main. The credentialRef
+   * is inspected here only; it is deliberately omitted from the Core job
+   * payload. A future real adapter may use it through CredentialVault.runWithSecret.
+   */
+  async resolveTts(input: TtsStartRequest): Promise<TtsJobStartParams> {
+    if (!isTtsStartRequest(input)) throw new ProviderServiceError("PROVIDER_INVALID_CONFIG");
+    const config = this.store.get(input.projectId, "tts", input.providerId);
+    if (!config || !config.enabled || !config.capabilities.includes("speech.synthesize")) throw new ProviderServiceError("PROVIDER_UNAVAILABLE");
+    if (config.credentialRef) {
+      const credential = await this.findCredential(config.credentialRef);
+      if (!credential) throw new ProviderServiceError("PROVIDER_CREDENTIAL_NOT_FOUND");
+      if (credential.providerId !== config.providerId || credential.serviceKind !== "tts") throw new ProviderServiceError("PROVIDER_CREDENTIAL_KIND_MISMATCH");
+    } else if (config.providerId !== "fake") {
+      throw new ProviderServiceError("PROVIDER_UNAVAILABLE");
+    }
+    return Object.freeze({ ...input, model: config.model });
+  }
+  /**
+   * Main-only future real-provider seam. The adapter receives the decrypted
+   * secret only inside CredentialVault.runWithSecret; the request and result
+   * contain no credentialRef, secret, or ciphertext.
+   */
+  async synthesizeTts(input: TtsStartRequest): Promise<ProviderTtsSynthesisResult> {
+    const resolved = await this.resolveTts(input);
+    const config = this.store.get(input.projectId, "tts", input.providerId);
+    const adapter = this.registry.get(input.providerId, "tts");
+    if (!config?.credentialRef || !adapter?.synthesizeTts) throw new ProviderServiceError("PROVIDER_UNAVAILABLE");
+    const request = Object.freeze({
+      projectId: resolved.projectId,
+      model: resolved.model,
+      voice: resolved.voice,
+      sentences: Object.freeze(resolved.sentences.map((sentence) => Object.freeze({
+        sentenceId: sentence.sentenceId,
+        text: sentence.text,
+        provenanceIds: Object.freeze([...(sentence.provenanceIds ?? [])]),
+      }))),
+    });
+    return this.vault.runWithSecret(config.credentialRef, (secret) => adapter.synthesizeTts!(secret, request, 30_000));
   }
   descriptors(): readonly ProviderRegistryEntry["descriptor"][] { return this.registry.list(); }
   private async findCredential(ref: string): Promise<CredentialMetadata | undefined> { return (await this.vault.list()).items.find((item) => item.credentialRef === ref); }

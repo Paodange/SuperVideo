@@ -7,6 +7,9 @@ from .models import (
     JobPage,
     JobSmokeInput,
     JobSummary,
+    TtsJobInput,
+    TtsJobStartParams,
+    TtsSynthesisResult,
 )
 from .state_machine import ALLOWED_TRANSITIONS, TERMINAL_STATUSES, can_transition
 
@@ -19,6 +22,9 @@ __all__ = [
     "JobPage",
     "JobSmokeInput",
     "JobSummary",
+    "TtsJobInput",
+    "TtsJobStartParams",
+    "TtsSynthesisResult",
     "TERMINAL_STATUSES",
     "can_transition",
 ]
