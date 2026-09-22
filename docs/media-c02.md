@@ -18,7 +18,8 @@ whole-sentence duration and its target ±20% status.
 
 C02 does not trim, rewrite, add, remove or optimize sentences. A plan outside
 the duration tolerance is returned as `needs-duration-optimization` for C03;
-candidate shortages remain reproducible segment gaps. The implementation is
+the caller passes that plan together with the same-source B10 alignment result
+to `plan.optimize_duration`. Candidate shortages remain reproducible segment gaps. The implementation is
 local and deterministic: it uses B08/B09/B10 only and does not call an LLM,
 network, credential or arbitrary path/command.
 

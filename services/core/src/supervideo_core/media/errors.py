@@ -66,6 +66,12 @@ MediaErrorCode = Literal[
     "PLAN_OUTPUT_INVALID",
     "PLAN_TIMEOUT",
     "PLAN_CANCELLED",
+    "DURATION_OPTIMIZATION_INPUT_INVALID",
+    "DURATION_OPTIMIZATION_SOURCE_INVALID",
+    "DURATION_OPTIMIZATION_ALIGNMENT_INVALID",
+    "DURATION_OPTIMIZATION_OUTPUT_INVALID",
+    "DURATION_OPTIMIZATION_TIMEOUT",
+    "DURATION_OPTIMIZATION_CANCELLED",
 ]
 
 
@@ -135,6 +141,12 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "PLAN_OUTPUT_INVALID": MediaErrorDefinition("The narrative plan output was invalid."),
     "PLAN_TIMEOUT": MediaErrorDefinition("The narrative planning operation timed out."),
     "PLAN_CANCELLED": MediaErrorDefinition("The narrative planning operation was cancelled."),
+    "DURATION_OPTIMIZATION_INPUT_INVALID": MediaErrorDefinition("The duration optimization input is invalid or exceeds its bounds."),
+    "DURATION_OPTIMIZATION_SOURCE_INVALID": MediaErrorDefinition("The C02 source plan is invalid for duration optimization."),
+    "DURATION_OPTIMIZATION_ALIGNMENT_INVALID": MediaErrorDefinition("The B10 candidate pool is invalid for duration optimization."),
+    "DURATION_OPTIMIZATION_OUTPUT_INVALID": MediaErrorDefinition("The duration optimization output was invalid."),
+    "DURATION_OPTIMIZATION_TIMEOUT": MediaErrorDefinition("The duration optimization operation timed out."),
+    "DURATION_OPTIMIZATION_CANCELLED": MediaErrorDefinition("The duration optimization operation was cancelled."),
 }
 
 

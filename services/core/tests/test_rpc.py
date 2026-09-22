@@ -79,6 +79,7 @@ class RpcModelTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_request(invalid)
         self.assertIn("media.script.align", health_result()["capabilities"])
+        self.assertIn("plan.optimize_duration", health_result()["capabilities"])
         expected_codes = {
             "SLOT_INPUT_INVALID": -32346,
             "SLOT_SOURCE_INVALID": -32347,
@@ -87,6 +88,12 @@ class RpcModelTests(unittest.TestCase):
             "SLOT_OUTPUT_INVALID": -32350,
             "SLOT_TIMEOUT": -32351,
             "SLOT_CANCELLED": -32352,
+            "DURATION_OPTIMIZATION_INPUT_INVALID": -32360,
+            "DURATION_OPTIMIZATION_SOURCE_INVALID": -32361,
+            "DURATION_OPTIMIZATION_ALIGNMENT_INVALID": -32362,
+            "DURATION_OPTIMIZATION_OUTPUT_INVALID": -32363,
+            "DURATION_OPTIMIZATION_TIMEOUT": -32364,
+            "DURATION_OPTIMIZATION_CANCELLED": -32365,
         }
         for error_code, code in expected_codes.items():
             with self.subTest(error_code=error_code):

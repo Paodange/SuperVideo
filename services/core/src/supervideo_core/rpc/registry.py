@@ -28,6 +28,7 @@ from supervideo_core.media.retrieval_models import RetrievalParams
 from supervideo_core.media.rerank_models import RerankParams
 from supervideo_core.media.slot_alignment_models import SlotAlignmentParams
 from supervideo_core.media.narrative_planner_models import NarrativePlanParams
+from supervideo_core.media.duration_optimizer_models import DurationOptimizationParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -231,6 +232,15 @@ async def plan_create_remix_handler(
     return (await service.create_remix_plan(params, cancelled)).model_dump(by_alias=True)
 
 
+async def plan_optimize_duration_handler(
+    params: DurationOptimizationParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.optimize_duration(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -346,6 +356,10 @@ class RpcRegistry:
             "plan.create_remix": (
                 NarrativePlanParams,
                 lambda params, emit, cancelled: plan_create_remix_handler(params, emit, cancelled, self.project_service),
+            ),
+            "plan.optimize_duration": (
+                DurationOptimizationParams,
+                lambda params, emit, cancelled: plan_optimize_duration_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

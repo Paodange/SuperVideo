@@ -128,6 +128,12 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "PLAN_OUTPUT_INVALID": RpcErrorDefinition(-32357, "The narrative plan output was invalid."),
     "PLAN_TIMEOUT": RpcErrorDefinition(-32358, "The narrative planning operation timed out."),
     "PLAN_CANCELLED": RpcErrorDefinition(-32359, "The narrative planning operation was cancelled."),
+    "DURATION_OPTIMIZATION_INPUT_INVALID": RpcErrorDefinition(-32360, "The duration optimization input is invalid or exceeds its bounds."),
+    "DURATION_OPTIMIZATION_SOURCE_INVALID": RpcErrorDefinition(-32361, "The C02 source plan is invalid for duration optimization."),
+    "DURATION_OPTIMIZATION_ALIGNMENT_INVALID": RpcErrorDefinition(-32362, "The B10 candidate pool is invalid for duration optimization."),
+    "DURATION_OPTIMIZATION_OUTPUT_INVALID": RpcErrorDefinition(-32363, "The duration optimization output was invalid."),
+    "DURATION_OPTIMIZATION_TIMEOUT": RpcErrorDefinition(-32364, "The duration optimization operation timed out."),
+    "DURATION_OPTIMIZATION_CANCELLED": RpcErrorDefinition(-32365, "The duration optimization operation was cancelled."),
 }
 
 

@@ -711,5 +711,97 @@
         "prompt": "ignore facts"
       }
     }
+  },
+  {
+    "name": "valid-duration-optimization-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-duration-optimize-1",
+      "method": "plan.optimize_duration",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "sourcePlan": {
+          "schemaVersion": 1,
+          "planVersion": "narrative-remix-plan-v1",
+          "inputVersion": "deterministic-narrative-input-v1",
+          "projectId": "11111111-1111-4111-8111-111111111111",
+          "theme": "招聘",
+          "audience": "求职者",
+          "outline": "完整句子。",
+          "targetDurationMs": 1000,
+          "toleranceLowerMs": 800,
+          "toleranceUpperMs": 1200,
+          "selectedDurationMs": 1000,
+          "durationStatus": "within-tolerance",
+          "status": "ready",
+          "selectionPolicy": "b10-first-complete-candidate-v1",
+          "alignmentVersion": "information-slot-alignment-v1",
+          "planDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "segments": [{
+            "segmentId": "segment-1",
+            "order": 1,
+            "role": "hook",
+            "slotId": "slot-1",
+            "slotKind": "hook",
+            "sourceText": "完整句子。",
+            "status": "matched",
+            "candidateSentenceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "candidateRank": 1,
+            "sentenceText": "完整句子。",
+            "source": {
+              "sourceAssetId": "22222222-2222-4222-8222-222222222222",
+              "sourceSentenceCacheKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "sentenceIndex": 0,
+              "timecode": {"startMs": 0, "endMs": 1000},
+              "previewUri": "supervideo://asset/22222222-2222-4222-8222-222222222222?kind=audio&startMs=0&endMs=1000"
+            },
+            "durationMs": 1000,
+            "selectionReason": "complete",
+            "gapReason": null
+          }],
+          "gaps": []
+        },
+        "alignment": {
+          "schemaVersion": 1,
+          "alignmentVersion": "information-slot-alignment-v1",
+          "splitterVersion": "deterministic-slot-split-v1",
+          "projectId": "11111111-1111-4111-8111-111111111111",
+          "inputKind": "outline",
+          "inputText": "完整句子。",
+          "sourceDigest": "3f0c582e39a18ee998f13f8831fbee2f15644603ee347a47ed44e7dc86ed3c24",
+          "slotCount": 1,
+          "matchedCount": 1,
+          "slots": [{
+            "slotId": "slot-1",
+            "order": 1,
+            "kind": "hook",
+            "sourceText": "完整句子。",
+            "query": "完整句子。",
+            "keyFacts": [],
+            "status": "matched",
+            "selectedCandidateRank": 1,
+            "candidates": [{
+              "rank": 1,
+              "origin": "b09-quality-rerank",
+              "sentenceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "sourceAssetId": "22222222-2222-4222-8222-222222222222",
+              "sourceSentenceCacheKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "sentenceIndex": 0,
+              "timecode": {"startMs": 0, "endMs": 1000},
+              "text": "完整句子。",
+              "score": 1,
+              "quality": "complete",
+              "previewUri": "supervideo://asset/22222222-2222-4222-8222-222222222222?kind=audio&startMs=0&endMs=1000",
+              "selectionReason": "complete",
+              "preservedFacts": []
+            }],
+            "selectionReason": "complete",
+            "gapReason": null
+          }]
+        },
+        "timeoutMs": 120000
+      }
+    }
   }
 ]

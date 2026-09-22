@@ -301,6 +301,10 @@ def validate_request(value: Any) -> RpcRequest:
         SlotAlignmentParams.model_validate(request.params)
     elif request.method == "plan.create_remix":
         NarrativePlanParams.model_validate(request.params)
+    elif request.method == "plan.optimize_duration":
+        from supervideo_core.media.duration_optimizer_models import DurationOptimizationParams
+
+        DurationOptimizationParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -370,6 +374,7 @@ def health_result() -> dict[str, object]:
             "media.sentences.rerank",
             "media.script.align",
             "plan.create_remix",
+            "plan.optimize_duration",
             "job.smoke.start",
             "job.get",
             "job.list",
