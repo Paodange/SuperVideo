@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 TIMELINE_IR_SCHEMA_VERSION = 1
 TIMELINE_IR_MAX_DURATION_MS = 86_400_000
+TIMELINE_IR_MAX_PROJECT_BYTES = 512 * 1024
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
@@ -298,11 +299,13 @@ def _unique_ids(items: list[Any], kind: str) -> set[str]:
 
 
 def validate_timeline_project(value: Any) -> TimelineProject:
-    return value if isinstance(value, TimelineProject) else TimelineProject.model_validate(value)
+    project = value if isinstance(value, TimelineProject) else TimelineProject.model_validate(value)
+    return validate_timeline_size(project)
 
 
-def validate_timeline_size(value: TimelineProject | dict[str, Any], maximum_bytes: int = 512 * 1024) -> TimelineProject:
-    project = validate_timeline_project(value)
+def validate_timeline_size(value: TimelineProject | dict[str, Any], maximum_bytes: int = TIMELINE_IR_MAX_PROJECT_BYTES) -> TimelineProject:
+    project = value if isinstance(value, TimelineProject) else TimelineProject.model_validate(value)
+    maximum_bytes = min(maximum_bytes, TIMELINE_IR_MAX_PROJECT_BYTES)
     if len(project.model_dump_json(by_alias=True).encode("utf-8")) > maximum_bytes:
         raise TimelineValidationError("TIMELINE_INVALID_VALUE", "$", "encoded Timeline IR exceeds the size limit")
     return project

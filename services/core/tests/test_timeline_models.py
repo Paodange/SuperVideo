@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from supervideo_core.timeline.models import TimelineProject, validate_timeline_project, validate_timeline_size
+from supervideo_core.timeline.models import TIMELINE_IR_MAX_PROJECT_BYTES, TimelineProject, TimelineProvenance, validate_timeline_project, validate_timeline_size
 
 
 class TimelineIrModelTests(unittest.TestCase):
@@ -98,6 +98,26 @@ class TimelineIrModelTests(unittest.TestCase):
         too_deep["tracks"][0]["clips"][0]["metadata"] = {"a": {"b": {"c": {"d": {"e": {"f": 1}}}}}}
         with self.assertRaises(ValidationError):
             validate_timeline_project(too_deep)
+
+    def test_project_size_has_fixed_512_kib_upper_bound(self) -> None:
+        base = validate_timeline_project(self.fixture)
+        oversized = TimelineProject.model_construct(
+            schema_version=1,
+            id="oversized-project",
+            canvas=base.canvas,
+            duration_ms=base.duration_ms,
+            tracks=base.tracks,
+            sources=base.sources,
+            provenance=[TimelineProvenance.model_construct(
+                id="oversized-provenance",
+                kind="generated",
+                metadata={"padding": "x" * (TIMELINE_IR_MAX_PROJECT_BYTES + 1)},
+            )],
+        )
+        with self.assertRaises(ValueError):
+            validate_timeline_project(oversized)
+        with self.assertRaises(ValueError):
+            validate_timeline_size(oversized, TIMELINE_IR_MAX_PROJECT_BYTES * 2)
 
 
 if __name__ == "__main__":
