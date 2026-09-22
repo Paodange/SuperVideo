@@ -31,6 +31,7 @@ run(
     path.join(root, "tests", "agent-worker.test.mjs"),
     path.join(root, "tests", "python-rpc.test.mjs"),
     path.join(root, "tests", "diagnostics.test.mjs"),
+    path.join(root, "tests", "timeline-ir.test.mjs"),
   ],
   "automated tests",
 );

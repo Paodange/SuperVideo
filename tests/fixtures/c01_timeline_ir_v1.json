@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "id": "project-c01-demo",
+  "canvas": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30
+  },
+  "durationMs": 10000,
+  "sources": [
+    {
+      "id": "source-camera-a",
+      "kind": "asset",
+      "uri": "supervideo://asset/source-camera-a",
+      "mediaType": "video",
+      "durationMs": 60000,
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "provenanceIds": ["prov-camera-a"],
+      "metadata": {
+        "role": "a-roll"
+      }
+    },
+    {
+      "id": "source-voiceover",
+      "kind": "generated",
+      "uri": "supervideo://generated/source-voiceover",
+      "mediaType": "audio",
+      "durationMs": 10000,
+      "provenanceIds": ["prov-voiceover"]
+    }
+  ],
+  "provenance": [
+    {
+      "id": "prov-camera-a",
+      "kind": "user-supplied",
+      "sourceId": "source-camera-a",
+      "uri": "supervideo://asset/source-camera-a",
+      "license": "user-provided"
+    },
+    {
+      "id": "prov-voiceover",
+      "kind": "generated",
+      "sourceId": "source-voiceover",
+      "provider": "local-test-adapter"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "track-video",
+      "kind": "video",
+      "name": "A-roll",
+      "clips": [
+        {
+          "id": "clip-camera-a",
+          "trackId": "track-video",
+          "kind": "video",
+          "sourceId": "source-camera-a",
+          "timelineStartMs": 0,
+          "durationMs": 4000,
+          "sourceInMs": 1000,
+          "sourceOutMs": 5000,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "rotation": 0,
+            "opacity": 1,
+            "anchorX": 0.5,
+            "anchorY": 0.5
+          },
+          "transitionIn": {
+            "kind": "fade",
+            "durationMs": 500
+          },
+          "transitionOut": {
+            "kind": "dissolve",
+            "durationMs": 500
+          },
+          "sentenceId": "sentence-0001",
+          "editableInJianying": true,
+          "provenanceIds": ["prov-camera-a"],
+          "metadata": {
+            "shot": "opening"
+          }
+        }
+      ]
+    },
+    {
+      "id": "track-audio",
+      "kind": "audio",
+      "name": "Voiceover",
+      "clips": [
+        {
+          "id": "clip-voiceover",
+          "trackId": "track-audio",
+          "kind": "audio",
+          "sourceId": "source-voiceover",
+          "timelineStartMs": 0,
+          "durationMs": 10000,
+          "sourceInMs": 0,
+          "sourceOutMs": 10000,
+          "volume": 1,
+          "editableInJianying": true,
+          "provenanceIds": ["prov-voiceover"]
+        }
+      ]
+    },
+    {
+      "id": "track-subtitles",
+      "kind": "subtitle",
+      "name": "Subtitles",
+      "clips": [
+        {
+          "id": "clip-subtitle-0001",
+          "trackId": "track-subtitles",
+          "kind": "subtitle",
+          "timelineStartMs": 500,
+          "durationMs": 4000,
+          "editableInJianying": true,
+          "subtitle": {
+            "text": "这是一个可编辑的字幕片段。",
+            "language": "zh-CN",
+            "style": {
+              "fontFamily": "Microsoft YaHei",
+              "fontSize": 64,
+              "color": "#FFFFFF",
+              "backgroundColor": "#00000099",
+              "position": "bottom",
+              "maxLines": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "track-overlay",
+      "kind": "overlay",
+      "name": "Information cards",
+      "clips": [
+        {
+          "id": "clip-title-card",
+          "trackId": "track-overlay",
+          "kind": "text",
+          "timelineStartMs": 1000,
+          "durationMs": 2000,
+          "editableInJianying": false,
+          "metadata": {
+            "text": "C01 Timeline IR V1"
+          }
+        }
+      ]
+    }
+  ]
+}
