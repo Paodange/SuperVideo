@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Any
 
 from .errors import MediaError
@@ -23,6 +24,7 @@ from .duration_optimizer_models import (
 from .slot_alignment_models import SlotAlignmentCandidate
 
 MAX_FRONTIER_STATES = 20_000
+DP_BUDGET_CHECK_INTERVAL = 256
 
 
 @dataclass(frozen=True)
@@ -42,8 +44,11 @@ class _State:
 class DurationOptimizerService:
     """Optimize only by choosing, replacing, or removing complete B10 sentences."""
 
+    def __init__(self, clock: Callable[[], float] | None = None) -> None:
+        self._clock = clock or time.monotonic
+
     async def optimize(self, request: DurationOptimizationParams, cancelled: asyncio.Event) -> DurationOptimizationResult:
-        deadline = time.monotonic() + request.timeout_ms / 1_000
+        deadline = self._clock() + request.timeout_ms / 1_000
         try:
             if cancelled.is_set():
                 raise MediaError("DURATION_OPTIMIZATION_CANCELLED")
@@ -52,7 +57,7 @@ class DurationOptimizerService:
             if cancelled.is_set():
                 raise MediaError("DURATION_OPTIMIZATION_CANCELLED")
             choices = await self._build_choices(request, cancelled, deadline)
-            selected = self._select_state(request, choices, cancelled, deadline)
+            selected = await self._select_state(request, choices, cancelled, deadline)
             result = self._build_result(request, choices, selected)
             return validate_duration_optimization_size(result)
         except MediaError:
@@ -74,30 +79,37 @@ class DurationOptimizerService:
             raise MediaError("DURATION_OPTIMIZATION_ALIGNMENT_INVALID")
         if len(plan.segments) > 32 or len(alignment.slots) > 32:
             raise MediaError("DURATION_OPTIMIZATION_INPUT_INVALID")
+        seen_sentence_ids: set[str] = set()
+        for slot in alignment.slots:
+            for candidate in slot.candidates:
+                if candidate.sentence_id in seen_sentence_ids:
+                    raise MediaError("DURATION_OPTIMIZATION_ALIGNMENT_INVALID")
+                seen_sentence_ids.add(candidate.sentence_id)
         slot_ids = {slot.slot_id for slot in alignment.slots}
         for segment in plan.segments:
             if segment.status == "matched" and segment.slot_id not in slot_ids:
                 raise MediaError("DURATION_OPTIMIZATION_ALIGNMENT_INVALID")
+            if segment.status != "matched":
+                continue
+            slot = next(slot for slot in alignment.slots if slot.slot_id == segment.slot_id)
+            candidate = next((item for item in slot.candidates if item.sentence_id == segment.candidate_sentence_id), None)
+            if candidate is None or not DurationOptimizerService._candidate_matches_segment(candidate, segment):
+                raise MediaError("DURATION_OPTIMIZATION_SOURCE_INVALID")
 
-    @classmethod
     async def _build_choices(
-        cls,
+        self,
         request: DurationOptimizationParams,
         cancelled: asyncio.Event,
         deadline: float,
     ) -> list[list[_Choice]]:
         slots = {slot.slot_id: slot for slot in request.alignment.slots}
-        seen_sentence_ids: set[str] = set()
         choices: list[list[_Choice]] = []
         for segment in request.source_plan.segments:
-            cls._check_budget(cancelled, deadline)
+            self._check_budget(cancelled, deadline)
             slot = slots.get(segment.slot_id)
             options: list[_Choice] = [_Choice(None, 0)]
             if slot is not None:
                 for candidate in slot.candidates:
-                    if candidate.sentence_id in seen_sentence_ids:
-                        raise MediaError("DURATION_OPTIMIZATION_ALIGNMENT_INVALID")
-                    seen_sentence_ids.add(candidate.sentence_id)
                     options.append(_Choice(candidate, candidate.timecode.end_ms - candidate.timecode.start_ms))
             if segment.status == "matched":
                 if slot is None or not any(option.candidate and option.candidate.sentence_id == segment.candidate_sentence_id for option in options):
@@ -106,9 +118,8 @@ class DurationOptimizerService:
             await asyncio.sleep(0)
         return choices
 
-    @classmethod
-    def _select_state(
-        cls,
+    async def _select_state(
+        self,
         request: DurationOptimizationParams,
         choices: list[list[_Choice]],
         cancelled: asyncio.Event,
@@ -121,26 +132,32 @@ class DurationOptimizerService:
         frontier: dict[int, _State] = {0: _State(0, (), 0, 0)}
         max_duration = upper + max_candidate_duration
         for segment_index, group in enumerate(choices):
-            cls._check_budget(cancelled, deadline)
+            self._check_budget(cancelled, deadline)
             next_frontier: dict[int, _State] = {}
+            iterations = 0
             for state in frontier.values():
                 for choice_index, choice in enumerate(group):
+                    iterations += 1
+                    if iterations % DP_BUDGET_CHECK_INTERVAL == 0:
+                        self._check_budget(cancelled, deadline)
+                        await asyncio.sleep(0)
+                        self._check_budget(cancelled, deadline)
                     total = state.duration_ms + choice.duration_ms
                     if total > max_duration:
                         continue
-                    changes = state.change_count + cls._choice_change(request, segment_index, choice)
+                    changes = state.change_count + self._choice_change(request, segment_index, choice)
                     candidate_rank = choice.candidate.rank if choice.candidate else 0
                     candidate_state = _State(total, state.choices + (choice_index,), changes, state.rank_sum + candidate_rank)
                     previous = next_frontier.get(total)
-                    if previous is None or cls._partial_key(candidate_state) < cls._partial_key(previous):
+                    if previous is None or self._partial_key(candidate_state) < self._partial_key(previous):
                         next_frontier[total] = candidate_state
             if len(next_frontier) > MAX_FRONTIER_STATES:
-                ordered = sorted(next_frontier.values(), key=lambda state: cls._frontier_key(state, target, lower, upper))
+                ordered = sorted(next_frontier.values(), key=lambda state: self._frontier_key(state, target, lower, upper))
                 next_frontier = {state.duration_ms: state for state in ordered[:MAX_FRONTIER_STATES]}
             frontier = next_frontier
         if not frontier:
             return _State(0, tuple(0 for _ in choices), len(choices), 0)
-        return min(frontier.values(), key=lambda state: cls._frontier_key(state, target, lower, upper))
+        return min(frontier.values(), key=lambda state: self._frontier_key(state, target, lower, upper))
 
     @staticmethod
     def _choice_change(request: DurationOptimizationParams, index: int, choice: _Choice) -> int:
@@ -158,12 +175,27 @@ class DurationOptimizerService:
         in_tolerance = lower <= state.duration_ms <= upper
         return (0 if in_tolerance else 1, abs(target - state.duration_ms), state.change_count, state.rank_sum, state.choices)
 
-    @staticmethod
-    def _check_budget(cancelled: asyncio.Event, deadline: float) -> None:
+    def _check_budget(self, cancelled: asyncio.Event, deadline: float) -> None:
         if cancelled.is_set():
             raise MediaError("DURATION_OPTIMIZATION_CANCELLED")
-        if time.monotonic() >= deadline:
+        if self._clock() >= deadline:
             raise MediaError("DURATION_OPTIMIZATION_TIMEOUT")
+
+    @staticmethod
+    def _candidate_matches_segment(candidate: SlotAlignmentCandidate, segment: Any) -> bool:
+        source = segment.source
+        return (
+            candidate.sentence_id == segment.candidate_sentence_id
+            and candidate.rank == segment.candidate_rank
+            and candidate.text == segment.sentence_text
+            and candidate.source_asset_id == source.source_asset_id
+            and candidate.source_sentence_cache_key == source.source_sentence_cache_key
+            and candidate.sentence_index == source.sentence_index
+            and candidate.timecode.start_ms == source.timecode.start_ms
+            and candidate.timecode.end_ms == source.timecode.end_ms
+            and candidate.preview_uri == source.preview_uri
+            and candidate.timecode.end_ms - candidate.timecode.start_ms == segment.duration_ms
+        )
 
     @classmethod
     def _build_result(

@@ -8,6 +8,7 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from supervideo_core.media.duration_optimizer import DurationOptimizerService
+import supervideo_core.media.duration_optimizer as duration_optimizer_module
 from supervideo_core.media.duration_optimizer_models import DurationOptimizationParams
 from supervideo_core.media.errors import MediaError
 from supervideo_core.media.narrative_planner_models import (
@@ -148,12 +149,34 @@ class DurationOptimizerTests(unittest.IsolatedAsyncioTestCase):
     async def test_duplicate_candidate_id_and_invalid_timecode_are_rejected(self) -> None:
         duplicate = hashlib.sha256(b"duplicate").hexdigest()
         alignment = make_alignment([[make_candidate(1, 1, 0, 1000, sentence_id=duplicate)], [make_candidate(2, 1, 1000, 2000, sentence_id=duplicate)]])
-        plan = make_plan(alignment, 2000)
+        plan = make_plan(alignment, 2000, gap_slot=2)
         with self.assertRaises(MediaError) as context:
             await DurationOptimizerService().optimize(DurationOptimizationParams(projectId=PROJECT_ID, sourcePlan=plan, alignment=alignment), asyncio.Event())
         self.assertEqual(context.exception.code, "DURATION_OPTIMIZATION_ALIGNMENT_INVALID")
         with self.assertRaises(ValidationError):
             make_candidate(1, 1, 1000, 1000)
+
+    async def test_tampered_c02_evidence_is_rejected_as_stale_source(self) -> None:
+        alignment = make_alignment([[make_candidate(1, 1, 0, 1000)]])
+        plan = make_plan(alignment, 1000)
+        tampered_text = plan.model_copy(update={
+            "segments": [plan.segments[0].model_copy(update={"sentence_text": "篡改句子。"})],
+        })
+        with self.assertRaises(MediaError) as context:
+            await DurationOptimizerService().optimize(DurationOptimizationParams(projectId=PROJECT_ID, sourcePlan=tampered_text, alignment=alignment), asyncio.Event())
+        self.assertEqual(context.exception.code, "DURATION_OPTIMIZATION_SOURCE_INVALID")
+
+        tampered_timecode = plan.segments[0].source.timecode.model_copy(update={"start_ms": 10})
+        tampered_source = plan.segments[0].source.model_copy(update={
+            "timecode": tampered_timecode,
+            "preview_uri": f"supervideo://asset/{ASSET_ID}?kind=audio&startMs=10&endMs=1000",
+        })
+        tampered_plan = plan.model_copy(update={
+            "segments": [plan.segments[0].model_copy(update={"source": tampered_source})],
+        })
+        with self.assertRaises(MediaError) as context:
+            await DurationOptimizerService().optimize(DurationOptimizationParams(projectId=PROJECT_ID, sourcePlan=tampered_plan, alignment=alignment), asyncio.Event())
+        self.assertEqual(context.exception.code, "DURATION_OPTIMIZATION_SOURCE_INVALID")
 
     async def test_cancel_and_timeout_are_stable(self) -> None:
         alignment = make_alignment([[make_candidate(1, 1, 0, 1000)]])
@@ -167,6 +190,38 @@ class DurationOptimizerTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(MediaError, "timed out") as context:
                 await DurationOptimizerService().optimize(DurationOptimizationParams(projectId=PROJECT_ID, sourcePlan=plan, alignment=alignment), asyncio.Event())
         self.assertEqual(context.exception.code, "DURATION_OPTIMIZATION_TIMEOUT")
+
+    async def test_inner_dp_checks_cancellation_and_deadline(self) -> None:
+        alignment = make_alignment([
+            [make_candidate(1, 1, 0, 1000), make_candidate(1, 2, 0, 2000), make_candidate(1, 3, 0, 3000)],
+            [make_candidate(2, 1, 1000, 2000), make_candidate(2, 2, 1000, 3000), make_candidate(2, 3, 1000, 4000)],
+            [make_candidate(3, 1, 2000, 3000), make_candidate(3, 2, 2000, 4000), make_candidate(3, 3, 2000, 5000)],
+        ])
+        plan = make_plan(alignment, 3000)
+        with patch.object(duration_optimizer_module, "DP_BUDGET_CHECK_INTERVAL", 1):
+            ticks = 0
+
+            def advancing_clock() -> float:
+                nonlocal ticks
+                ticks += 1
+                return 0.0 if ticks <= 6 else 2.0
+
+            with self.assertRaises(MediaError) as context:
+                await DurationOptimizerService(clock=advancing_clock).optimize(DurationOptimizationParams(projectId=PROJECT_ID, sourcePlan=plan, alignment=alignment, timeoutMs=1000), asyncio.Event())
+            self.assertEqual(context.exception.code, "DURATION_OPTIMIZATION_TIMEOUT")
+
+            class AutoCancelEvent(asyncio.Event):
+                checks = 0
+
+                def is_set(self) -> bool:
+                    self.checks += 1
+                    if self.checks >= 7 and not super().is_set():
+                        super().set()
+                    return super().is_set()
+
+            with self.assertRaises(MediaError) as context:
+                await DurationOptimizerService().optimize(DurationOptimizationParams(projectId=PROJECT_ID, sourcePlan=plan, alignment=alignment), AutoCancelEvent())
+            self.assertEqual(context.exception.code, "DURATION_OPTIMIZATION_CANCELLED")
 
 
 if __name__ == "__main__":

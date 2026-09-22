@@ -8,12 +8,20 @@ The request carries the C02 `sourcePlan` and the same-project B10 `alignment`
 result. B10 candidates are therefore explicit, bounded, complete-sentence
 inputs; C03 never searches, rewrites, trims, concatenates, or calls a model.
 
+Before optimization, every B10 slot is audited for duplicate sentence IDs and
+each C02 matched segment is compared field-by-field with its same-slot B10
+candidate, including exact text, source identity, cache key, sentence index,
+timecode, preview URI, rank and duration. Stale or tampered C02 evidence is
+rejected as a source error.
+
 The optimizer uses `bounded-whole-sentence-knapsack-v1`. It considers each
 source-plan segment in stable order, keeps at most one candidate per segment,
 and may keep, replace, add, or remove a complete sentence. Candidate duration
 is always `endMs - startMs`, and ties are resolved by: within the target
 tolerance, absolute target distance, number of changes, candidate rank sum,
 then stable candidate order. The frontier is bounded at 20,000 states.
+The DP checks cancellation and the monotonic deadline at fixed inner-loop
+intervals and yields at each check.
 
 The response is `duration-optimization-v1`. It includes the selected segments
 and a change ledger whose `before`/`after` records retain sentence ID, exact
