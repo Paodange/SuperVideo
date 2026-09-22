@@ -314,6 +314,10 @@ def validate_request(value: Any) -> RpcRequest:
         SubtitlePlanParams.model_validate(request.params)
     elif request.method == "media.preview.render":
         PreviewRenderParams.model_validate(request.params)
+    elif request.method == "media.preview.quality_check":
+        from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
+
+        PreviewQualityCheckParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -386,7 +390,8 @@ def health_result() -> dict[str, object]:
             "plan.optimize_duration",
             "media.aroll.cut_join",
             "media.subtitle.plan",
-            "media.preview.render",
+    "media.preview.render",
+    "media.preview.quality_check",
             "job.smoke.start",
             "job.get",
             "job.list",

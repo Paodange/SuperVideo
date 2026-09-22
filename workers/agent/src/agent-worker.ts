@@ -26,6 +26,7 @@ import {
   isArollCutJoinResult,
   isSubtitlePlanResult,
   isPreviewRenderResult,
+  isPreviewQualityCheckResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -169,6 +170,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-aroll-cut-join":
     case "media-subtitle-plan":
     case "media-preview-render":
+    case "media-preview-quality-check":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -236,6 +238,8 @@ async function handleProjectOperation(
                   ? isSubtitlePlanResult(result)
                 : operation === "media-preview-render"
                   ? isPreviewRenderResult(result)
+                : operation === "media-preview-quality-check"
+                  ? isPreviewQualityCheckResult(result)
                 : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
@@ -355,6 +359,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-aroll-cut-join") return CORE_RPC_METHODS.mediaArollCutJoin;
   if (operation === "media-subtitle-plan") return CORE_RPC_METHODS.mediaSubtitlePlan;
   if (operation === "media-preview-render") return CORE_RPC_METHODS.mediaPreviewRender;
+  if (operation === "media-preview-quality-check") return CORE_RPC_METHODS.mediaPreviewQualityCheck;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 
@@ -417,7 +422,30 @@ function isProjectOperationErrorCode(value: string): value is ProjectOperationEr
     || value === "SENTENCE_QA_RESULT_INVALID"
     || value === "SENTENCE_QA_INDEX_INVALID"
     || value === "SENTENCE_QA_STORAGE_INVALID"
-    || value === "SENTENCE_QA_OUTPUT_INVALID";
+    || value === "SENTENCE_QA_OUTPUT_INVALID"
+    || value === "SUBTITLE_INPUT_INVALID"
+    || value === "SUBTITLE_TIMELINE_INVALID"
+    || value === "SUBTITLE_SOURCE_INVALID"
+    || value === "SUBTITLE_TIMECODE_INVALID"
+    || value === "SUBTITLE_OVERLAP"
+    || value === "SUBTITLE_TEXT_INVALID"
+    || value === "SUBTITLE_LINE_COUNT_INVALID"
+    || value === "SUBTITLE_LINE_WIDTH_INVALID"
+    || value === "SUBTITLE_OUTPUT_INVALID"
+    || value === "SUBTITLE_TIMEOUT"
+    || value === "SUBTITLE_CANCELLED"
+    || value === "PREVIEW_RENDER_INPUT_INVALID"
+    || value === "PREVIEW_RENDER_SOURCE_INVALID"
+    || value === "PREVIEW_RENDER_SUBTITLE_INVALID"
+    || value === "PREVIEW_RENDER_OUTPUT_INVALID"
+    || value === "PREVIEW_RENDER_TOOL_UNAVAILABLE"
+    || value === "PREVIEW_RENDER_TOOL_TIMEOUT"
+    || value === "PREVIEW_RENDER_TIMEOUT"
+    || value === "PREVIEW_RENDER_CANCELLED"
+    || value === "PREVIEW_QUALITY_INPUT_INVALID"
+    || value === "PREVIEW_QUALITY_OUTPUT_INVALID"
+    || value === "PREVIEW_QUALITY_TIMEOUT"
+    || value === "PREVIEW_QUALITY_CANCELLED";
 }
 
 async function shutdown(): Promise<void> {

@@ -118,7 +118,7 @@ class RpcServer:
 
     async def dispatch(self, request: RpcRequest) -> None:
         self.logger.emit("core-request-started", request_id=request.id, details={"method": request.method})
-        if request.method in {"core.smoke.countdown", "media.probe", "media.proxy", "media.transcribe", "media.vad", "media.sentences", "media.sentences.index", "media.sentences.retrieve", "media.script.align", "plan.create_remix", "media.aroll.cut_join", "media.subtitle.plan", "media.preview.render"}:
+        if request.method in {"core.smoke.countdown", "media.probe", "media.proxy", "media.transcribe", "media.vad", "media.sentences", "media.sentences.index", "media.sentences.retrieve", "media.script.align", "plan.create_remix", "media.aroll.cut_join", "media.subtitle.plan", "media.preview.render", "media.preview.quality_check"}:
             if self.active_request_id == request.id:
                 await self.send_error(request.id, "DUPLICATE_REQUEST_ID")
                 return

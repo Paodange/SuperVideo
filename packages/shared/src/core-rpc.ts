@@ -43,6 +43,7 @@ export const CORE_RPC_METHODS = {
   mediaArollCutJoin: "media.aroll.cut_join",
   mediaSubtitlePlan: "media.subtitle.plan",
   mediaPreviewRender: "media.preview.render",
+  mediaPreviewQualityCheck: "media.preview.quality_check",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -78,6 +79,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaArollCutJoin
   | typeof CORE_RPC_METHODS.mediaSubtitlePlan
   | typeof CORE_RPC_METHODS.mediaPreviewRender
+  | typeof CORE_RPC_METHODS.mediaPreviewQualityCheck
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -237,6 +239,10 @@ export const CORE_RPC_ERROR_CODES = {
   previewRenderToolTimeout: "PREVIEW_RENDER_TOOL_TIMEOUT",
   previewRenderTimeout: "PREVIEW_RENDER_TIMEOUT",
   previewRenderCancelled: "PREVIEW_RENDER_CANCELLED",
+  previewQualityInputInvalid: "PREVIEW_QUALITY_INPUT_INVALID",
+  previewQualityOutputInvalid: "PREVIEW_QUALITY_OUTPUT_INVALID",
+  previewQualityTimeout: "PREVIEW_QUALITY_TIMEOUT",
+  previewQualityCancelled: "PREVIEW_QUALITY_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -392,6 +398,10 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   PREVIEW_RENDER_TOOL_TIMEOUT: -32390,
   PREVIEW_RENDER_TIMEOUT: -32391,
   PREVIEW_RENDER_CANCELLED: -32392,
+  PREVIEW_QUALITY_INPUT_INVALID: -32393,
+  PREVIEW_QUALITY_OUTPUT_INVALID: -32394,
+  PREVIEW_QUALITY_TIMEOUT: -32395,
+  PREVIEW_QUALITY_CANCELLED: -32396,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -545,6 +555,10 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   PREVIEW_RENDER_TOOL_TIMEOUT: "The preview media tool timed out.",
   PREVIEW_RENDER_TIMEOUT: "The preview render operation timed out.",
   PREVIEW_RENDER_CANCELLED: "The preview render operation was cancelled.",
+  PREVIEW_QUALITY_INPUT_INVALID: "The preview quality-check input is invalid.",
+  PREVIEW_QUALITY_OUTPUT_INVALID: "The preview quality-check result was invalid.",
+  PREVIEW_QUALITY_TIMEOUT: "The preview quality check timed out.",
+  PREVIEW_QUALITY_CANCELLED: "The preview quality check was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -681,6 +695,9 @@ export type PreviewRenderGap = Readonly<{ code: "subtitle-plan-gap" | "subtitle-
 export type PreviewRenderOutput = Readonly<{ kind: "video"; relativePath: string; playbackUri: string; sizeBytes: number; durationMs: number; outputFingerprint: string }>;
 export type PreviewRenderLog = Readonly<{ status: "not-run" | "cache-hit" | "completed"; stdout: string; stderr: string }>;
 export type PreviewRenderResult = Readonly<{ schemaVersion: 1; planVersion: "preview-render-plan-v1"; projectId: string; timelineId: string; arollPlanDigest: string; subtitlePlanDigest: string; executionMode: "plan" | "ffmpeg"; executionStatus: "not-run" | "completed"; status: "ready" | "gaps"; renderPolicy: "ffmpeg-low-bitrate-subtitle-overlay-v1"; selectedDurationMs: number; timelineDurationMs: number; cueCount: number; planDigest: string; sourceBindings: readonly PreviewSourceBinding[]; cues: readonly PreviewRenderCue[]; gaps: readonly PreviewRenderGap[]; log: PreviewRenderLog; output: PreviewRenderOutput | null }>;
+export type PreviewQualityCheckParams = Readonly<{ projectId: string; previewResult: PreviewRenderResult; timeoutMs?: number }>;
+export type PreviewQualityIssue = Readonly<{ checkId: string; code: "QA_PLAN_BINDING_INVALID" | "QA_PLAN_ORDER_INVALID" | "QA_PLAN_RANGE_INVALID" | "QA_PLAN_GAP" | "QA_EXECUTION_NOT_RUN" | "QA_OUTPUT_MISSING" | "QA_OUTPUT_PATH_INVALID" | "QA_OUTPUT_FILE_INVALID" | "QA_OUTPUT_SIZE_MISMATCH" | "QA_OUTPUT_FINGERPRINT_MISMATCH" | "QA_OUTPUT_MANIFEST_INVALID" | "QA_OUTPUT_DURATION_MISMATCH" | "QA_OUTPUT_CONTAINER_UNVERIFIED" | "QA_OUTPUT_CONTAINER_INVALID"; severity: "pass" | "warning" | "fail"; status: "verified" | "not-run"; message: string }>;
+export type PreviewQualityCheckResult = Readonly<{ schemaVersion: 1; qaVersion: "preview-quality-v1"; projectId: string; planDigest: string; phase: "plan" | "executed"; status: "pass" | "warning" | "fail"; readyForExport: boolean; executionVerified: boolean; issueCount: number; issues: readonly PreviewQualityIssue[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -837,6 +854,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaArollCutJoin) return isArollCutJoinParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSubtitlePlan) return isSubtitlePlanParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaPreviewRender) return isPreviewRenderParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaPreviewQualityCheck) return isPreviewQualityCheckParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -1166,6 +1184,18 @@ export function isPreviewRenderResult(value: unknown): value is PreviewRenderRes
   return isBoundedCoreJsonValue(value, 256 * 1024);
 }
 
+export function isPreviewQualityCheckResult(value: unknown): value is PreviewQualityCheckResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "planDigest", "phase", "status", "readyForExport", "executionVerified", "issueCount", "issues"])) return false;
+  if (value.schemaVersion !== 1 || value.qaVersion !== "preview-quality-v1" || !isUuid(value.projectId) || !isSentenceCacheKey(value.planDigest)) return false;
+  if ((value.phase !== "plan" && value.phase !== "executed") || (value.status !== "pass" && value.status !== "warning" && value.status !== "fail") || typeof value.readyForExport !== "boolean" || typeof value.executionVerified !== "boolean") return false;
+  if (!isSafeInteger(value.issueCount, 1, 64) || !Array.isArray(value.issues) || value.issues.length !== value.issueCount || !value.issues.every(isPreviewQualityIssue)) return false;
+  if (value.phase === "plan" && value.executionVerified) return false;
+  const severities = new Set((value.issues as readonly PreviewQualityIssue[]).map((issue) => issue.severity));
+  const expected = severities.has("fail") ? "fail" : severities.has("warning") ? "warning" : "pass";
+  if (value.status !== expected || (!value.executionVerified && value.readyForExport) || (severities.has("fail") && value.readyForExport)) return false;
+  return isBoundedCoreJsonValue(value, 64 * 1024);
+}
+
 export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
   return isPlainRecord(value) && hasOnlyKeys(value, ["schemaVersion", "qaVersion", "projectId", "assetId", "sentenceCacheKey", "selectedIndex", "items", "markers"])
     && value.schemaVersion === 1 && value.qaVersion === "sentence-qa-v1" && isUuid(value.projectId) && isUuid(value.assetId)
@@ -1478,6 +1508,13 @@ export function isPreviewRenderParams(value: unknown): value is PreviewRenderPar
   return isBoundedCoreJsonValue(value, 512 * 1024);
 }
 
+export function isPreviewQualityCheckParams(value: unknown): value is PreviewQualityCheckParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "previewResult", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isPreviewRenderResult(value.previewResult) || (value.previewResult as PreviewRenderResult).projectId !== value.projectId) return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1703,6 +1740,15 @@ function isPreviewRenderOutput(value: unknown): value is PreviewRenderOutput {
     && value.kind === "video" && isSafeString(value.relativePath, 512) && /^previews\/preview-render-v1\/[0-9a-f]{64}\.mp4$/.test(value.relativePath)
     && isSafeString(value.playbackUri, 256) && /^supervideo:\/\/preview\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{64}$/.test(value.playbackUri)
     && isSafeInteger(value.sizeBytes, 1, 512 * 1024 * 1024) && isSafeInteger(value.durationMs, 1, 86_400_000) && isSentenceCacheKey(value.outputFingerprint);
+}
+
+function isPreviewQualityIssue(value: unknown): value is PreviewQualityIssue {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["checkId", "code", "severity", "status", "message"])
+    && isSafeString(value.checkId, 64)
+    && ["QA_PLAN_BINDING_INVALID", "QA_PLAN_ORDER_INVALID", "QA_PLAN_RANGE_INVALID", "QA_PLAN_GAP", "QA_EXECUTION_NOT_RUN", "QA_OUTPUT_MISSING", "QA_OUTPUT_PATH_INVALID", "QA_OUTPUT_FILE_INVALID", "QA_OUTPUT_SIZE_MISMATCH", "QA_OUTPUT_FINGERPRINT_MISMATCH", "QA_OUTPUT_MANIFEST_INVALID", "QA_OUTPUT_DURATION_MISMATCH", "QA_OUTPUT_CONTAINER_UNVERIFIED", "QA_OUTPUT_CONTAINER_INVALID"].includes(value.code as string)
+    && ["pass", "warning", "fail"].includes(value.severity as string)
+    && (value.status === "verified" || value.status === "not-run")
+    && isSafeString(value.message, 256);
 }
 
 function isSubtitleSentenceSource(value: unknown): value is SubtitleSentenceSource {

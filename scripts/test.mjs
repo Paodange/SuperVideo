@@ -35,6 +35,7 @@ run(
     path.join(root, "tests", "c04-aroll-cut-join.test.mjs"),
     path.join(root, "tests", "c05-subtitle-plan.test.mjs"),
     path.join(root, "tests", "c06-preview-render.test.mjs"),
+    path.join(root, "tests", "c07-quality-check.test.mjs"),
   ],
   "automated tests",
 );

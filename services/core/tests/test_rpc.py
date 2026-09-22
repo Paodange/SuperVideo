@@ -171,6 +171,19 @@ class RpcModelTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_request(invalid)
 
+        preview = json.loads((ROOT / "tests" / "fixtures" / "c06_preview_render_v1.json").read_text(encoding="utf-8"))
+        quality = {
+            "jsonrpc": "2.0",
+            "id": "preview-quality-1",
+            "method": "media.preview.quality_check",
+            "params": {"projectId": preview["projectId"], "previewResult": preview},
+        }
+        self.assertEqual(validate_request(quality).method, "media.preview.quality_check")
+        self.assertIn("media.preview.quality_check", health_result()["capabilities"])
+        self.assertEqual(error_payload("PREVIEW_QUALITY_CANCELLED")["code"], -32396)
+        with self.assertRaises(ValidationError):
+            validate_request({**quality, "params": {**quality["params"], "previewResult": {**preview, "projectId": "11111111-1111-4111-8111-111111111111"}}})
+
 
 class RpcServerTests(unittest.TestCase):
     def setUp(self) -> None:

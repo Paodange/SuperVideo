@@ -99,6 +99,10 @@ MediaErrorCode = Literal[
     "PREVIEW_RENDER_TOOL_TIMEOUT",
     "PREVIEW_RENDER_TIMEOUT",
     "PREVIEW_RENDER_CANCELLED",
+    "PREVIEW_QUALITY_INPUT_INVALID",
+    "PREVIEW_QUALITY_OUTPUT_INVALID",
+    "PREVIEW_QUALITY_TIMEOUT",
+    "PREVIEW_QUALITY_CANCELLED",
 ]
 
 
@@ -201,6 +205,10 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "PREVIEW_RENDER_TOOL_TIMEOUT": MediaErrorDefinition("The preview media tool timed out."),
     "PREVIEW_RENDER_TIMEOUT": MediaErrorDefinition("The preview render operation timed out."),
     "PREVIEW_RENDER_CANCELLED": MediaErrorDefinition("The preview render operation was cancelled."),
+    "PREVIEW_QUALITY_INPUT_INVALID": MediaErrorDefinition("The preview quality-check input is invalid."),
+    "PREVIEW_QUALITY_OUTPUT_INVALID": MediaErrorDefinition("The preview quality-check result was invalid."),
+    "PREVIEW_QUALITY_TIMEOUT": MediaErrorDefinition("The preview quality check timed out."),
+    "PREVIEW_QUALITY_CANCELLED": MediaErrorDefinition("The preview quality check was cancelled."),
 }
 
 
