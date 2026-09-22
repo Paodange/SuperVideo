@@ -278,6 +278,9 @@ def fallback_input_digest(params: GenerationFallbackParams) -> str:
         "timelineId": params.timeline_id,
         "assemblyId": params.assembly_id,
         "storyboardDigest": params.storyboard.source_plan_digest,
+        "storyboard": storyboard_digest_projection(params.storyboard),
+        "d04Plan": recruitment_plan_digest_projection(params.d04_plan),
+        "d03Plan": remotion_plan_digest_projection(params.d03_plan),
         "tts": (
             {"cacheKey": params.tts.cache_key, "durationMs": params.tts.duration_ms, "outputFingerprint": params.tts.output.output_fingerprint}
             if params.tts is not None
@@ -320,14 +323,88 @@ def fallback_result_digest(result: GenerationFallbackResult) -> str:
 
 
 def storyboard_digest_projection(value: ScriptStoryboardResult) -> dict[str, Any]:
-    projection = value.model_dump(by_alias=True, exclude_none=True)
-    projection["durationPlanSourceDigest"] = value.duration_plan_source_digest
-    return projection
+    def segment_projection(segment: Any) -> dict[str, Any]:
+        return {
+            "segmentId": segment.segment_id,
+            "sourceSegmentId": segment.source_segment_id,
+            "order": segment.order,
+            "role": segment.role,
+            "status": segment.status,
+            "sentenceId": segment.sentence_id,
+            "text": segment.text,
+            "source": segment.source.model_dump(by_alias=True, exclude_none=True) if segment.source is not None else None,
+            "durationMs": segment.duration_ms,
+            "provenanceIds": segment.provenance_ids,
+            "factIds": segment.fact_ids,
+            "confirmation": segment.confirmation,
+        }
+
+    return {
+        "schemaVersion": value.schema_version,
+        "contractVersion": value.contract_version,
+        "plannerVersion": value.planner_version,
+        "projectId": value.project_id,
+        "sourcePlanDigest": value.source_plan_digest,
+        "durationPlanSourceDigest": value.duration_plan_source_digest,
+        "targetDurationMs": value.target_duration_ms,
+        "toleranceLowerMs": value.tolerance_lower_ms,
+        "toleranceUpperMs": value.tolerance_upper_ms,
+        "selectedDurationMs": value.selected_duration_ms,
+        "durationStatus": value.duration_status,
+        "durationPolicy": value.duration_policy,
+        "status": value.status,
+        "brief": {"theme": value.brief.theme, "audience": value.brief.audience, "objective": value.brief.objective, "language": value.brief.language},
+        "forbiddenInferences": value.forbidden_inferences,
+        "provenance": [
+            {**{"id": item.id, "kind": item.kind, "label": item.label}, **({"sourceSegmentId": item.source_segment_id} if item.source_segment_id is not None else {}), "verified": item.verified}
+            for item in value.provenance
+        ],
+        "facts": [{"factId": item.fact_id, "status": item.status, "provenanceIds": item.provenance_ids, "segmentIds": item.segment_ids} for item in value.facts],
+        "script": {"hook": segment_projection(value.script.hook), "body": [segment_projection(item) for item in value.script.body], "cta": segment_projection(value.script.cta)},
+        "shots": [
+            {"shotId": item.shot_id, "order": item.order, "segmentId": item.segment_id, "durationMs": item.duration_ms, "visualSourcePriority": item.visual_source_priority, "fallbackReason": item.fallback_reason, "visualIntent": item.visual_intent}
+            for item in value.shots
+        ],
+    }
+
+
+def recruitment_plan_digest_projection(value: RecruitmentTemplateRenderPlan) -> dict[str, Any]:
+    return {
+        "schemaVersion": value.schema_version,
+        "contractVersion": value.contract_version,
+        "runtimeMode": value.runtime_mode,
+        "projectId": value.project_id,
+        "timelineId": value.timeline_id,
+        "templateId": value.template_id,
+        "templateVersion": value.template_version,
+        "canvas": value.canvas,
+        "safeArea": value.safe_area,
+        "components": [item.model_dump(by_alias=True, exclude_none=True) for item in value.components],
+        "sourceIds": value.source_ids,
+        "provenanceIds": value.provenance_ids,
+        "overlapRule": value.overlap_rule,
+    }
+
+
+def remotion_plan_digest_projection(value: VideoAssemblyRemotionPlan) -> dict[str, Any]:
+    return {
+        "contractVersion": value.contract_version,
+        "renderVersion": value.render_version,
+        "runtimeMode": value.runtime_mode,
+        "templateId": value.template_id,
+        "templateVersion": value.template_version,
+        "bundleVersion": value.bundle_version,
+        "compositionId": value.composition_id,
+    }
 
 
 def video_assembly_digest_projection(value: VideoAssemblyParams) -> dict[str, Any]:
     projection = value.model_dump(by_alias=True, exclude_none=True)
     projection["storyboard"] = storyboard_digest_projection(value.storyboard)
+    projection["userMaterials"] = [
+        {"sourceId": item.source_id, "shotId": item.shot_id, "uri": item.uri, "mediaType": item.media_type, **({"durationMs": item.duration_ms} if item.duration_ms is not None else {}), "fingerprint": item.fingerprint, "provenanceId": item.provenance_id}
+        for item in value.user_materials
+    ]
     return projection
 
 

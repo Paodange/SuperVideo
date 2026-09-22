@@ -70,7 +70,9 @@ diagnostic: FALLBACK_TTS_AUDIO_UNAVAILABLE / tts
 
 校验器强制 `status` 与结果事实一致：存在 `videoAssemblyRequest` 或 `d07Eligible=true` 时只能是 `ready`；没有 D07 request 时，只要 TTS 是 fallback 或任一镜头为 `unresolved` 就只能是 `blocked`，否则只能是 `partial`。
 
-`inputDigest` 和 `resultDigest` 都使用与 D07 相同的 canonical JSON/SHA-256 规则。`resultDigest` 的完整投影绑定版本、项目/时间线/装配 ID、`status`、`d07Eligible`、`inputDigest`、原始 `storyboardDigest`、TTS 解析、逐镜头解析、`d07Diagnostic`、完整 `resolvedStoryboard` 和完整 `videoAssemblyRequest`；投影明确不包含 `resultDigest` 本身，避免循环。Python 会保留 D05 必需的 `durationPlanSourceDigest: null`，并省略其他未提供的可选字段，以便与 TS 投影逐字节一致。相同输入在 TS/Python 两端产生固定 digest（当前成功夹具：`7703dbe9eb3088b87a2e78f64ae7e20b6c92823b207078740cd2df7bf3f5ecd1`）。digest 不包含 prompt、密钥、用户路径或隐私 metadata。
+`inputDigest` 和 `resultDigest` 都使用与 D07 相同的 canonical JSON/SHA-256 规则。`inputDigest` 不只绑定 `sourcePlanDigest`：它还绑定 D05 storyboard 的受控完整 projection（包括状态、hook/body/CTA segments、显式 gap/null 字段、shots 和 fallback 状态），以及完整受控的 D04 layout plan 和 D03 Remotion plan identity。`resultDigest` 的完整投影绑定版本、项目/时间线/装配 ID、`status`、`d07Eligible`、`inputDigest`、原始 `storyboardDigest`、TTS 解析、逐镜头解析、`d07Diagnostic`、完整 `resolvedStoryboard` 和完整 `videoAssemblyRequest`；投影明确不包含 `resultDigest` 本身，避免循环。
+
+跨运行时 projection 保留 D05 契约要求的 null（例如 `durationPlanSourceDigest`、gap segment 的 `sentenceId`/`text`/`source`），只省略 TS 真正可选且为 `undefined` 的字段（例如 image user material 的 `durationMs`）。当前成功夹具的 `inputDigest/resultDigest` 为 `7b6b8a11faaad3503f4be248a8613f1283078d398d8df661781313dbe96345c4` / `528e2d0e7d284ea244ca76a0ef51f83aded8e1e7147c9596c18fdd4fa225dfc0`；同一 source-gap 夹具为 `7373c010c958c5c6d809eb875c4e0d177c8acb3947191199257b578b63107457` / `52e3a2da7d3e104b6dd920b602b1fa55e88ab2155c94cd75333fee93ffcb67d2`。digest 不包含 prompt、密钥、用户路径或隐私 metadata。
 
 ## 稳定错误
 

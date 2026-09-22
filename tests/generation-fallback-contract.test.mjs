@@ -55,8 +55,8 @@ test("D08 success resolves D05/D06 inputs and hands a valid request to strict D0
   assert.equal(isVideoAssemblyRequest(first.videoAssemblyRequest), true);
   assert.equal(buildVideoAssembly(first.videoAssemblyRequest).status, "assembled");
   assert.deepEqual(first, second);
-  assert.equal(first.resultDigest, "7703dbe9eb3088b87a2e78f64ae7e20b6c92823b207078740cd2df7bf3f5ecd1");
-  assert.equal(first.inputDigest, "ce97428802d7e6030bef28c688b4a8a7647be6b360c0c285c49dac5f8cca307c");
+  assert.equal(first.resultDigest, "528e2d0e7d284ea244ca76a0ef51f83aded8e1e7147c9596c18fdd4fa225dfc0");
+  assert.equal(first.inputDigest, "7b6b8a11faaad3503f4be248a8613f1283078d398d8df661781313dbe96345c4");
 });
 
 test("D08 isolates a failed image and records the next deterministic visual fallback", () => {
@@ -127,6 +127,17 @@ test("D08 preserves source gaps and never invents missing sentence/audio provena
   assert.equal(result.shots[1].fallbackReason, "source-gap");
   assert.equal(result.shots[1].diagnostic.code, "FALLBACK_SOURCE_GAP");
   assert.equal(result.d07Eligible, false);
+  assert.equal(result.inputDigest, "7373c010c958c5c6d809eb875c4e0d177c8acb3947191199257b578b63107457");
+  assert.equal(result.resultDigest, "52e3a2da7d3e104b6dd920b602b1fa55e88ab2155c94cd75333fee93ffcb67d2");
+});
+
+test("D08 input digest binds the actual storyboard beyond sourcePlanDigest", () => {
+  const original = resolveGenerationFallback(makeRequest());
+  const changedInput = makeRequest();
+  changedInput.storyboard.brief.objective = "changed objective with the same source plan digest";
+  const changed = resolveGenerationFallback(changedInput);
+  assert.equal(changed.storyboard.sourcePlanDigest, original.storyboard.sourcePlanDigest);
+  assert.notEqual(changed.inputDigest, original.inputDigest);
 });
 
 test("D08 keeps user-material priority when D05 planned it and accepts the resulting D07 request", () => {

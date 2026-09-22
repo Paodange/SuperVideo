@@ -421,11 +421,76 @@ function validateMaterials(value: unknown, shotIds: ReadonlySet<string>): VideoA
 
 function validateRemotionPlan(value: unknown, path: string): asserts value is GenerationFallbackRemotionPlan { const item = record(value, "GENERATION_FALLBACK_INPUT_INVALID", "input", path); exactKeys(item, ["contractVersion", "renderVersion", "runtimeMode", "templateId", "templateVersion", "bundleVersion", "compositionId"], "GENERATION_FALLBACK_INPUT_INVALID", "input", path); if (item.contractVersion !== REMOTION_CONTRACT_VERSION || item.renderVersion !== REMOTION_RENDER_VERSION || item.runtimeMode !== REMOTION_RUNTIME_MODE || item.templateId !== REMOTION_TEMPLATE_ID || item.templateVersion !== REMOTION_TEMPLATE_VERSION || item.bundleVersion !== REMOTION_BUNDLE_VERSION || item.compositionId !== "timeline-preview-v1") fail("GENERATION_FALLBACK_INPUT_INVALID", "input", path, "does not match the fixed D03 plan"); }
 
-function inputDigest(input: GenerationFallbackRequest): unknown { return { schemaVersion: input.schemaVersion, contractVersion: input.contractVersion, policyVersion: input.policyVersion, projectId: input.projectId, timelineId: input.timelineId, assemblyId: input.assemblyId, storyboardDigest: input.storyboard.sourcePlanDigest, tts: input.tts ? { cacheKey: input.tts.cacheKey, durationMs: input.tts.durationMs, outputFingerprint: input.tts.output.outputFingerprint } : { failure: input.ttsFailure ? { component: input.ttsFailure.component, stage: input.ttsFailure.stage, code: input.ttsFailure.code, retryable: input.ttsFailure.retryable } : null }, imageResults: [...input.imageResults].sort((a, b) => a.shotId.localeCompare(b.shotId)).map((item) => ({ shotId: item.shotId, cacheKey: item.cacheKey, outputFingerprint: item.output.outputFingerprint })), imageFailures: [...input.imageFailures].sort((a, b) => a.shotId!.localeCompare(b.shotId!)).map(failureDigest), animationFailures: [...input.animationFailures].sort((a, b) => a.shotId!.localeCompare(b.shotId!)).map(failureDigest), textCardUnavailableShotIds: [...input.textCardUnavailableShotIds].sort(), userMaterials: [...input.userMaterials].sort((a, b) => a.shotId.localeCompare(b.shotId)).map((item) => ({ shotId: item.shotId, sourceId: item.sourceId, mediaType: item.mediaType, durationMs: item.durationMs ?? null, fingerprint: item.fingerprint })), }; }
+function inputDigest(input: GenerationFallbackRequest): unknown {
+  return {
+    schemaVersion: input.schemaVersion,
+    contractVersion: input.contractVersion,
+    policyVersion: input.policyVersion,
+    projectId: input.projectId,
+    timelineId: input.timelineId,
+    assemblyId: input.assemblyId,
+    storyboardDigest: input.storyboard.sourcePlanDigest,
+    storyboard: storyboardDigestProjection(input.storyboard),
+    d04Plan: recruitmentPlanDigestProjection(input.d04Plan),
+    d03Plan: remotionPlanDigestProjection(input.d03Plan),
+    tts: input.tts ? { cacheKey: input.tts.cacheKey, durationMs: input.tts.durationMs, outputFingerprint: input.tts.output.outputFingerprint } : { failure: input.ttsFailure ? { component: input.ttsFailure.component, stage: input.ttsFailure.stage, code: input.ttsFailure.code, retryable: input.ttsFailure.retryable } : null },
+    imageResults: [...input.imageResults].sort((a, b) => a.shotId.localeCompare(b.shotId)).map((item) => ({ shotId: item.shotId, cacheKey: item.cacheKey, outputFingerprint: item.output.outputFingerprint })),
+    imageFailures: [...input.imageFailures].sort((a, b) => a.shotId!.localeCompare(b.shotId!)).map(failureDigest),
+    animationFailures: [...input.animationFailures].sort((a, b) => a.shotId!.localeCompare(b.shotId!)).map(failureDigest),
+    textCardUnavailableShotIds: [...input.textCardUnavailableShotIds].sort(),
+    userMaterials: [...input.userMaterials].sort((a, b) => a.shotId.localeCompare(b.shotId)).map((item) => ({ shotId: item.shotId, sourceId: item.sourceId, mediaType: item.mediaType, durationMs: item.durationMs ?? null, fingerprint: item.fingerprint })),
+  };
+}
+
+function storyboardDigestProjection(value: ScriptStoryboardResult): unknown {
+  return {
+    schemaVersion: value.schemaVersion,
+    contractVersion: value.contractVersion,
+    plannerVersion: value.plannerVersion,
+    projectId: value.projectId,
+    sourcePlanDigest: value.sourcePlanDigest,
+    durationPlanSourceDigest: value.durationPlanSourceDigest,
+    targetDurationMs: value.targetDurationMs,
+    toleranceLowerMs: value.toleranceLowerMs,
+    toleranceUpperMs: value.toleranceUpperMs,
+    selectedDurationMs: value.selectedDurationMs,
+    durationStatus: value.durationStatus,
+    durationPolicy: value.durationPolicy,
+    status: value.status,
+    brief: { theme: value.brief.theme, audience: value.brief.audience, objective: value.brief.objective, language: value.brief.language },
+    forbiddenInferences: [...value.forbiddenInferences],
+    provenance: value.provenance.map((item) => item.sourceSegmentId === undefined ? { id: item.id, kind: item.kind, label: item.label, verified: item.verified } : { id: item.id, kind: item.kind, label: item.label, sourceSegmentId: item.sourceSegmentId, verified: item.verified }),
+    facts: value.facts.map((item) => ({ factId: item.factId, status: item.status, provenanceIds: [...item.provenanceIds], segmentIds: [...item.segmentIds] })),
+    script: { hook: storyboardSegmentDigestProjection(value.script.hook), body: value.script.body.map(storyboardSegmentDigestProjection), cta: storyboardSegmentDigestProjection(value.script.cta) },
+    shots: value.shots.map((item) => ({ shotId: item.shotId, order: item.order, segmentId: item.segmentId, durationMs: item.durationMs, visualSourcePriority: [...item.visualSourcePriority], fallbackReason: item.fallbackReason, visualIntent: item.visualIntent })),
+  };
+}
+
+function storyboardSegmentDigestProjection(value: ScriptStoryboardResult["script"]["hook"]): unknown {
+  return { segmentId: value.segmentId, sourceSegmentId: value.sourceSegmentId, order: value.order, role: value.role, status: value.status, sentenceId: value.sentenceId, text: value.text, source: value.source, durationMs: value.durationMs, provenanceIds: [...value.provenanceIds], factIds: [...value.factIds], confirmation: value.confirmation };
+}
+
+function recruitmentPlanDigestProjection(value: RecruitmentTemplateRenderPlan): unknown {
+  return { schemaVersion: value.schemaVersion, contractVersion: value.contractVersion, runtimeMode: value.runtimeMode, projectId: value.projectId, timelineId: value.timelineId, templateId: value.templateId, templateVersion: value.templateVersion, canvas: value.canvas, safeArea: value.safeArea, components: value.components, sourceIds: [...value.sourceIds], provenanceIds: [...value.provenanceIds], overlapRule: value.overlapRule };
+}
+
+function remotionPlanDigestProjection(value: GenerationFallbackRemotionPlan): unknown {
+  return { contractVersion: value.contractVersion, renderVersion: value.renderVersion, runtimeMode: value.runtimeMode, templateId: value.templateId, templateVersion: value.templateVersion, bundleVersion: value.bundleVersion, compositionId: value.compositionId };
+}
+
+function userMaterialDigestProjection(value: VideoAssemblyUserMaterial): unknown {
+  const result: Record<string, unknown> = { sourceId: value.sourceId, shotId: value.shotId, uri: value.uri, mediaType: value.mediaType, fingerprint: value.fingerprint, provenanceId: value.provenanceId };
+  if (value.durationMs !== undefined) result.durationMs = value.durationMs;
+  return result;
+}
+
+function videoAssemblyDigestProjection(value: VideoAssemblyRequest): unknown {
+  return { ...value, storyboard: storyboardDigestProjection(value.storyboard), ...(value.userMaterials === undefined ? {} : { userMaterials: value.userMaterials.map(userMaterialDigestProjection) }) };
+}
 function failureDigest(item: GenerationFallbackFailure): unknown { return { projectId: item.projectId, component: item.component, stage: item.stage, shotId: item.shotId, code: item.code, retryable: item.retryable }; }
 function ttsDigest(item: GenerationFallbackTts): unknown { return { status: item.status, chosenSource: item.chosenSource, fallbackReason: item.fallbackReason, d07Binding: item.d07Binding, failure: item.failure ? failureDigest(item.failure) : null, provenance: [...item.provenance], diagnostic: item.diagnostic }; }
 function shotDigest(item: GenerationFallbackShot): unknown { return { shotId: item.shotId, order: item.order, segmentId: item.segmentId, status: item.status, chosenSource: item.chosenSource, fallbackReason: item.fallbackReason, d05FallbackReason: item.d05FallbackReason, d07Binding: item.d07Binding, attempts: item.attempts.map((attempt) => ({ source: attempt.source, outcome: attempt.outcome, error: attempt.error, provenance: [...attempt.provenance] })), provenance: [...item.provenance], diagnostic: item.diagnostic }; }
-function fallbackResultDigest(result: GenerationFallbackResult): string { return sha256Hex(canonicalJson({ schemaVersion: result.schemaVersion, contractVersion: result.contractVersion, policyVersion: result.policyVersion, projectId: result.projectId, timelineId: result.timelineId, assemblyId: result.assemblyId, status: result.status, d07Eligible: result.d07Eligible, inputDigest: result.inputDigest, storyboardDigest: result.storyboard.sourcePlanDigest, tts: ttsDigest(result.tts), shots: result.shots.map(shotDigest), d07Diagnostic: result.d07Diagnostic, resolvedStoryboard: result.resolvedStoryboard, videoAssemblyRequest: result.videoAssemblyRequest })); }
+function fallbackResultDigest(result: GenerationFallbackResult): string { return sha256Hex(canonicalJson({ schemaVersion: result.schemaVersion, contractVersion: result.contractVersion, policyVersion: result.policyVersion, projectId: result.projectId, timelineId: result.timelineId, assemblyId: result.assemblyId, status: result.status, d07Eligible: result.d07Eligible, inputDigest: result.inputDigest, storyboardDigest: result.storyboard.sourcePlanDigest, tts: ttsDigest(result.tts), shots: result.shots.map(shotDigest), d07Diagnostic: result.d07Diagnostic, resolvedStoryboard: storyboardDigestProjection(result.resolvedStoryboard), videoAssemblyRequest: result.videoAssemblyRequest === null ? null : videoAssemblyDigestProjection(result.videoAssemblyRequest) })); }
 
 function findSegment(storyboard: ScriptStoryboardResult, segmentId: string) { const segment = getSegments(storyboard).find((item) => item.segmentId === segmentId); if (!segment) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.shots", "shot segment is missing"); return segment; }
 function getSegments(storyboard: ScriptStoryboardResult) { return [storyboard.script.hook, ...storyboard.script.body, storyboard.script.cta]; }

@@ -55,8 +55,8 @@ class GenerationFallbackTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(first.status, "ready")
         self.assertTrue(first.d07_eligible)
-        self.assertEqual(first.result_digest, "7703dbe9eb3088b87a2e78f64ae7e20b6c92823b207078740cd2df7bf3f5ecd1")
-        self.assertEqual(first.input_digest, "ce97428802d7e6030bef28c688b4a8a7647be6b360c0c285c49dac5f8cca307c")
+        self.assertEqual(first.result_digest, "528e2d0e7d284ea244ca76a0ef51f83aded8e1e7147c9596c18fdd4fa225dfc0")
+        self.assertEqual(first.input_digest, "7b6b8a11faaad3503f4be248a8613f1283078d398d8df661781313dbe96345c4")
         self.assertIsNotNone(first.video_assembly_request)
 
     def test_failed_image_is_isolated_and_falls_back_to_remotion(self) -> None:
@@ -124,6 +124,17 @@ class GenerationFallbackTests(unittest.TestCase):
         self.assertEqual(result.shots[1].status, "unresolved")
         self.assertEqual(result.shots[1].diagnostic.code, "FALLBACK_SOURCE_GAP")
         self.assertFalse(result.d07_eligible)
+        self.assertEqual(result.input_digest, "7373c010c958c5c6d809eb875c4e0d177c8acb3947191199257b578b63107457")
+        self.assertEqual(result.result_digest, "52e3a2da7d3e104b6dd920b602b1fa55e88ab2155c94cd75333fee93ffcb67d2")
+
+    def test_input_digest_binds_the_actual_storyboard_beyond_source_plan_digest(self) -> None:
+        original = GenerationFallbackService().resolve(request())
+        changed_input = request().model_dump(by_alias=True)
+        changed_input["storyboard"]["brief"]["objective"] = "changed objective with the same source plan digest"
+        changed = request(storyboard=changed_input["storyboard"])
+        changed_result = GenerationFallbackService().resolve(changed)
+        self.assertEqual(changed_result.storyboard.source_plan_digest, original.storyboard.source_plan_digest)
+        self.assertNotEqual(changed_result.input_digest, original.input_digest)
 
     def test_validation_rejects_cross_project_sensitive_stage_and_loop_data(self) -> None:
         base = request().model_dump(by_alias=True)
