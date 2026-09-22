@@ -19,6 +19,7 @@
     "project:smoke": "node scripts/project-smoke.mjs",
     "jobs:smoke": "node scripts/jobs-smoke.mjs",
     "tts:smoke": "node scripts/tts-smoke.mjs",
+    "image:smoke": "node scripts/image-smoke.mjs",
     "remotion:smoke": "node scripts/remotion-smoke.mjs",
     "recruitment-templates:smoke": "node scripts/recruitment-template-smoke.mjs",
     "script-storyboard:smoke": "node scripts/script-storyboard-smoke.mjs",

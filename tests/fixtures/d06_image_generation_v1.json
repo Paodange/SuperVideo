@@ -1,0 +1,28 @@
+{
+  "projectId": "11111111-1111-4111-8111-111111111111",
+  "idempotencyKey": "fixture-image-1",
+  "providerId": "fake",
+  "model": "fake-image-v1",
+  "shotId": "d05-shot-1",
+  "prompt": "A clean factory dormitory for a recruitment shot.",
+  "parameters": {
+    "width": 128,
+    "height": 128,
+    "steps": 8,
+    "seed": 7
+  },
+  "source": {
+    "kind": "d05-shot",
+    "id": "d05:shot:1"
+  },
+  "provenance": [
+    {
+      "kind": "script",
+      "id": "d05:script:shot-1"
+    },
+    {
+      "kind": "fact",
+      "id": "fact:verified-1"
+    }
+  ]
+}

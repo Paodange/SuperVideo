@@ -24,6 +24,8 @@ import {
   isJobReferenceParams,
   isJobSmokeStartParams,
   isJobTtsStartParams,
+  isImageJobStartParams,
+  isImageGenerationResult,
   isRemotionRenderParams,
   isRemotionRenderResult,
   isTtsResult,
@@ -136,6 +138,8 @@ import {
   type JobSmokeStartParams,
   type TtsJobStartParams,
   type TtsSynthesisResult,
+  type ImageJobStartParams,
+  type ImageGenerationResult,
   type JobSummary,
 } from "@supervideo/shared";
 
@@ -538,6 +542,13 @@ export class PythonCoreClient {
     return result;
   }
 
+  async startImageJob(params: ImageJobStartParams, options: CoreRpcRequestOptions = {}): Promise<JobSummary> {
+    if (!isImageJobStartParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobImageStart, params, options);
+    if (!isJobSummary(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
   async getTtsJobResult(params: import("@supervideo/shared").JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<TtsSynthesisResult> {
     if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.jobTtsResult, params, options);
@@ -549,6 +560,13 @@ export class PythonCoreClient {
     if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.jobRemotionResult, params, options);
     if (!isRemotionRenderResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async getImageJobResult(params: import("@supervideo/shared").JobReferenceParams, options: CoreRpcRequestOptions = {}): Promise<ImageGenerationResult> {
+    if (!isJobReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.jobImageResult, params, options);
+    if (!isImageGenerationResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

@@ -11,6 +11,8 @@ import type {
   JobSummary,
   TtsStartRequest,
   TtsSynthesisResult,
+  ImageStartRequest,
+  ImageGenerationResult,
   ProjectSummary,
   SentenceQaParams,
   SentenceQaSaveParams,
@@ -50,7 +52,7 @@ import type {
   TimelineVersionListResult,
   TimelineVersionDiffResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isJobTtsStartParams, isTtsResult, isRemotionRenderParams, isRemotionRenderResult, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult, isTimelineVersionCreateParams, isTimelineVersionApplyEditParams, isTimelineVersionListParams, isTimelineVersionReferenceParams, isTimelineVersionActivateParams, isTimelineVersionUndoParams, isTimelineVersionRedoParams, isTimelineVersionDiffParams, isTimelineVersionResult, isTimelineVersionListResult, isTimelineVersionDiffResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isJobTtsStartParams, isImageStartRequest, isImageJobStartParams, isImageGenerationResult, isTtsResult, isRemotionRenderParams, isRemotionRenderResult, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult, isTimelineVersionCreateParams, isTimelineVersionApplyEditParams, isTimelineVersionListParams, isTimelineVersionReferenceParams, isTimelineVersionActivateParams, isTimelineVersionUndoParams, isTimelineVersionRedoParams, isTimelineVersionDiffParams, isTimelineVersionResult, isTimelineVersionListResult, isTimelineVersionDiffResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -85,7 +87,7 @@ export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_MAX_CAPABILITIES = 32;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "timeline-versions", "tts", "remotion-runtime", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "timeline-versions", "tts", "image", "remotion-runtime", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -126,12 +128,14 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaScriptAlign: "media-script-align",
   jobSmokeStart: "job-smoke-start",
   jobTtsStart: "job-tts-start",
+  jobImageStart: "job-image-start",
   jobGet: "job-get",
   jobList: "job-list",
   jobEventsList: "job-events-list",
   jobCancel: "job-cancel",
   jobRetry: "job-retry",
   jobTtsResult: "job-tts-result",
+  jobImageResult: "job-image-result",
   jobRemotionStart: "job-remotion-start",
   jobRemotionResult: "job-remotion-result",
 } as const;
@@ -187,7 +191,7 @@ export type AgentProjectOperationType =
   | "timeline-version-redo"
   | "timeline-version-diff";
 
-export type AgentJobOperationType = "job-smoke-start" | "job-tts-start" | "job-remotion-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry" | "job-tts-result" | "job-remotion-result";
+export type AgentJobOperationType = "job-smoke-start" | "job-tts-start" | "job-image-start" | "job-remotion-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry" | "job-tts-result" | "job-image-result" | "job-remotion-result";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
 export type ProjectOperationErrorCode =
   | "DIALOG_CANCELLED"
@@ -462,8 +466,10 @@ export const DESKTOP_IPC_CHANNELS = {
   diffTimelineVersions: "desktop:v2:diff-timeline-versions",
   startSmokeJob: "desktop:v2:start-smoke-job",
   startTtsJob: "desktop:v2:start-tts-job",
+  startImageJob: "desktop:v2:start-image-job",
   getJob: "desktop:v2:get-job",
   getTtsJobResult: "desktop:v2:get-tts-job-result",
+  getImageJobResult: "desktop:v2:get-image-job-result",
   startRemotionJob: "desktop:v2:start-remotion-job",
   getRemotionJobResult: "desktop:v2:get-remotion-job-result",
   listJobs: "desktop:v2:list-jobs",
@@ -504,9 +510,11 @@ export type AddAssetReferencesRequest = Readonly<{ projectId: string }>;
 export type ListProjectAssetsRequest = Readonly<{ projectId: string }>;
 export type StartSmokeJobRequest = JobSmokeStartParams;
 export type StartTtsJobRequest = TtsStartRequest;
+export type StartImageJobRequest = ImageStartRequest;
 export type StartRemotionJobRequest = RemotionRenderParams;
 export type GetJobRequest = JobReferenceParams;
 export type GetTtsJobResultRequest = JobReferenceParams;
+export type GetImageJobResultRequest = JobReferenceParams;
 export type GetRemotionJobResultRequest = JobReferenceParams;
 export type ListJobsRequest = JobListParams;
 export type ListJobEventsRequest = JobEventsListParams;
@@ -559,8 +567,10 @@ export type DesktopApi = Readonly<{
   diffTimelineVersions: (input: TimelineVersionDiffParams) => Promise<TimelineVersionDiffResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   startTtsJob: (input: TtsStartRequest) => Promise<JobSummary>;
+  startImageJob: (input: ImageStartRequest) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   getTtsJobResult: (input: JobReferenceParams) => Promise<TtsSynthesisResult>;
+  getImageJobResult: (input: JobReferenceParams) => Promise<ImageGenerationResult>;
   startRemotionJob: (input: RemotionRenderParams) => Promise<JobSummary>;
   getRemotionJobResult: (input: JobReferenceParams) => Promise<RemotionRenderResult>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -1095,7 +1105,7 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
   return value === "job-smoke-start" || value === "job-get" || value === "job-list"
     || value === "job-events-list" || value === "job-cancel" || value === "job-retry"
-    || value === "job-tts-start" || value === "job-tts-result" || value === "job-remotion-start" || value === "job-remotion-result";
+    || value === "job-tts-start" || value === "job-tts-result" || value === "job-image-start" || value === "job-image-result" || value === "job-remotion-start" || value === "job-remotion-result";
 }
 
 function isProjectOperationError(value: unknown): value is ProjectOperationError {
@@ -1209,6 +1219,7 @@ function isJobOperationPayload(type: AgentJobOperationType, value: unknown, resu
     if (type === "job-list") return isJobPage(value);
     if (type === "job-events-list") return isJobEventPage(value);
     if (type === "job-tts-result") return isTtsResult(value);
+    if (type === "job-image-result") return isImageGenerationResult(value);
     if (type === "job-remotion-result") return isRemotionRenderResult(value);
     return isJobSummary(value);
   }
@@ -1222,6 +1233,10 @@ function isJobOperationPayload(type: AgentJobOperationType, value: unknown, resu
   if (type === "job-tts-start") {
     return hasOnlyKeys(value, ["idempotencyKey", "providerId", "model", "voice", "sentences"])
       && isJobTtsStartParams({ projectId: "11111111-1111-4111-8111-111111111111", ...value });
+  }
+  if (type === "job-image-start") {
+    return hasOnlyKeys(value, ["idempotencyKey", "providerId", "shotId", "prompt", "parameters", "source", "provenance"])
+      && isImageStartRequest({ projectId: "11111111-1111-4111-8111-111111111111", ...value });
   }
   if (type === "job-remotion-start") {
     return isRemotionRenderParams({ projectId: "11111111-1111-4111-8111-111111111111", ...value });

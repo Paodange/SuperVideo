@@ -13,10 +13,14 @@ import {
   type ProviderAdapter,
   type ProviderRegistry,
   type ProviderTtsSynthesisResult,
+  type ProviderImageGenerationResult,
+  type ProviderImageGenerationRequest,
   type TtsJobStartParams,
   type TtsStartRequest,
+  type ImageJobStartParams,
+  type ImageStartRequest,
 } from "@supervideo/shared";
-import { isTtsStartRequest } from "@supervideo/shared";
+import { isTtsStartRequest, isImageStartRequest } from "@supervideo/shared";
 import type { CredentialMetadata } from "@supervideo/shared";
 import type { CredentialVault } from "../security/credential-vault";
 import { ProviderConfigStore } from "./provider-config-store";
@@ -127,6 +131,37 @@ export class ProviderConfigService {
       }))),
     });
     return this.vault.runWithSecret(config.credentialRef, (secret) => adapter.synthesizeTts!(secret, request, 30_000));
+  }
+  /** Resolve D06's non-sensitive image selection; credentialRef never leaves Main. */
+  async resolveImage(input: ImageStartRequest): Promise<ImageJobStartParams> {
+    if (!isImageStartRequest(input)) throw new ProviderServiceError("PROVIDER_INVALID_CONFIG");
+    const config = this.store.get(input.projectId, "image", input.providerId);
+    if (!config || !config.enabled || !config.capabilities.includes("image.generate")) throw new ProviderServiceError("PROVIDER_UNAVAILABLE");
+    if (config.credentialRef) {
+      const credential = await this.findCredential(config.credentialRef);
+      if (!credential) throw new ProviderServiceError("PROVIDER_CREDENTIAL_NOT_FOUND");
+      if (credential.providerId !== config.providerId || credential.serviceKind !== "image") throw new ProviderServiceError("PROVIDER_CREDENTIAL_KIND_MISMATCH");
+    } else if (config.providerId !== "fake") {
+      throw new ProviderServiceError("PROVIDER_UNAVAILABLE");
+    }
+    return Object.freeze({ ...input, model: config.model });
+  }
+  /** Main-only future real-image seam. The decrypted secret is callback-scoped. */
+  async generateImage(input: ImageStartRequest): Promise<ProviderImageGenerationResult> {
+    const resolved = await this.resolveImage(input);
+    const config = this.store.get(input.projectId, "image", input.providerId);
+    const adapter = this.registry.get(input.providerId, "image");
+    if (!config?.credentialRef || !adapter?.generateImage) throw new ProviderServiceError("PROVIDER_UNAVAILABLE");
+    const request: ProviderImageGenerationRequest = Object.freeze({
+      projectId: resolved.projectId,
+      model: resolved.model,
+      shotId: resolved.shotId,
+      prompt: resolved.prompt,
+      parameters: Object.freeze({ ...resolved.parameters }),
+      source: Object.freeze({ ...resolved.source }),
+      provenance: Object.freeze(resolved.provenance.map((item) => Object.freeze({ ...item }))),
+    });
+    return this.vault.runWithSecret(config.credentialRef, (secret) => adapter.generateImage!(secret, request, 30_000));
   }
   descriptors(): readonly ProviderRegistryEntry["descriptor"][] { return this.registry.list(); }
   private async findCredential(ref: string): Promise<CredentialMetadata | undefined> { return (await this.vault.list()).items.find((item) => item.credentialRef === ref); }

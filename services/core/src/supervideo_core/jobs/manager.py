@@ -12,11 +12,12 @@ from supervideo_core.project.service import ProjectService
 from supervideo_core.storage import JobCreate, JobEventRecord, JobRepository, JobRecord, StorageError, new_id, serialize_json_value, utc_now_ms
 
 from .errors import JobError
-from .executors import JobCancelled, JobShutdown, RemotionRenderExecutor, SmokeCountdownExecutor, TtsSynthesisExecutor
-from .models import JobEventPage, JobEventSummary, JobPage, JobSmokeInput, JobSummary, RemotionJobInput, RemotionRenderParams, RemotionRenderResult, TtsJobInput, TtsJobStartParams, TtsSynthesisResult
+from .executors import ImageGenerationExecutor, JobCancelled, JobShutdown, RemotionRenderExecutor, SmokeCountdownExecutor, TtsSynthesisExecutor
+from .models import ImageJobInput, ImageJobStartParams, ImageGenerationResult, JobEventPage, JobEventSummary, JobPage, JobSmokeInput, JobSummary, RemotionJobInput, RemotionRenderParams, RemotionRenderResult, TtsJobInput, TtsJobStartParams, TtsSynthesisResult
 from supervideo_core.media.tts_models import TTS_JOB_TYPE
 from supervideo_core.media.remotion_models import REMOTION_JOB_TYPE
 from supervideo_core.media.remotion_models import compute_remotion_cache_key
+from supervideo_core.media.image_models import IMAGE_JOB_TYPE
 from .state_machine import can_transition, require_transition
 
 JobEventListener = Callable[[JobEventRecord], None]
@@ -46,6 +47,7 @@ class JobManager:
         self.executor = SmokeCountdownExecutor()
         self.tts_executor = TtsSynthesisExecutor()
         self.remotion_executor = RemotionRenderExecutor()
+        self.image_executor = ImageGenerationExecutor()
         self._project_id: str | None = None
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._cancel_events: dict[str, asyncio.Event] = {}
@@ -195,6 +197,47 @@ class JobManager:
         await self._pump()
         return self._summary(created)
 
+    async def start_image(self, params: ImageJobStartParams) -> JobSummary:
+        self._require_active(params.project_id)
+        if self._shutting_down:
+            raise JobError("JOB_SHUTTING_DOWN")
+        input_model = ImageJobInput(
+            providerId=params.provider_id,
+            model=params.model,
+            shotId=params.shot_id,
+            prompt=params.prompt,
+            parameters=params.parameters,
+            source=params.source,
+            provenance=params.provenance,
+        )
+        input_json = input_model.model_dump(by_alias=False)
+        repository = self._repository()
+        existing = repository.find_by_idempotency_key(params.project_id, IMAGE_JOB_TYPE, params.idempotency_key)
+        if existing is not None:
+            if serialize_json_value(existing.input_json) != serialize_json_value(input_json):
+                raise JobError("IDEMPOTENCY_CONFLICT")
+            return self._summary(existing)
+        if len(repository.find_incomplete(params.project_id)) >= self.max_queue:
+            raise JobError("JOB_QUEUE_FULL")
+        now = self.clock()
+        job = JobCreate(
+            id=new_id(), project_id=params.project_id, job_type=IMAGE_JOB_TYPE, status="queued", progress=0.0,
+            stage="queued", input_json=input_json, idempotency_key=params.idempotency_key, created_at_ms=now,
+            updated_at_ms=now, executor_version=self.image_executor.executor_version,
+        )
+        try:
+            created, event = repository.create_job_with_event(job, "created", {"jobType": IMAGE_JOB_TYPE})
+        except StorageError as error:
+            if error.code == "CONSTRAINT_VIOLATION":
+                existing = repository.find_by_idempotency_key(params.project_id, IMAGE_JOB_TYPE, params.idempotency_key)
+                if existing is not None and serialize_json_value(existing.input_json) == serialize_json_value(input_json):
+                    return self._summary(existing)
+                raise JobError("IDEMPOTENCY_CONFLICT") from error
+            raise JobError("JOB_STATE_CONFLICT") from error
+        self._publish(event)
+        await self._pump()
+        return self._summary(created)
+
     def get(self, project_id: str, job_id: str) -> JobSummary:
         self._require_active(project_id)
         try:
@@ -221,6 +264,16 @@ class JobManager:
             raise JobError("JOB_STATE_CONFLICT")
         try:
             return RemotionRenderResult.model_validate(current.result_json)
+        except ValidationError as error:
+            raise JobError("JOB_CHECKPOINT_INVALID") from error
+
+    def get_image_result(self, project_id: str, job_id: str) -> ImageGenerationResult:
+        self._require_active(project_id)
+        current = self._get_record(self._repository(), project_id, job_id)
+        if current.job_type != IMAGE_JOB_TYPE or current.status != "succeeded" or current.result_json is None:
+            raise JobError("JOB_STATE_CONFLICT")
+        try:
+            return ImageGenerationResult.model_validate(current.result_json)
         except ValidationError as error:
             raise JobError("JOB_CHECKPOINT_INVALID") from error
 
@@ -335,6 +388,9 @@ class JobManager:
                 total = max(1, len(job.input_json.get("sentences", [])))
                 progress = step / total
                 payload: dict[str, object] = {"sentenceIndex": step - 1}
+            elif job.job_type == IMAGE_JOB_TYPE:
+                progress = min(1.0, float(step))
+                payload = {"imageStep": step}
             elif job.job_type == REMOTION_JOB_TYPE:
                 progress = min(1.0, float(step))
                 payload = {"renderStep": step}
@@ -385,6 +441,17 @@ class JobManager:
                     cancel_event=cancel_event, shutdown_event=self._shutdown_event, persist=persist,
                 )
                 event_payload = {"cacheKey": result_json.get("cacheKey"), "runtimeMode": result_json.get("runtimeMode")}
+            elif job.job_type == self.image_executor.name:
+                params = ImageJobInput.model_validate(job.input_json)
+                project_root = self.project_service.active_project_root
+                if project_root is None:
+                    raise JobError("JOB_EXECUTOR_UNAVAILABLE")
+                self.image_executor.service.bind_session(project_root)
+                result_json = await self.image_executor.run(
+                    job.project_id, params, attempt=job.attempt, checkpoint=job.checkpoint_json,
+                    cancel_event=cancel_event, shutdown_event=self._shutdown_event, persist=persist,
+                )
+                event_payload = {"cacheKey": result_json.get("cacheKey"), "shotId": result_json.get("shotId")}
             else:
                 raise JobError("JOB_EXECUTOR_UNAVAILABLE")
             current = self._get_record(repository, job.project_id, job.id)
@@ -447,6 +514,9 @@ class JobManager:
         elif job.job_type == self.remotion_executor.name:
             executor = self.remotion_executor
             params_type = RemotionJobInput
+        elif job.job_type == self.image_executor.name:
+            executor = self.image_executor
+            params_type = ImageJobInput
         else:
             return False
         if job.executor_version != executor.executor_version:
@@ -461,7 +531,14 @@ class JobManager:
                     return False
             elif job.job_type == REMOTION_JOB_TYPE and job.checkpoint_json.get("cacheKey") != compute_remotion_cache_key(params.render):
                 return False
-            executor.validate_checkpoint(job.checkpoint_json, params)
+            elif job.job_type == IMAGE_JOB_TYPE:
+                adapter = self.image_executor.service.registry.get(params.provider_id)
+                expected_cache_key = self.image_executor.service.cache_key(job.project_id, params, adapter.adapter_version) if adapter is not None else None
+                if expected_cache_key is None or job.checkpoint_json.get("cacheKey") != expected_cache_key:
+                    return False
+                executor.validate_checkpoint(job.checkpoint_json, params, expected_cache_key)
+            if job.job_type != IMAGE_JOB_TYPE:
+                executor.validate_checkpoint(job.checkpoint_json, params)
         except (JobError, ValidationError, TypeError, ValueError):
             return False
         return job.checkpoint_version == executor.checkpoint_version

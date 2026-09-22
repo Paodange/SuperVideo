@@ -13,6 +13,8 @@ from supervideo_core.media.tts_models import TtsJobInput
 from supervideo_core.media.remotion import RemotionRuntime, RemotionRuntimeError, RemotionRuntimeShutdown
 from supervideo_core.media.remotion_models import compute_remotion_cache_key
 from supervideo_core.jobs.models import RemotionJobInput
+from supervideo_core.media.image import ImageExecutionCancelled, ImageExecutionShutdown, ImageGenerationService
+from supervideo_core.media.image_models import ImageJobInput
 
 
 class JobCancelled(Exception):
@@ -181,5 +183,52 @@ class RemotionRenderExecutor:
             or value.get("executorVersion") != self.executor_version
             or value.get("checkpointVersion") != self.checkpoint_version
             or value.get("cacheKey") != compute_remotion_cache_key(params.render)
+        ):
+            raise JobError("JOB_CHECKPOINT_INVALID")
+
+
+class ImageGenerationExecutor:
+    """A07 wrapper for the Core-owned offline D06 image adapter."""
+
+    name = "image.generate"
+    executor_version = 1
+    checkpoint_version = 1
+
+    def __init__(self, service: ImageGenerationService | None = None) -> None:
+        self.service = service or ImageGenerationService()
+
+    async def run(
+        self,
+        project_id: str,
+        params: ImageJobInput,
+        *,
+        attempt: int,
+        checkpoint: dict[str, Any] | None,
+        cancel_event: asyncio.Event,
+        shutdown_event: asyncio.Event,
+        persist: Callable[[int, str, dict[str, Any]], Awaitable[None]],
+    ) -> dict[str, object]:
+        if params.model == "fake-retry-once" and attempt == 1:
+            raise JobError("JOB_EXECUTION_FAILED")
+        try:
+            result = await self.service.generate(
+                project_id, params, cancel_event=cancel_event, shutdown_event=shutdown_event, persist=persist,
+            )
+        except ImageExecutionCancelled as error:
+            raise JobCancelled() from error
+        except ImageExecutionShutdown as error:
+            raise JobShutdown() from error
+        except ValueError as error:
+            raise JobError("JOB_EXECUTION_FAILED", cause=error) from error
+        return result.model_dump(by_alias=True)
+
+    def validate_checkpoint(self, value: dict[str, Any], params: ImageJobInput, expected_cache_key: str) -> None:
+        if (
+            value.get("executor") != self.name
+            or value.get("executorVersion") != self.executor_version
+            or value.get("checkpointVersion") != self.checkpoint_version
+            or value.get("cacheKey") != expected_cache_key
+            or value.get("completed") != 0
+            or value.get("nextStep") != 1
         ):
             raise JobError("JOB_CHECKPOINT_INVALID")
