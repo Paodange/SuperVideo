@@ -38,6 +38,34 @@ PREVIEW_MANIFEST_MAX_BYTES = 16 * 1024
 ProgressEmitter = Callable[[int, float, str], Awaitable[None]]
 
 
+def compute_preview_plan_digest(
+    project_id: str,
+    timeline_id: str,
+    aroll_plan_digest: str,
+    subtitle_plan_digest: str,
+    selected_duration_ms: int,
+    cues: list[PreviewRenderCue],
+    gaps: list[PreviewRenderGap],
+    bindings: list[PreviewSourceBinding],
+) -> str:
+    """Return the canonical digest shared by C06 rendering and C07 QA."""
+
+    value = {
+        "schemaVersion": PREVIEW_RENDER_SCHEMA_VERSION,
+        "planVersion": PREVIEW_RENDER_VERSION,
+        "projectId": project_id,
+        "timelineId": timeline_id,
+        "arollPlanDigest": aroll_plan_digest,
+        "subtitlePlanDigest": subtitle_plan_digest,
+        "renderPolicy": PREVIEW_RENDER_POLICY,
+        "selectedDurationMs": selected_duration_ms,
+        "sourceBindings": [item.model_dump(by_alias=True) for item in bindings],
+        "cues": [item.model_dump(by_alias=True) for item in cues],
+        "gaps": [item.model_dump(by_alias=True) for item in gaps],
+    }
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 class PreviewRenderService:
     """Builds a truthful preview plan; only Core owns the optional tool call."""
 
@@ -70,7 +98,16 @@ class PreviewRenderService:
                 await emit(1, 0.05, "preview-plan")
             cues, gaps, bindings = self._map_cues(aroll, subtitles)
             self._check_budget(cancelled, deadline)
-            digest = self._plan_digest(request.project_id, aroll, subtitles, cues, gaps, bindings)
+            digest = compute_preview_plan_digest(
+                request.project_id,
+                aroll.timeline_id,
+                aroll.plan_digest,
+                subtitles.plan_digest,
+                aroll.selected_duration_ms,
+                cues,
+                gaps,
+                bindings,
+            )
             output = None
             log = PreviewRenderLog(status="not-run")
             execution_status = "not-run"
@@ -164,30 +201,6 @@ class PreviewRenderService:
                 outputEndMs=segment.output_start_ms + offset + cue.duration_ms,
             ))
         return cues, gaps, list(source_values.values())
-
-    @staticmethod
-    def _plan_digest(
-        project_id: str,
-        aroll: ArollCutJoinResult,
-        subtitles: SubtitlePlanResult,
-        cues: list[PreviewRenderCue],
-        gaps: list[PreviewRenderGap],
-        bindings: list[PreviewSourceBinding],
-    ) -> str:
-        value = {
-            "schemaVersion": PREVIEW_RENDER_SCHEMA_VERSION,
-            "planVersion": PREVIEW_RENDER_VERSION,
-            "projectId": project_id,
-            "timelineId": aroll.timeline_id,
-            "arollPlanDigest": aroll.plan_digest,
-            "subtitlePlanDigest": subtitles.plan_digest,
-            "renderPolicy": PREVIEW_RENDER_POLICY,
-            "selectedDurationMs": aroll.selected_duration_ms,
-            "sourceBindings": [item.model_dump(by_alias=True) for item in bindings],
-            "cues": [item.model_dump(by_alias=True) for item in cues],
-            "gaps": [item.model_dump(by_alias=True) for item in gaps],
-        }
-        return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
     async def _execute(
         self,

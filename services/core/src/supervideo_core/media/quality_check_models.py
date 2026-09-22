@@ -48,11 +48,13 @@ QualitySeverity = Literal["pass", "warning", "fail"]
 QualityCheckStatus = Literal["verified", "not-run"]
 QualityIssueCode = Literal[
     "QA_PLAN_BINDING_INVALID",
+    "QA_PLAN_DIGEST_MISMATCH",
     "QA_PLAN_ORDER_INVALID",
     "QA_PLAN_RANGE_INVALID",
     "QA_PLAN_GAP",
     "QA_EXECUTION_NOT_RUN",
     "QA_OUTPUT_MISSING",
+    "QA_OUTPUT_PLAYBACK_URI_INVALID",
     "QA_OUTPUT_PATH_INVALID",
     "QA_OUTPUT_FILE_INVALID",
     "QA_OUTPUT_SIZE_MISMATCH",

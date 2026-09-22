@@ -11,7 +11,7 @@ from unittest.mock import patch
 from supervideo_core.media.aroll_cut_join import ArollCutJoinService
 from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams
 from supervideo_core.media.preview_render import PreviewRenderService
-from supervideo_core.media.preview_render_models import PreviewRenderOutput, PreviewRenderParams, PreviewRenderResult
+from supervideo_core.media.preview_render_models import PreviewRenderGap, PreviewRenderOutput, PreviewRenderParams, PreviewRenderResult
 from supervideo_core.media.quality_check import PreviewQualityCheckService
 from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
 from supervideo_core.media.subtitle_plan import SubtitlePlanService
@@ -60,6 +60,23 @@ class PreviewQualityCheckTests(unittest.TestCase):
         self.assertFalse(result.ready_for_export)
         self.assertIn("QA_PLAN_GAP", [issue.code for issue in result.issues])
 
+    def test_digest_detects_source_cue_and_gap_tampering(self) -> None:
+        aroll, subtitle = plans()
+        base = asyncio.run(PreviewRenderService().render(PreviewRenderParams(projectId=PROJECT_ID, arollPlan=aroll, subtitlePlan=subtitle), asyncio.Event()))
+        changed_cue = {**base.model_dump(by_alias=True), "cues": [
+            {**base.cues[0].model_dump(by_alias=True), "sourceId": base.source_bindings[1].source_id},
+            base.cues[1].model_dump(by_alias=True),
+        ]}
+        changed_gaps = {**base.model_dump(by_alias=True), "status": "gaps", "gaps": [
+            PreviewRenderGap(code="subtitle-plan-gap", clipId="clip-video-1", cueId=None, detail="tampered").model_dump(by_alias=True),
+        ]}
+        for payload in (changed_cue, changed_gaps):
+            with self.subTest(payload=payload):
+                tampered = PreviewRenderResult.model_validate(payload)
+                result = asyncio.run(PreviewQualityCheckService(ffprobe_path="C:\\missing\\ffprobe.exe").check(PreviewQualityCheckParams(projectId=PROJECT_ID, previewResult=tampered), asyncio.Event()))
+                self.assertEqual(result.status, "fail")
+                self.assertIn("QA_PLAN_DIGEST_MISMATCH", [issue.code for issue in result.issues])
+
     def test_executed_output_checks_manifest_size_and_fingerprint(self) -> None:
         aroll, subtitle = plans()
         base = asyncio.run(PreviewRenderService().render(PreviewRenderParams(projectId=PROJECT_ID, arollPlan=aroll, subtitlePlan=subtitle), asyncio.Event()))
@@ -81,10 +98,44 @@ class PreviewQualityCheckTests(unittest.TestCase):
             self.assertEqual(result.status, "warning")
             self.assertFalse(result.ready_for_export)
             self.assertNotIn("QA_OUTPUT_SIZE_MISMATCH", [issue.code for issue in result.issues if issue.severity == "fail"])
+            wrong_uri = PreviewRenderResult.model_validate({**executed.model_dump(by_alias=True), "output": {**output.model_dump(by_alias=True), "playbackUri": f"supervideo://preview/11111111-1111-4111-8111-111111111111/{digest}"}})
+            wrong_uri_result = asyncio.run(service.check(PreviewQualityCheckParams(projectId=PROJECT_ID, previewResult=wrong_uri), asyncio.Event()))
+            self.assertEqual(wrong_uri_result.status, "fail")
+            self.assertIn("QA_OUTPUT_PLAYBACK_URI_INVALID", [issue.code for issue in wrong_uri_result.issues])
             output_path.write_bytes(b"tampered")
             tampered = asyncio.run(service.check(PreviewQualityCheckParams(projectId=PROJECT_ID, previewResult=executed), asyncio.Event()))
             self.assertEqual(tampered.status, "fail")
             self.assertIn("QA_OUTPUT_FINGERPRINT_MISMATCH", [issue.code for issue in tampered.issues])
+
+    def test_timeout_budget_expires_during_hash_with_stable_error(self) -> None:
+        aroll, subtitle = plans()
+        base = asyncio.run(PreviewRenderService().render(PreviewRenderParams(projectId=PROJECT_ID, arollPlan=aroll, subtitlePlan=subtitle), asyncio.Event()))
+        digest = base.plan_digest
+        payload = b"preview bytes"
+        fingerprint = hashlib.sha256(payload).hexdigest()
+        output = PreviewRenderOutput(kind="video", relativePath=f"previews/preview-render-v1/{digest}.mp4", playbackUri=f"supervideo://preview/{PROJECT_ID}/{digest}", sizeBytes=len(payload), durationMs=base.timeline_duration_ms, outputFingerprint=fingerprint)
+        executed = PreviewRenderResult.model_validate({**base.model_dump(by_alias=True), "executionMode": "ffmpeg", "executionStatus": "completed", "log": {"status": "completed", "stdout": "", "stderr": ""}, "output": output.model_dump(by_alias=True)})
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            output_path = root / output.relative_path
+            output_path.parent.mkdir(parents=True)
+            output_path.write_bytes(payload)
+            clock_value = [0.0]
+
+            def clock() -> float:
+                return clock_value[0]
+
+            def slow_hash(_path: Path, check_budget) -> str:
+                clock_value[0] = 2.0
+                check_budget()
+                return fingerprint
+
+            service = PreviewQualityCheckService(ffprobe_path="C:\\missing\\ffprobe.exe", clock=clock)
+            service.bind_session(root, object())
+            with patch("supervideo_core.media.quality_check._sha256_file", side_effect=slow_hash):
+                with self.assertRaises(Exception) as error:
+                    asyncio.run(service.check(PreviewQualityCheckParams(projectId=PROJECT_ID, previewResult=executed, timeoutMs=1_000), asyncio.Event()))
+            self.assertEqual(error.exception.code, "PREVIEW_QUALITY_TIMEOUT")
 
     def test_cancel_is_stable(self) -> None:
         aroll, subtitle = plans()
