@@ -45,6 +45,7 @@ run(
     path.join(root, "tests", "remotion-contract.test.mjs"),
     path.join(root, "tests", "recruitment-template-contract.test.mjs"),
     path.join(root, "tests", "script-storyboard-contract.test.mjs"),
+    path.join(root, "tests", "video-assembly-contract.test.mjs"),
   ],
   "automated tests",
 );

@@ -14,3 +14,4 @@ export * from "./image-contract";
 export * from "./remotion-contract";
 export * from "./recruitment-template-contract";
 export * from "./script-storyboard-contract";
+export * from "./video-assembly-contract";
