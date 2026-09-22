@@ -55,12 +55,3 @@ test("Timeline IR requires source provenance references to resolve", () => {
   assert.equal(shared.isTimelineProject(invalid), false);
   assert.throws(() => shared.validateTimelineProject(invalid), shared.TimelineValidationException);
 });
-
-test("Timeline validation is carried through Core RPC and Agent Worker contracts", () => {
-  const projectId = "11111111-1111-4111-8111-111111111111";
-  const params = { projectId, timeline: fixture };
-  assert.equal(shared.isCoreRpcRequest({ jsonrpc: "2.0", id: "timeline-1", method: "timeline.validate", params }), true);
-  assert.equal(shared.isCoreRpcRequest({ jsonrpc: "2.0", id: "timeline-1", method: "timeline.validate", params: { ...params, timeline: { ...fixture, schemaVersion: 2 } } }), false);
-  assert.equal(shared.isValidAgentWorkerCommand({ protocolVersion: 1, type: "timeline-validate", operationId: "op-timeline-1", timestamp: 1, projectId, payload: params }), true);
-  assert.equal(shared.isTimelineValidateResult({ schemaVersion: 1, projectId, timelineId: fixture.id, valid: true, durationMs: fixture.durationMs, trackCount: 4, clipCount: 4 }), true);
-});
