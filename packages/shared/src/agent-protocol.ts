@@ -29,7 +29,7 @@ import type {
   PreviewRenderParams,
   PreviewRenderResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -55,7 +55,7 @@ export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_MAX_CAPABILITIES = 32;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -82,6 +82,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaArollCutJoin: "media-aroll-cut-join",
   mediaSubtitlePlan: "media-subtitle-plan",
   mediaPreviewRender: "media-preview-render",
+  mediaPreviewQualityCheck: "media-preview-quality-check",
   mediaScriptAlign: "media-script-align",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
@@ -129,7 +130,8 @@ export type AgentProjectOperationType =
   | "plan-optimize-duration"
   | "media-aroll-cut-join"
   | "media-subtitle-plan"
-  | "media-preview-render";
+  | "media-preview-render"
+  | "media-preview-quality-check";
 
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
@@ -179,7 +181,8 @@ export type ProjectOperationErrorCode =
   | "DURATION_OPTIMIZATION_INPUT_INVALID" | "DURATION_OPTIMIZATION_SOURCE_INVALID" | "DURATION_OPTIMIZATION_ALIGNMENT_INVALID" | "DURATION_OPTIMIZATION_OUTPUT_INVALID" | "DURATION_OPTIMIZATION_TIMEOUT" | "DURATION_OPTIMIZATION_CANCELLED"
   | "AROLL_CUT_JOIN_INPUT_INVALID" | "AROLL_CUT_JOIN_TIMELINE_INVALID" | "AROLL_CUT_JOIN_SOURCE_INVALID" | "AROLL_CUT_JOIN_OUTPUT_INVALID" | "AROLL_CUT_JOIN_TOOL_UNAVAILABLE" | "AROLL_CUT_JOIN_TOOL_TIMEOUT" | "AROLL_CUT_JOIN_TIMEOUT" | "AROLL_CUT_JOIN_CANCELLED"
   | "SUBTITLE_INPUT_INVALID" | "SUBTITLE_TIMELINE_INVALID" | "SUBTITLE_SOURCE_INVALID" | "SUBTITLE_TIMECODE_INVALID" | "SUBTITLE_OVERLAP" | "SUBTITLE_TEXT_INVALID" | "SUBTITLE_LINE_COUNT_INVALID" | "SUBTITLE_LINE_WIDTH_INVALID" | "SUBTITLE_OUTPUT_INVALID" | "SUBTITLE_TIMEOUT" | "SUBTITLE_CANCELLED"
-  | "PREVIEW_RENDER_INPUT_INVALID" | "PREVIEW_RENDER_SOURCE_INVALID" | "PREVIEW_RENDER_SUBTITLE_INVALID" | "PREVIEW_RENDER_OUTPUT_INVALID" | "PREVIEW_RENDER_TOOL_UNAVAILABLE" | "PREVIEW_RENDER_TOOL_TIMEOUT" | "PREVIEW_RENDER_TIMEOUT" | "PREVIEW_RENDER_CANCELLED";
+  | "PREVIEW_RENDER_INPUT_INVALID" | "PREVIEW_RENDER_SOURCE_INVALID" | "PREVIEW_RENDER_SUBTITLE_INVALID" | "PREVIEW_RENDER_OUTPUT_INVALID" | "PREVIEW_RENDER_TOOL_UNAVAILABLE" | "PREVIEW_RENDER_TOOL_TIMEOUT" | "PREVIEW_RENDER_TIMEOUT" | "PREVIEW_RENDER_CANCELLED"
+  | "PREVIEW_QUALITY_INPUT_INVALID" | "PREVIEW_QUALITY_OUTPUT_INVALID" | "PREVIEW_QUALITY_TIMEOUT" | "PREVIEW_QUALITY_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -381,6 +384,7 @@ export const DESKTOP_IPC_CHANNELS = {
   cutJoinAroll: "desktop:v2:cut-join-aroll",
   planSubtitles: "desktop:v2:plan-subtitles",
   renderPreview: "desktop:v2:render-preview",
+  checkPreviewQuality: "desktop:v2:check-preview-quality",
   startSmokeJob: "desktop:v2:start-smoke-job",
   getJob: "desktop:v2:get-job",
   listJobs: "desktop:v2:list-jobs",
@@ -455,6 +459,7 @@ export type DesktopApi = Readonly<{
   cutJoinAroll: (input: ArollCutJoinParams) => Promise<ArollCutJoinResult>;
   planSubtitles: (input: SubtitlePlanParams) => Promise<SubtitlePlanResult>;
   renderPreview: (input: PreviewRenderParams) => Promise<PreviewRenderResult>;
+  checkPreviewQuality: (input: import("./core-rpc").PreviewQualityCheckParams) => Promise<import("./core-rpc").PreviewQualityCheckResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -621,6 +626,10 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   PREVIEW_RENDER_TOOL_TIMEOUT: "The preview media tool timed out.",
   PREVIEW_RENDER_TIMEOUT: "The preview render operation timed out.",
   PREVIEW_RENDER_CANCELLED: "The preview render operation was cancelled.",
+  PREVIEW_QUALITY_INPUT_INVALID: "The preview quality-check input is invalid.",
+  PREVIEW_QUALITY_OUTPUT_INVALID: "The preview quality-check result was invalid.",
+  PREVIEW_QUALITY_TIMEOUT: "The preview quality check timed out.",
+  PREVIEW_QUALITY_CANCELLED: "The preview quality check was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -922,7 +931,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "plan-optimize-duration"
     || value === "media-aroll-cut-join"
     || value === "media-subtitle-plan"
-    || value === "media-preview-render";
+    || value === "media-preview-render"
+    || value === "media-preview-quality-check";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -1006,6 +1016,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
   if (type === "media-aroll-cut-join") return isArollCutJoinParams(value);
   if (type === "media-subtitle-plan") return isSubtitlePlanParams(value);
   if (type === "media-preview-render") return isPreviewRenderParams(value);
+  if (type === "media-preview-quality-check") return isPreviewQualityCheckParams(value);
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
     if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
@@ -1108,6 +1119,9 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "PLAN_INPUT_INVALID", "PLAN_SOURCE_INVALID", "PLAN_SOURCE_STALE", "PLAN_ALIGNMENT_INVALID", "PLAN_OUTPUT_INVALID", "PLAN_TIMEOUT", "PLAN_CANCELLED",
   "DURATION_OPTIMIZATION_INPUT_INVALID", "DURATION_OPTIMIZATION_SOURCE_INVALID", "DURATION_OPTIMIZATION_ALIGNMENT_INVALID", "DURATION_OPTIMIZATION_OUTPUT_INVALID", "DURATION_OPTIMIZATION_TIMEOUT", "DURATION_OPTIMIZATION_CANCELLED",
   "AROLL_CUT_JOIN_INPUT_INVALID", "AROLL_CUT_JOIN_TIMELINE_INVALID", "AROLL_CUT_JOIN_SOURCE_INVALID", "AROLL_CUT_JOIN_OUTPUT_INVALID", "AROLL_CUT_JOIN_TOOL_UNAVAILABLE", "AROLL_CUT_JOIN_TOOL_TIMEOUT", "AROLL_CUT_JOIN_TIMEOUT", "AROLL_CUT_JOIN_CANCELLED",
+  "SUBTITLE_INPUT_INVALID", "SUBTITLE_TIMELINE_INVALID", "SUBTITLE_SOURCE_INVALID", "SUBTITLE_TIMECODE_INVALID", "SUBTITLE_OVERLAP", "SUBTITLE_TEXT_INVALID", "SUBTITLE_LINE_COUNT_INVALID", "SUBTITLE_LINE_WIDTH_INVALID", "SUBTITLE_OUTPUT_INVALID", "SUBTITLE_TIMEOUT", "SUBTITLE_CANCELLED",
+  "PREVIEW_RENDER_INPUT_INVALID", "PREVIEW_RENDER_SOURCE_INVALID", "PREVIEW_RENDER_SUBTITLE_INVALID", "PREVIEW_RENDER_OUTPUT_INVALID", "PREVIEW_RENDER_TOOL_UNAVAILABLE", "PREVIEW_RENDER_TOOL_TIMEOUT", "PREVIEW_RENDER_TIMEOUT", "PREVIEW_RENDER_CANCELLED",
+  "PREVIEW_QUALITY_INPUT_INVALID", "PREVIEW_QUALITY_OUTPUT_INVALID", "PREVIEW_QUALITY_TIMEOUT", "PREVIEW_QUALITY_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -1153,6 +1167,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-aroll-cut-join") return isArollCutJoinResult(value);
   if (type === "media-subtitle-plan") return isSubtitlePlanResult(value);
   if (type === "media-preview-render") return isPreviewRenderResult(value);
+  if (type === "media-preview-quality-check") return isPreviewQualityCheckResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;

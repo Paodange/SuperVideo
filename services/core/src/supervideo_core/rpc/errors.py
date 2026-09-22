@@ -161,6 +161,10 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "PREVIEW_RENDER_TOOL_TIMEOUT": RpcErrorDefinition(-32390, "The preview media tool timed out."),
     "PREVIEW_RENDER_TIMEOUT": RpcErrorDefinition(-32391, "The preview render operation timed out."),
     "PREVIEW_RENDER_CANCELLED": RpcErrorDefinition(-32392, "The preview render operation was cancelled."),
+    "PREVIEW_QUALITY_INPUT_INVALID": RpcErrorDefinition(-32393, "The preview quality-check input is invalid."),
+    "PREVIEW_QUALITY_OUTPUT_INVALID": RpcErrorDefinition(-32394, "The preview quality-check result was invalid."),
+    "PREVIEW_QUALITY_TIMEOUT": RpcErrorDefinition(-32395, "The preview quality check timed out."),
+    "PREVIEW_QUALITY_CANCELLED": RpcErrorDefinition(-32396, "The preview quality check was cancelled."),
 }
 
 

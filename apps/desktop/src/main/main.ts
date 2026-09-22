@@ -24,6 +24,7 @@ import {
   isArollCutJoinResult,
   isSubtitlePlanResult,
   isPreviewRenderResult,
+  isPreviewQualityCheckResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -59,6 +60,8 @@ import {
   type SubtitlePlanResult,
   type PreviewRenderParams,
   type PreviewRenderResult,
+  type PreviewQualityCheckParams,
+  type PreviewQualityCheckResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -766,6 +769,11 @@ app.whenReady().then(() => {
     renderPreview: async (_event, input: PreviewRenderParams): Promise<PreviewRenderResult> => {
       const result = await agentController.runProjectOperation("media-preview-render", input, input.projectId);
       if (!isPreviewRenderResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    checkPreviewQuality: async (_event, input: PreviewQualityCheckParams): Promise<PreviewQualityCheckResult> => {
+      const result = await agentController.runProjectOperation("media-preview-quality-check", input, input.projectId);
+      if (!isPreviewQualityCheckResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(

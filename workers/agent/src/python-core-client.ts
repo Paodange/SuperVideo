@@ -43,6 +43,10 @@ import {
   isDurationOptimizationResult,
   isArollCutJoinParams,
   isArollCutJoinResult,
+  isPreviewRenderParams,
+  isPreviewRenderResult,
+  isPreviewQualityCheckParams,
+  isPreviewQualityCheckResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -80,6 +84,10 @@ import {
   type DurationOptimizationResult,
   type ArollCutJoinParams,
   type ArollCutJoinResult,
+  type PreviewRenderParams,
+  type PreviewRenderResult,
+  type PreviewQualityCheckParams,
+  type PreviewQualityCheckResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -384,6 +392,20 @@ export class PythonCoreClient {
     if (!isArollCutJoinParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaArollCutJoin, params, options);
     if (!isArollCutJoinResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async renderPreview(params: PreviewRenderParams, options: CoreRpcRequestOptions = {}): Promise<PreviewRenderResult> {
+    if (!isPreviewRenderParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaPreviewRender, params, options);
+    if (!isPreviewRenderResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async checkPreviewQuality(params: PreviewQualityCheckParams, options: CoreRpcRequestOptions = {}): Promise<PreviewQualityCheckResult> {
+    if (!isPreviewQualityCheckParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaPreviewQualityCheck, params, options);
+    if (!isPreviewQualityCheckResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 
