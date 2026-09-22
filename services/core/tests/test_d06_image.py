@@ -58,6 +58,15 @@ class D06ImageTestCase(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     ImageJobStartParams.model_validate(payload)
 
+    def test_idempotency_key_rejects_control_characters(self) -> None:
+        base = self.request("control-safe")
+        for key in ("contains\x00nul", "contains\nnewline", "contains\x7fdel"):
+            with self.subTest(key=repr(key)):
+                payload = base.model_dump(by_alias=True)
+                payload["idempotencyKey"] = key
+                with self.assertRaises(ValidationError):
+                    ImageJobStartParams.model_validate(payload)
+
     def test_fake_png_cache_manifest_tamper_and_selection_binding(self) -> None:
         async def scenario() -> None:
             manager = JobManager(self.project)

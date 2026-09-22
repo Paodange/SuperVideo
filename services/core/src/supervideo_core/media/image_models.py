@@ -114,6 +114,13 @@ class ImageJobStartParams(ImageJobInput):
     project_id: str = Field(alias="projectId")
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=256)
 
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str) -> str:
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+            raise ValueError("invalid image idempotency key")
+        return value
+
     @field_validator("project_id")
     @classmethod
     def validate_project_id(cls, value: str) -> str:
