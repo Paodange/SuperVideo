@@ -18,6 +18,8 @@ from .fallback_models import (
     GenerationFallbackTts,
     fallback_input_digest,
     fallback_result_digest,
+    storyboard_digest_projection,
+    video_assembly_digest_projection,
 )
 from .video_assembly_models import VideoAssemblyParams
 
@@ -137,6 +139,8 @@ class GenerationFallbackService:
         d07_request = self._build_d07_request(request, resolved_storyboard, resolutions) if tts.d07_binding is not None and all(item.status == "resolved" and item.d07_binding is not None for item in resolutions) and resolved_storyboard.status != "gaps" and resolved_storyboard.duration_status == "within-tolerance" and all(item.status == "matched" and item.duration_ms > 0 for item in [resolved_storyboard.script.hook, *resolved_storyboard.script.body, resolved_storyboard.script.cta]) else None
         d07_diagnostic = None if d07_request is not None else self._first_d07_diagnostic(tts, resolutions)
         status = "ready" if d07_request is not None else "blocked" if tts.status == "fallback" or any(item.status == "unresolved" for item in resolutions) else "partial"
+        d07_eligible = d07_request is not None
+        input_digest = fallback_input_digest(request)
         digest_seed = {
             "schemaVersion": GENERATION_FALLBACK_SCHEMA_VERSION,
             "contractVersion": GENERATION_FALLBACK_CONTRACT_VERSION,
@@ -144,10 +148,15 @@ class GenerationFallbackService:
             "projectId": request.project_id,
             "timelineId": request.timeline_id,
             "assemblyId": request.assembly_id,
+            "status": status,
+            "d07Eligible": d07_eligible,
+            "inputDigest": input_digest,
             "storyboardDigest": request.storyboard.source_plan_digest,
             "tts": self._tts_digest(tts),
             "shots": [self._shot_digest(item) for item in resolutions],
             "d07Diagnostic": d07_diagnostic.model_dump(by_alias=True) if d07_diagnostic is not None else None,
+            "resolvedStoryboard": storyboard_digest_projection(resolved_storyboard),
+            "videoAssemblyRequest": video_assembly_digest_projection(d07_request) if d07_request is not None else None,
         }
         result = GenerationFallbackResult(
             schemaVersion=GENERATION_FALLBACK_SCHEMA_VERSION,
@@ -158,8 +167,8 @@ class GenerationFallbackService:
             timelineId=request.timeline_id,
             assemblyId=request.assembly_id,
             status=status,
-            d07Eligible=d07_request is not None,
-            inputDigest=fallback_input_digest(request),
+            d07Eligible=d07_eligible,
+            inputDigest=input_digest,
             resultDigest=self._sha256_json(digest_seed),
             storyboard=request.storyboard,
             resolvedStoryboard=resolved_storyboard,

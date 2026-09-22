@@ -68,7 +68,9 @@ diagnostic: FALLBACK_TTS_AUDIO_UNAVAILABLE / tts
 - `partial`：镜头已解析，但至少一个镜头只有当前 D07 不接收的 template/text-card 视觉来源；
 - `blocked`：存在 source gap、候选耗尽或 TTS failure。
 
-`inputDigest` 和 `resultDigest` 都使用与 D07 相同的 canonical JSON/SHA-256 规则。digest 只包含受控 ID、cache/output fingerprint、错误 code/stage 和策略结果，不包含 prompt、密钥、用户路径或隐私 metadata。相同输入在 TS/Python 两端产生相同 digest。
+校验器强制 `status` 与结果事实一致：存在 `videoAssemblyRequest` 或 `d07Eligible=true` 时只能是 `ready`；没有 D07 request 时，只要 TTS 是 fallback 或任一镜头为 `unresolved` 就只能是 `blocked`，否则只能是 `partial`。
+
+`inputDigest` 和 `resultDigest` 都使用与 D07 相同的 canonical JSON/SHA-256 规则。`resultDigest` 的完整投影绑定版本、项目/时间线/装配 ID、`status`、`d07Eligible`、`inputDigest`、原始 `storyboardDigest`、TTS 解析、逐镜头解析、`d07Diagnostic`、完整 `resolvedStoryboard` 和完整 `videoAssemblyRequest`；投影明确不包含 `resultDigest` 本身，避免循环。Python 会保留 D05 必需的 `durationPlanSourceDigest: null`，并省略其他未提供的可选字段，以便与 TS 投影逐字节一致。相同输入在 TS/Python 两端产生固定 digest（当前成功夹具：`7703dbe9eb3088b87a2e78f64ae7e20b6c92823b207078740cd2df7bf3f5ecd1`）。digest 不包含 prompt、密钥、用户路径或隐私 metadata。
 
 ## 稳定错误
 

@@ -55,7 +55,7 @@ class GenerationFallbackTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(first.status, "ready")
         self.assertTrue(first.d07_eligible)
-        self.assertEqual(first.result_digest, "c76de1c381f27fae3ce7264f96c4f732fd94d8f9232abdfc9da37710d25d0c58")
+        self.assertEqual(first.result_digest, "7703dbe9eb3088b87a2e78f64ae7e20b6c92823b207078740cd2df7bf3f5ecd1")
         self.assertEqual(first.input_digest, "ce97428802d7e6030bef28c688b4a8a7647be6b360c0c285c49dac5f8cca307c")
         self.assertIsNotNone(first.video_assembly_request)
 
@@ -147,6 +147,20 @@ class GenerationFallbackTests(unittest.TestCase):
         result = GenerationFallbackService().resolve(request())
         self.assertIsNotNone(result.video_assembly_request)
         VideoAssemblyService._validate_bindings(result.video_assembly_request)
+
+    def test_result_digest_rejects_tampered_status_input_storyboard_and_d07_request(self) -> None:
+        base = GenerationFallbackService().resolve(request()).model_dump(by_alias=True)
+        mutations = [
+            lambda value: value.update(status="partial"),
+            lambda value: value.update(inputDigest="0" * 64),
+            lambda value: (value["resolvedStoryboard"]["shots"][0].update(visualIntent="tampered"), value["videoAssemblyRequest"].update(storyboard=copy.deepcopy(value["resolvedStoryboard"]))),
+            lambda value: value["videoAssemblyRequest"].update(assemblyId="assembly-d08-tampered"),
+        ]
+        for mutate in mutations:
+            forged = copy.deepcopy(base)
+            mutate(forged)
+            with self.assertRaises(ValidationError):
+                GenerationFallbackResult.model_validate(forged)
 
     def test_planned_user_material_missing_is_downgraded_to_no_user_material_for_d07(self) -> None:
         base = request().model_dump(by_alias=True)

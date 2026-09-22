@@ -252,13 +252,21 @@ export function validateGenerationFallbackResult(value: unknown): GenerationFall
   const resolvedShots = getShots(result.resolvedStoryboard as ScriptStoryboardResult);
   if (!Array.isArray(result.shots) || result.shots.length !== shots.length) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.shots", "must map one-to-one to D05 shots");
   validateTtsResolution(result.tts, result.projectId as string);
-  result.shots.forEach((item: unknown, index: number) => validateResolvedShot(item, `$.shots[${index}]`, shots[index]!, resolvedShots[index]!));
+  const tts = result.tts as GenerationFallbackTts;
+  const shotResults = result.shots as GenerationFallbackShot[];
+  shotResults.forEach((item: unknown, index: number) => validateResolvedShot(item, `$.shots[${index}]`, shots[index]!, resolvedShots[index]!));
   if (result.d07Diagnostic !== null) validateDiagnostic(result.d07Diagnostic, "$.d07Diagnostic");
   if (result.videoAssemblyRequest !== null) {
     if (!isVideoAssemblyRequest(result.videoAssemblyRequest)) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.videoAssemblyRequest", "must be a valid D07 request");
     if (result.videoAssemblyRequest.projectId !== result.projectId || JSON.stringify(result.videoAssemblyRequest.storyboard) !== JSON.stringify(result.resolvedStoryboard)) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.videoAssemblyRequest", "must bind to the resolved D05 project");
   }
   if (result.d07Eligible !== (result.videoAssemblyRequest !== null)) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.d07Eligible", "must match D07 request availability");
+  const expectedStatus = result.d07Eligible || result.videoAssemblyRequest !== null
+    ? "ready"
+    : tts.status === "fallback" || shotResults.some((item) => item.status === "unresolved")
+      ? "blocked"
+      : "partial";
+  if (result.status !== expectedStatus) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.status", "does not match D07 eligibility and fallback outcomes");
   const digest = fallbackResultDigest(result as GenerationFallbackResult);
   if (digest !== result.resultDigest) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.resultDigest", "does not match the deterministic D08 result digest");
   rejectForbidden(result, "$", new Set());
@@ -320,8 +328,10 @@ export function resolveGenerationFallback(value: unknown): GenerationFallbackRes
     : null;
   const d07Diagnostic = d07Candidate === null ? firstD07Diagnostic(tts, resolutions) : null;
   const status = d07Candidate !== null ? "ready" as const : resolutions.some((item) => item.status === "unresolved") || tts.status === "fallback" ? "blocked" as const : "partial" as const;
-  const digestSeed = { schemaVersion: GENERATION_FALLBACK_SCHEMA_VERSION, contractVersion: GENERATION_FALLBACK_CONTRACT_VERSION, policyVersion: GENERATION_FALLBACK_POLICY_VERSION, projectId: request.projectId, timelineId: request.timelineId, assemblyId: request.assemblyId, storyboardDigest: sourceStoryboard.sourcePlanDigest, tts: ttsDigest(tts), shots: resolutions.map(shotDigest), d07Diagnostic };
-  const result: GenerationFallbackResult = { schemaVersion: GENERATION_FALLBACK_SCHEMA_VERSION, contractVersion: GENERATION_FALLBACK_CONTRACT_VERSION, policyVersion: GENERATION_FALLBACK_POLICY_VERSION, runtimeMode: GENERATION_FALLBACK_RUNTIME_MODE, projectId: request.projectId, timelineId: request.timelineId, assemblyId: request.assemblyId, status, d07Eligible: d07Candidate !== null, inputDigest: sha256Hex(canonicalJson(inputDigest(request))), resultDigest: sha256Hex(canonicalJson(digestSeed)), storyboard: sourceStoryboard, resolvedStoryboard, tts, shots: resolutions, d07Diagnostic, videoAssemblyRequest: d07Candidate };
+  const d07Eligible = d07Candidate !== null;
+  const inputDigestValue = sha256Hex(canonicalJson(inputDigest(request)));
+  const digestSeed = { schemaVersion: GENERATION_FALLBACK_SCHEMA_VERSION, contractVersion: GENERATION_FALLBACK_CONTRACT_VERSION, policyVersion: GENERATION_FALLBACK_POLICY_VERSION, projectId: request.projectId, timelineId: request.timelineId, assemblyId: request.assemblyId, status, d07Eligible, inputDigest: inputDigestValue, storyboardDigest: sourceStoryboard.sourcePlanDigest, tts: ttsDigest(tts), shots: resolutions.map(shotDigest), d07Diagnostic, resolvedStoryboard, videoAssemblyRequest: d07Candidate };
+  const result: GenerationFallbackResult = { schemaVersion: GENERATION_FALLBACK_SCHEMA_VERSION, contractVersion: GENERATION_FALLBACK_CONTRACT_VERSION, policyVersion: GENERATION_FALLBACK_POLICY_VERSION, runtimeMode: GENERATION_FALLBACK_RUNTIME_MODE, projectId: request.projectId, timelineId: request.timelineId, assemblyId: request.assemblyId, status, d07Eligible, inputDigest: inputDigestValue, resultDigest: sha256Hex(canonicalJson(digestSeed)), storyboard: sourceStoryboard, resolvedStoryboard, tts, shots: resolutions, d07Diagnostic, videoAssemblyRequest: d07Candidate };
   return validateGenerationFallbackResult(result);
 }
 
@@ -415,7 +425,7 @@ function inputDigest(input: GenerationFallbackRequest): unknown { return { schem
 function failureDigest(item: GenerationFallbackFailure): unknown { return { projectId: item.projectId, component: item.component, stage: item.stage, shotId: item.shotId, code: item.code, retryable: item.retryable }; }
 function ttsDigest(item: GenerationFallbackTts): unknown { return { status: item.status, chosenSource: item.chosenSource, fallbackReason: item.fallbackReason, d07Binding: item.d07Binding, failure: item.failure ? failureDigest(item.failure) : null, provenance: [...item.provenance], diagnostic: item.diagnostic }; }
 function shotDigest(item: GenerationFallbackShot): unknown { return { shotId: item.shotId, order: item.order, segmentId: item.segmentId, status: item.status, chosenSource: item.chosenSource, fallbackReason: item.fallbackReason, d05FallbackReason: item.d05FallbackReason, d07Binding: item.d07Binding, attempts: item.attempts.map((attempt) => ({ source: attempt.source, outcome: attempt.outcome, error: attempt.error, provenance: [...attempt.provenance] })), provenance: [...item.provenance], diagnostic: item.diagnostic }; }
-function fallbackResultDigest(result: GenerationFallbackResult): string { return sha256Hex(canonicalJson({ schemaVersion: result.schemaVersion, contractVersion: result.contractVersion, policyVersion: result.policyVersion, projectId: result.projectId, timelineId: result.timelineId, assemblyId: result.assemblyId, storyboardDigest: result.storyboard.sourcePlanDigest, tts: ttsDigest(result.tts), shots: result.shots.map(shotDigest), d07Diagnostic: result.d07Diagnostic })); }
+function fallbackResultDigest(result: GenerationFallbackResult): string { return sha256Hex(canonicalJson({ schemaVersion: result.schemaVersion, contractVersion: result.contractVersion, policyVersion: result.policyVersion, projectId: result.projectId, timelineId: result.timelineId, assemblyId: result.assemblyId, status: result.status, d07Eligible: result.d07Eligible, inputDigest: result.inputDigest, storyboardDigest: result.storyboard.sourcePlanDigest, tts: ttsDigest(result.tts), shots: result.shots.map(shotDigest), d07Diagnostic: result.d07Diagnostic, resolvedStoryboard: result.resolvedStoryboard, videoAssemblyRequest: result.videoAssemblyRequest })); }
 
 function findSegment(storyboard: ScriptStoryboardResult, segmentId: string) { const segment = getSegments(storyboard).find((item) => item.segmentId === segmentId); if (!segment) fail("GENERATION_FALLBACK_RESULT_INVALID", "result", "$.shots", "shot segment is missing"); return segment; }
 function getSegments(storyboard: ScriptStoryboardResult) { return [storyboard.script.hook, ...storyboard.script.body, storyboard.script.cta]; }

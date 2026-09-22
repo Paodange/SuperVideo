@@ -255,6 +255,9 @@ class GenerationFallbackResult(GenerationFallbackModel):
                 raise ValueError("D08 fallback attempts must be a non-looping prefix of the D05 priority")
         if self.d07_eligible != (self.video_assembly_request is not None):
             raise ValueError("D08 D07 eligibility does not match the request binding")
+        expected_status = "ready" if self.d07_eligible or self.video_assembly_request is not None else "blocked" if self.tts.status == "fallback" or any(item.status == "unresolved" for item in self.shots) else "partial"
+        if self.status != expected_status:
+            raise ValueError("D08 result status does not match D07 eligibility and fallback outcomes")
         if self.video_assembly_request is not None:
             if self.video_assembly_request.project_id != self.project_id or self.video_assembly_request.storyboard != self.resolved_storyboard:
                 raise ValueError("D08 D07 request is not bound to the resolved storyboard")
@@ -303,12 +306,29 @@ def fallback_result_digest(result: GenerationFallbackResult) -> str:
         "projectId": result.project_id,
         "timelineId": result.timeline_id,
         "assemblyId": result.assembly_id,
+        "status": result.status,
+        "d07Eligible": result.d07_eligible,
+        "inputDigest": result.input_digest,
         "storyboardDigest": result.storyboard.source_plan_digest,
         "tts": tts_digest(result.tts),
         "shots": [shot_digest(item) for item in result.shots],
         "d07Diagnostic": result.d07_diagnostic.model_dump(by_alias=True) if result.d07_diagnostic is not None else None,
+        "resolvedStoryboard": storyboard_digest_projection(result.resolved_storyboard),
+        "videoAssemblyRequest": video_assembly_digest_projection(result.video_assembly_request) if result.video_assembly_request is not None else None,
     }
     return hashlib.sha256(_canonical_json(value)).hexdigest()
+
+
+def storyboard_digest_projection(value: ScriptStoryboardResult) -> dict[str, Any]:
+    projection = value.model_dump(by_alias=True, exclude_none=True)
+    projection["durationPlanSourceDigest"] = value.duration_plan_source_digest
+    return projection
+
+
+def video_assembly_digest_projection(value: VideoAssemblyParams) -> dict[str, Any]:
+    projection = value.model_dump(by_alias=True, exclude_none=True)
+    projection["storyboard"] = storyboard_digest_projection(value.storyboard)
+    return projection
 
 
 def failure_digest(value: GenerationFallbackFailure | None) -> dict[str, object] | None:

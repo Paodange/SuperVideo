@@ -55,7 +55,7 @@ test("D08 success resolves D05/D06 inputs and hands a valid request to strict D0
   assert.equal(isVideoAssemblyRequest(first.videoAssemblyRequest), true);
   assert.equal(buildVideoAssembly(first.videoAssemblyRequest).status, "assembled");
   assert.deepEqual(first, second);
-  assert.equal(first.resultDigest, "c76de1c381f27fae3ce7264f96c4f732fd94d8f9232abdfc9da37710d25d0c58");
+  assert.equal(first.resultDigest, "7703dbe9eb3088b87a2e78f64ae7e20b6c92823b207078740cd2df7bf3f5ecd1");
   assert.equal(first.inputDigest, "ce97428802d7e6030bef28c688b4a8a7647be6b360c0c285c49dac5f8cca307c");
 });
 
@@ -161,4 +161,22 @@ test("D08 rejects project crossing, unknown fields, sensitive/path fields, inval
   const tampered = structuredClone(result);
   tampered.shots[0].attempts.push({ source: "ai-image", outcome: "selected", error: null, provenance: [] });
   assert.equal(isGenerationFallbackResult(tampered), false);
+});
+
+test("D08 result digest rejects tampered status, input, resolved storyboard, and D07 request", () => {
+  const base = resolveGenerationFallback(makeRequest());
+  const mutations = [
+    (value) => { value.status = "partial"; },
+    (value) => { value.inputDigest = "0".repeat(64); },
+    (value) => {
+      value.resolvedStoryboard.shots[0].visualIntent = "tampered";
+      value.videoAssemblyRequest.storyboard = structuredClone(value.resolvedStoryboard);
+    },
+    (value) => { value.videoAssemblyRequest.assemblyId = "assembly-d08-tampered"; },
+  ];
+  for (const mutate of mutations) {
+    const forged = structuredClone(base);
+    mutate(forged);
+    assert.equal(isGenerationFallbackResult(forged), false);
+  }
 });
