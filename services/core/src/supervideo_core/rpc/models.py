@@ -29,6 +29,7 @@ from supervideo_core.media.narrative_planner_models import NarrativePlanParams
 from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams
 from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 from supervideo_core.media.preview_render_models import PreviewRenderParams
+from supervideo_core.media.final_export_models import FinalMp4ExportParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -137,7 +138,7 @@ class CoreHealth(StrictModel):
     status: Literal["ok"]
     protocol_version: Literal[1] = Field(alias="protocolVersion")
     core_version: str = Field(alias="coreVersion", min_length=1, max_length=32)
-    capabilities: list[str] = Field(max_length=32)
+    capabilities: list[str] = Field(max_length=64)
 
     @field_validator("capabilities")
     @classmethod
@@ -318,6 +319,8 @@ def validate_request(value: Any) -> RpcRequest:
         from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
 
         PreviewQualityCheckParams.model_validate(request.params)
+    elif request.method == "media.final.export":
+        FinalMp4ExportParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -390,8 +393,9 @@ def health_result() -> dict[str, object]:
             "plan.optimize_duration",
             "media.aroll.cut_join",
             "media.subtitle.plan",
-    "media.preview.render",
-    "media.preview.quality_check",
+            "media.preview.render",
+            "media.preview.quality_check",
+            "media.final.export",
             "job.smoke.start",
             "job.get",
             "job.list",

@@ -27,6 +27,7 @@ import {
   isSubtitlePlanResult,
   isPreviewRenderResult,
   isPreviewQualityCheckResult,
+  isFinalMp4ExportResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -171,6 +172,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-subtitle-plan":
     case "media-preview-render":
     case "media-preview-quality-check":
+    case "media-final-export":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -240,6 +242,8 @@ async function handleProjectOperation(
                   ? isPreviewRenderResult(result)
                 : operation === "media-preview-quality-check"
                   ? isPreviewQualityCheckResult(result)
+                : operation === "media-final-export"
+                  ? isFinalMp4ExportResult(result)
                 : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
@@ -360,6 +364,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-subtitle-plan") return CORE_RPC_METHODS.mediaSubtitlePlan;
   if (operation === "media-preview-render") return CORE_RPC_METHODS.mediaPreviewRender;
   if (operation === "media-preview-quality-check") return CORE_RPC_METHODS.mediaPreviewQualityCheck;
+  if (operation === "media-final-export") return CORE_RPC_METHODS.mediaFinalExport;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 

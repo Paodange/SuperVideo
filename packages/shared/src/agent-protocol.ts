@@ -28,8 +28,12 @@ import type {
   SubtitlePlanResult,
   PreviewRenderParams,
   PreviewRenderResult,
+  PreviewQualityCheckParams,
+  PreviewQualityCheckResult,
+  FinalMp4ExportParams,
+  FinalMp4ExportResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -55,7 +59,7 @@ export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_MAX_CAPABILITIES = 32;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -83,6 +87,7 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaSubtitlePlan: "media-subtitle-plan",
   mediaPreviewRender: "media-preview-render",
   mediaPreviewQualityCheck: "media-preview-quality-check",
+  mediaFinalExport: "media-final-export",
   mediaScriptAlign: "media-script-align",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
@@ -131,7 +136,8 @@ export type AgentProjectOperationType =
   | "media-aroll-cut-join"
   | "media-subtitle-plan"
   | "media-preview-render"
-  | "media-preview-quality-check";
+  | "media-preview-quality-check"
+  | "media-final-export";
 
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
@@ -182,7 +188,8 @@ export type ProjectOperationErrorCode =
   | "AROLL_CUT_JOIN_INPUT_INVALID" | "AROLL_CUT_JOIN_TIMELINE_INVALID" | "AROLL_CUT_JOIN_SOURCE_INVALID" | "AROLL_CUT_JOIN_OUTPUT_INVALID" | "AROLL_CUT_JOIN_TOOL_UNAVAILABLE" | "AROLL_CUT_JOIN_TOOL_TIMEOUT" | "AROLL_CUT_JOIN_TIMEOUT" | "AROLL_CUT_JOIN_CANCELLED"
   | "SUBTITLE_INPUT_INVALID" | "SUBTITLE_TIMELINE_INVALID" | "SUBTITLE_SOURCE_INVALID" | "SUBTITLE_TIMECODE_INVALID" | "SUBTITLE_OVERLAP" | "SUBTITLE_TEXT_INVALID" | "SUBTITLE_LINE_COUNT_INVALID" | "SUBTITLE_LINE_WIDTH_INVALID" | "SUBTITLE_OUTPUT_INVALID" | "SUBTITLE_TIMEOUT" | "SUBTITLE_CANCELLED"
   | "PREVIEW_RENDER_INPUT_INVALID" | "PREVIEW_RENDER_SOURCE_INVALID" | "PREVIEW_RENDER_SUBTITLE_INVALID" | "PREVIEW_RENDER_OUTPUT_INVALID" | "PREVIEW_RENDER_TOOL_UNAVAILABLE" | "PREVIEW_RENDER_TOOL_TIMEOUT" | "PREVIEW_RENDER_TIMEOUT" | "PREVIEW_RENDER_CANCELLED"
-  | "PREVIEW_QUALITY_INPUT_INVALID" | "PREVIEW_QUALITY_OUTPUT_INVALID" | "PREVIEW_QUALITY_TIMEOUT" | "PREVIEW_QUALITY_CANCELLED";
+  | "PREVIEW_QUALITY_INPUT_INVALID" | "PREVIEW_QUALITY_OUTPUT_INVALID" | "PREVIEW_QUALITY_TIMEOUT" | "PREVIEW_QUALITY_CANCELLED"
+  | "FINAL_EXPORT_INPUT_INVALID" | "FINAL_EXPORT_PREVIEW_NOT_READY" | "FINAL_EXPORT_QUALITY_NOT_READY" | "FINAL_EXPORT_SOURCE_INVALID" | "FINAL_EXPORT_SOURCE_TAMPERED" | "FINAL_EXPORT_OUTPUT_INVALID" | "FINAL_EXPORT_OUTPUT_CONFLICT" | "FINAL_EXPORT_CONTAINER_INVALID" | "FINAL_EXPORT_TOOL_UNAVAILABLE" | "FINAL_EXPORT_TIMEOUT" | "FINAL_EXPORT_CANCELLED";
 
 export type ProjectOperationError = Readonly<{
   code: ProjectOperationErrorCode;
@@ -385,6 +392,7 @@ export const DESKTOP_IPC_CHANNELS = {
   planSubtitles: "desktop:v2:plan-subtitles",
   renderPreview: "desktop:v2:render-preview",
   checkPreviewQuality: "desktop:v2:check-preview-quality",
+  exportFinalMp4: "desktop:v2:export-final-mp4",
   startSmokeJob: "desktop:v2:start-smoke-job",
   getJob: "desktop:v2:get-job",
   listJobs: "desktop:v2:list-jobs",
@@ -460,6 +468,7 @@ export type DesktopApi = Readonly<{
   planSubtitles: (input: SubtitlePlanParams) => Promise<SubtitlePlanResult>;
   renderPreview: (input: PreviewRenderParams) => Promise<PreviewRenderResult>;
   checkPreviewQuality: (input: import("./core-rpc").PreviewQualityCheckParams) => Promise<import("./core-rpc").PreviewQualityCheckResult>;
+  exportFinalMp4: (input: FinalMp4ExportParams) => Promise<FinalMp4ExportResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -630,6 +639,17 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   PREVIEW_QUALITY_OUTPUT_INVALID: "The preview quality-check result was invalid.",
   PREVIEW_QUALITY_TIMEOUT: "The preview quality check timed out.",
   PREVIEW_QUALITY_CANCELLED: "The preview quality check was cancelled.",
+  FINAL_EXPORT_INPUT_INVALID: "The final export input is invalid or does not bind to the verified preview.",
+  FINAL_EXPORT_PREVIEW_NOT_READY: "The preview has not completed successfully and cannot be exported.",
+  FINAL_EXPORT_QUALITY_NOT_READY: "The preview quality gate is not ready for final export.",
+  FINAL_EXPORT_SOURCE_INVALID: "The verified preview source is missing or outside the project boundary.",
+  FINAL_EXPORT_SOURCE_TAMPERED: "The verified preview source changed or does not match its recorded fingerprint.",
+  FINAL_EXPORT_OUTPUT_INVALID: "The final MP4 output or manifest was invalid.",
+  FINAL_EXPORT_OUTPUT_CONFLICT: "The requested final export path already contains a different output.",
+  FINAL_EXPORT_CONTAINER_INVALID: "The final MP4 container or media streams could not be verified.",
+  FINAL_EXPORT_TOOL_UNAVAILABLE: "The final export media verification tool is unavailable.",
+  FINAL_EXPORT_TIMEOUT: "The final MP4 export timed out.",
+  FINAL_EXPORT_CANCELLED: "The final MP4 export was cancelled.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "Secure credential storage is unavailable.",
   CREDENTIAL_STORE_CORRUPT: "Secure credential storage is corrupt.",
   CREDENTIAL_NOT_FOUND: "The credential was not found.",
@@ -932,7 +952,8 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "media-aroll-cut-join"
     || value === "media-subtitle-plan"
     || value === "media-preview-render"
-    || value === "media-preview-quality-check";
+    || value === "media-preview-quality-check"
+    || value === "media-final-export";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -1017,6 +1038,7 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
   if (type === "media-subtitle-plan") return isSubtitlePlanParams(value);
   if (type === "media-preview-render") return isPreviewRenderParams(value);
   if (type === "media-preview-quality-check") return isPreviewQualityCheckParams(value);
+  if (type === "media-final-export") return isFinalMp4ExportParams(value);
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
     if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
@@ -1122,6 +1144,7 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "SUBTITLE_INPUT_INVALID", "SUBTITLE_TIMELINE_INVALID", "SUBTITLE_SOURCE_INVALID", "SUBTITLE_TIMECODE_INVALID", "SUBTITLE_OVERLAP", "SUBTITLE_TEXT_INVALID", "SUBTITLE_LINE_COUNT_INVALID", "SUBTITLE_LINE_WIDTH_INVALID", "SUBTITLE_OUTPUT_INVALID", "SUBTITLE_TIMEOUT", "SUBTITLE_CANCELLED",
   "PREVIEW_RENDER_INPUT_INVALID", "PREVIEW_RENDER_SOURCE_INVALID", "PREVIEW_RENDER_SUBTITLE_INVALID", "PREVIEW_RENDER_OUTPUT_INVALID", "PREVIEW_RENDER_TOOL_UNAVAILABLE", "PREVIEW_RENDER_TOOL_TIMEOUT", "PREVIEW_RENDER_TIMEOUT", "PREVIEW_RENDER_CANCELLED",
   "PREVIEW_QUALITY_INPUT_INVALID", "PREVIEW_QUALITY_OUTPUT_INVALID", "PREVIEW_QUALITY_TIMEOUT", "PREVIEW_QUALITY_CANCELLED",
+  "FINAL_EXPORT_INPUT_INVALID", "FINAL_EXPORT_PREVIEW_NOT_READY", "FINAL_EXPORT_QUALITY_NOT_READY", "FINAL_EXPORT_SOURCE_INVALID", "FINAL_EXPORT_SOURCE_TAMPERED", "FINAL_EXPORT_OUTPUT_INVALID", "FINAL_EXPORT_OUTPUT_CONFLICT", "FINAL_EXPORT_CONTAINER_INVALID", "FINAL_EXPORT_TOOL_UNAVAILABLE", "FINAL_EXPORT_TIMEOUT", "FINAL_EXPORT_CANCELLED",
 ]);
 
 const JOB_OPERATION_ERROR_CODES = new Set<string>([
@@ -1168,6 +1191,7 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-subtitle-plan") return isSubtitlePlanResult(value);
   if (type === "media-preview-render") return isPreviewRenderResult(value);
   if (type === "media-preview-quality-check") return isPreviewQualityCheckResult(value);
+  if (type === "media-final-export") return isFinalMp4ExportResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;

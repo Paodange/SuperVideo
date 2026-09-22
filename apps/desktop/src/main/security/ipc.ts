@@ -21,6 +21,7 @@ import {
   isSubtitlePlanParams,
   isPreviewRenderParams,
   isPreviewQualityCheckParams,
+  isFinalMp4ExportParams,
   isValidAgentRunId,
   isCredentialRemoveRequest,
   isCredentialReplaceRequest,
@@ -79,6 +80,8 @@ import {
   type PreviewRenderResult,
   type PreviewQualityCheckParams,
   type PreviewQualityCheckResult,
+  type FinalMp4ExportParams,
+  type FinalMp4ExportResult,
 } from "@supervideo/shared";
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { isTrustedRendererUrl, sanitizeUrlForDiagnostics, type RendererTrustPolicy } from "./policies";
@@ -105,6 +108,7 @@ export type DesktopIpcDependencies = Readonly<{
   planSubtitles: (event: IpcMainInvokeEvent, input: SubtitlePlanParams) => Promise<SubtitlePlanResult>;
   renderPreview: (event: IpcMainInvokeEvent, input: PreviewRenderParams) => Promise<PreviewRenderResult>;
   checkPreviewQuality: (event: IpcMainInvokeEvent, input: PreviewQualityCheckParams) => Promise<PreviewQualityCheckResult>;
+  exportFinalMp4: (event: IpcMainInvokeEvent, input: FinalMp4ExportParams) => Promise<FinalMp4ExportResult>;
   startSmokeJob: (event: IpcMainInvokeEvent, input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
@@ -164,6 +168,7 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.planSubtitles, isSubtitlePlanParams, dependencies, (payload, event) => dependencies.planSubtitles(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.renderPreview, isPreviewRenderParams, dependencies, (payload, event) => dependencies.renderPreview(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.checkPreviewQuality, isPreviewQualityCheckParams, dependencies, (payload, event) => dependencies.checkPreviewQuality(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.exportFinalMp4, isFinalMp4ExportParams, dependencies, (payload, event) => dependencies.exportFinalMp4(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startSmokeJob, isValidJobSmokeStartPayload, dependencies, (payload, event) => dependencies.startSmokeJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),

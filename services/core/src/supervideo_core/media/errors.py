@@ -103,6 +103,17 @@ MediaErrorCode = Literal[
     "PREVIEW_QUALITY_OUTPUT_INVALID",
     "PREVIEW_QUALITY_TIMEOUT",
     "PREVIEW_QUALITY_CANCELLED",
+    "FINAL_EXPORT_INPUT_INVALID",
+    "FINAL_EXPORT_PREVIEW_NOT_READY",
+    "FINAL_EXPORT_QUALITY_NOT_READY",
+    "FINAL_EXPORT_SOURCE_INVALID",
+    "FINAL_EXPORT_SOURCE_TAMPERED",
+    "FINAL_EXPORT_OUTPUT_INVALID",
+    "FINAL_EXPORT_OUTPUT_CONFLICT",
+    "FINAL_EXPORT_CONTAINER_INVALID",
+    "FINAL_EXPORT_TOOL_UNAVAILABLE",
+    "FINAL_EXPORT_TIMEOUT",
+    "FINAL_EXPORT_CANCELLED",
 ]
 
 
@@ -209,6 +220,17 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "PREVIEW_QUALITY_OUTPUT_INVALID": MediaErrorDefinition("The preview quality-check result was invalid."),
     "PREVIEW_QUALITY_TIMEOUT": MediaErrorDefinition("The preview quality check timed out."),
     "PREVIEW_QUALITY_CANCELLED": MediaErrorDefinition("The preview quality check was cancelled."),
+    "FINAL_EXPORT_INPUT_INVALID": MediaErrorDefinition("The final export input is invalid or does not bind to the verified preview."),
+    "FINAL_EXPORT_PREVIEW_NOT_READY": MediaErrorDefinition("The preview has not completed successfully and cannot be exported."),
+    "FINAL_EXPORT_QUALITY_NOT_READY": MediaErrorDefinition("The preview quality gate is not ready for final export."),
+    "FINAL_EXPORT_SOURCE_INVALID": MediaErrorDefinition("The verified preview source is missing or outside the project boundary."),
+    "FINAL_EXPORT_SOURCE_TAMPERED": MediaErrorDefinition("The verified preview source changed or does not match its recorded fingerprint."),
+    "FINAL_EXPORT_OUTPUT_INVALID": MediaErrorDefinition("The final MP4 output or manifest was invalid."),
+    "FINAL_EXPORT_OUTPUT_CONFLICT": MediaErrorDefinition("The requested final export path already contains a different output."),
+    "FINAL_EXPORT_CONTAINER_INVALID": MediaErrorDefinition("The final MP4 container or media streams could not be verified."),
+    "FINAL_EXPORT_TOOL_UNAVAILABLE": MediaErrorDefinition("The final export media verification tool is unavailable."),
+    "FINAL_EXPORT_TIMEOUT": MediaErrorDefinition("The final MP4 export timed out."),
+    "FINAL_EXPORT_CANCELLED": MediaErrorDefinition("The final MP4 export was cancelled."),
 }
 
 

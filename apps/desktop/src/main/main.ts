@@ -25,6 +25,7 @@ import {
   isSubtitlePlanResult,
   isPreviewRenderResult,
   isPreviewQualityCheckResult,
+  isFinalMp4ExportResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -62,6 +63,8 @@ import {
   type PreviewRenderResult,
   type PreviewQualityCheckParams,
   type PreviewQualityCheckResult,
+  type FinalMp4ExportParams,
+  type FinalMp4ExportResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -774,6 +777,11 @@ app.whenReady().then(() => {
     checkPreviewQuality: async (_event, input: PreviewQualityCheckParams): Promise<PreviewQualityCheckResult> => {
       const result = await agentController.runProjectOperation("media-preview-quality-check", input, input.projectId);
       if (!isPreviewQualityCheckResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    exportFinalMp4: async (_event, input: FinalMp4ExportParams): Promise<FinalMp4ExportResult> => {
+      const result = await agentController.runProjectOperation("media-final-export", input, input.projectId);
+      if (!isFinalMp4ExportResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(

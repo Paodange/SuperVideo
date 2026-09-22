@@ -47,12 +47,16 @@ import {
   isPreviewRenderResult,
   isPreviewQualityCheckParams,
   isPreviewQualityCheckResult,
+  isFinalMp4ExportParams,
+  isFinalMp4ExportResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
   type CoreProgress,
   type CoreRpcErrorCode,
   type CoreRpcServerMessage,
+  type FinalMp4ExportParams,
+  type FinalMp4ExportResult,
   type CoreSmokeCountdownParams,
   type CoreSmokeCountdownResult,
   type AssetListParams,
@@ -406,6 +410,13 @@ export class PythonCoreClient {
     if (!isPreviewQualityCheckParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaPreviewQualityCheck, params, options);
     if (!isPreviewQualityCheckResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async exportFinalMp4(params: FinalMp4ExportParams, options: CoreRpcRequestOptions = {}): Promise<FinalMp4ExportResult> {
+    if (!isFinalMp4ExportParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.mediaFinalExport, params, options);
+    if (!isFinalMp4ExportResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 
