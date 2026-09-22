@@ -83,6 +83,30 @@ class RpcModelTests(unittest.TestCase):
         self.assertIn("media.aroll.cut_join", health_result()["capabilities"])
         self.assertIn("media.subtitle.plan", health_result()["capabilities"])
         self.assertIn("media.preview.render", health_result()["capabilities"])
+
+    def test_c10_version_methods_are_versioned_and_scoped(self) -> None:
+        timeline = json.loads((ROOT / "tests" / "fixtures" / "c01_timeline_ir_v1.json").read_text(encoding="utf-8"))
+        request = {
+            "jsonrpc": "2.0",
+            "id": "timeline-version-1",
+            "method": "timeline.version.create",
+            "params": {
+                "schemaVersion": 1,
+                "versioningVersion": "timeline-version-v1",
+                "projectId": "99999999-9999-4999-8999-999999999999",
+                "timeline": timeline,
+                "idempotencyKey": "root-1",
+            },
+        }
+        self.assertEqual(validate_request(request).method, "timeline.version.create")
+        with self.assertRaises(ValidationError):
+            validate_request({**request, "params": {**request["params"], "unexpected": True}})
+        for method in (
+            "timeline.version.apply_edit", "timeline.version.list", "timeline.version.get",
+            "timeline.version.activate", "timeline.version.undo", "timeline.version.redo", "timeline.version.diff",
+        ):
+            self.assertIn(method, health_result()["capabilities"])
+        self.assertEqual(error_payload("TIMELINE_VERSION_CONFLICT")["code"], -32436)
         expected_codes = {
             "SLOT_INPUT_INVALID": -32346,
             "SLOT_SOURCE_INVALID": -32347,
@@ -353,7 +377,7 @@ class RpcServerTests(unittest.TestCase):
                 }
             )
             created = self.read_line()["result"]
-            self.assertEqual(created["databaseSchemaVersion"], 2)
+            self.assertEqual(created["databaseSchemaVersion"], 3)
             self.send(
                 {
                     "jsonrpc": "2.0",

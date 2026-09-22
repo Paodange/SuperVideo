@@ -46,6 +46,14 @@ from supervideo_core.media.final_export_models import FinalMp4ExportParams, Fina
 from supervideo_core.media.final_export import FinalMp4ExportService
 from supervideo_core.media.edit_models import TimelineEditParams, TimelineEditResult
 from supervideo_core.media.edit_service import TimelineEditService
+from supervideo_core.timeline.version_service import TimelineVersionService
+from supervideo_core.timeline.version_models import (
+    TimelineVersionActivateParams, TimelineVersionApplyEditParams, TimelineVersionCreateParams,
+    TimelineVersionDiffParams, TimelineVersionDiffResult, TimelineVersionListParams,
+    TimelineVersionListResult, TimelineVersionRedoParams, TimelineVersionReferenceParams,
+    TimelineVersionResult, TimelineVersionUndoParams,
+)
+from supervideo_core.timeline.version_errors import TimelineVersionError
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -98,7 +106,7 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None, preview_render_service: PreviewRenderService | None = None, preview_quality_check_service: PreviewQualityCheckService | None = None, final_export_service: FinalMp4ExportService | None = None, edit_service: TimelineEditService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None, preview_render_service: PreviewRenderService | None = None, preview_quality_check_service: PreviewQualityCheckService | None = None, final_export_service: FinalMp4ExportService | None = None, edit_service: TimelineEditService | None = None, version_service: TimelineVersionService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
         self.transcription_service = transcription_service or TranscriptionService()
@@ -117,6 +125,7 @@ class ProjectService:
         self.preview_quality_check_service = preview_quality_check_service or PreviewQualityCheckService()
         self.final_export_service = final_export_service or FinalMp4ExportService()
         self.edit_service = edit_service or TimelineEditService()
+        self.version_service = version_service or TimelineVersionService(self.edit_service)
 
     @property
     def active_project_id(self) -> str | None:
@@ -229,6 +238,37 @@ class ProjectService:
         self._require_active(request.project_id)
         del cancelled
         return self.edit_service.edit(request)
+
+    def _version_call(self, project_id: str, operation):
+        active = self._require_active(project_id)
+        try:
+            return operation(active.database)
+        except TimelineVersionError as error:
+            raise ProjectError(error.code) from error
+
+    def create_timeline_version(self, request: TimelineVersionCreateParams) -> TimelineVersionResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.create(request, database))
+
+    def apply_timeline_edit(self, request: TimelineVersionApplyEditParams) -> TimelineVersionResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.apply_edit(request, database))
+
+    def list_timeline_versions(self, request: TimelineVersionListParams) -> TimelineVersionListResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.list(request, database))
+
+    def get_timeline_version(self, request: TimelineVersionReferenceParams) -> TimelineVersionResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.get(request, database))
+
+    def activate_timeline_version(self, request: TimelineVersionActivateParams) -> TimelineVersionResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.activate(request, database))
+
+    def undo_timeline_version(self, request: TimelineVersionUndoParams) -> TimelineVersionResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.undo(request, database))
+
+    def redo_timeline_version(self, request: TimelineVersionRedoParams) -> TimelineVersionResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.redo(request, database))
+
+    def diff_timeline_versions(self, request: TimelineVersionDiffParams) -> TimelineVersionDiffResult:
+        return self._version_call(request.project_id, lambda database: self.version_service.diff(request, database))
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:

@@ -35,6 +35,11 @@ from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
 from supervideo_core.media.final_export_models import FinalMp4ExportParams
 from supervideo_core.media.edit_models import TimelineEditParams
+from supervideo_core.timeline.version_models import (
+    TimelineVersionActivateParams, TimelineVersionApplyEditParams, TimelineVersionCreateParams,
+    TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
+    TimelineVersionReferenceParams, TimelineVersionUndoParams,
+)
 
 from .errors import RpcServiceError
 from .models import (
@@ -308,6 +313,21 @@ async def timeline_edit_handler(
     return payload
 
 
+async def timeline_version_handler(params, _emit: ProgressEmitter, _cancelled: asyncio.Event, service: ProjectService) -> dict[str, object]:
+    handlers = {
+        "TimelineVersionCreateParams": service.create_timeline_version,
+        "TimelineVersionApplyEditParams": service.apply_timeline_edit,
+        "TimelineVersionListParams": service.list_timeline_versions,
+        "TimelineVersionReferenceParams": service.get_timeline_version,
+        "TimelineVersionActivateParams": service.activate_timeline_version,
+        "TimelineVersionUndoParams": service.undo_timeline_version,
+        "TimelineVersionRedoParams": service.redo_timeline_version,
+        "TimelineVersionDiffParams": service.diff_timeline_versions,
+    }
+    result = handlers[type(params).__name__](params)
+    return result.model_dump(by_alias=True, exclude_none=False)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -452,6 +472,14 @@ class RpcRegistry:
                 TimelineEditParams,
                 lambda params, emit, cancelled: timeline_edit_handler(params, emit, cancelled, self.project_service),
             ),
+            "timeline.version.create": (TimelineVersionCreateParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.apply_edit": (TimelineVersionApplyEditParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.list": (TimelineVersionListParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.get": (TimelineVersionReferenceParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.activate": (TimelineVersionActivateParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.undo": (TimelineVersionUndoParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.redo": (TimelineVersionRedoParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.diff": (TimelineVersionDiffParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
             "job.smoke.start": (
                 JobSmokeStartParams,
                 lambda params, _emit, _cancelled: job_smoke_start_handler(params, self.job_manager),

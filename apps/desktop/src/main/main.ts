@@ -27,6 +27,9 @@ import {
   isPreviewQualityCheckResult,
   isFinalMp4ExportResult,
   isTimelineEditResult,
+  isTimelineVersionResult,
+  isTimelineVersionListResult,
+  isTimelineVersionDiffResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -68,6 +71,17 @@ import {
   type FinalMp4ExportResult,
   type TimelineEditParams,
   type TimelineEditResult,
+  type TimelineVersionCreateParams,
+  type TimelineVersionApplyEditParams,
+  type TimelineVersionListParams,
+  type TimelineVersionReferenceParams,
+  type TimelineVersionActivateParams,
+  type TimelineVersionUndoParams,
+  type TimelineVersionRedoParams,
+  type TimelineVersionDiffParams,
+  type TimelineVersionResult,
+  type TimelineVersionListResult,
+  type TimelineVersionDiffResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -790,6 +804,46 @@ app.whenReady().then(() => {
     editTimeline: async (_event, input: TimelineEditParams): Promise<TimelineEditResult> => {
       const result = await agentController.runProjectOperation("timeline-edit", input, input.projectId);
       if (!isTimelineEditResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    createTimelineVersion: async (_event, input: TimelineVersionCreateParams): Promise<TimelineVersionResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-create", input, input.projectId);
+      if (!isTimelineVersionResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    applyTimelineEditVersion: async (_event, input: TimelineVersionApplyEditParams): Promise<TimelineVersionResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-apply-edit", input, input.projectId);
+      if (!isTimelineVersionResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    listTimelineVersions: async (_event, input: TimelineVersionListParams): Promise<TimelineVersionListResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-list", input, input.projectId);
+      if (!isTimelineVersionListResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    getTimelineVersion: async (_event, input: TimelineVersionReferenceParams): Promise<TimelineVersionResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-get", input, input.projectId);
+      if (!isTimelineVersionResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    activateTimelineVersion: async (_event, input: TimelineVersionActivateParams): Promise<TimelineVersionResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-activate", input, input.projectId);
+      if (!isTimelineVersionResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    undoTimelineVersion: async (_event, input: TimelineVersionUndoParams): Promise<TimelineVersionResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-undo", input, input.projectId);
+      if (!isTimelineVersionResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    redoTimelineVersion: async (_event, input: TimelineVersionRedoParams): Promise<TimelineVersionResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-redo", input, input.projectId);
+      if (!isTimelineVersionResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    diffTimelineVersions: async (_event, input: TimelineVersionDiffParams): Promise<TimelineVersionDiffResult> => {
+      const result = await agentController.runProjectOperation("timeline-version-diff", input, input.projectId);
+      if (!isTimelineVersionDiffResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(

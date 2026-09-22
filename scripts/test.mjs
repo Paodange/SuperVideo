@@ -38,6 +38,7 @@ run(
     path.join(root, "tests", "c07-quality-check.test.mjs"),
     path.join(root, "tests", "c08-final-export.test.mjs"),
     path.join(root, "tests", "c09-timeline-edit.test.mjs"),
+    path.join(root, "tests", "c10-timeline-versions.test.mjs"),
   ],
   "automated tests",
 );

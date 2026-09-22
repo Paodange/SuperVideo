@@ -31,6 +31,11 @@ from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.final_export_models import FinalMp4ExportParams
 from supervideo_core.media.edit_models import TimelineEditParams
+from supervideo_core.timeline.version_models import (
+    TimelineVersionActivateParams, TimelineVersionApplyEditParams, TimelineVersionCreateParams,
+    TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
+    TimelineVersionReferenceParams, TimelineVersionUndoParams,
+)
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -324,6 +329,22 @@ def validate_request(value: Any) -> RpcRequest:
         FinalMp4ExportParams.model_validate(request.params)
     elif request.method == "timeline.edit":
         TimelineEditParams.model_validate(request.params)
+    elif request.method == "timeline.version.create":
+        TimelineVersionCreateParams.model_validate(request.params)
+    elif request.method == "timeline.version.apply_edit":
+        TimelineVersionApplyEditParams.model_validate(request.params)
+    elif request.method == "timeline.version.list":
+        TimelineVersionListParams.model_validate(request.params)
+    elif request.method == "timeline.version.get":
+        TimelineVersionReferenceParams.model_validate(request.params)
+    elif request.method == "timeline.version.activate":
+        TimelineVersionActivateParams.model_validate(request.params)
+    elif request.method == "timeline.version.undo":
+        TimelineVersionUndoParams.model_validate(request.params)
+    elif request.method == "timeline.version.redo":
+        TimelineVersionRedoParams.model_validate(request.params)
+    elif request.method == "timeline.version.diff":
+        TimelineVersionDiffParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -400,6 +421,14 @@ def health_result() -> dict[str, object]:
             "media.preview.quality_check",
             "media.final.export",
             "timeline.edit",
+            "timeline.version.create",
+            "timeline.version.apply_edit",
+            "timeline.version.list",
+            "timeline.version.get",
+            "timeline.version.activate",
+            "timeline.version.undo",
+            "timeline.version.redo",
+            "timeline.version.diff",
             "job.smoke.start",
             "job.get",
             "job.list",

@@ -464,3 +464,32 @@ test("real PythonCoreClient timeline.edit returns the shared C09 wire shape", as
     rmSync(projectRoot, { recursive: true, force: true });
   }
 });
+
+test("real PythonCoreClient persists and navigates C10 Timeline versions", async () => {
+  const projectRoot = mkdtempSync(path.join(os.tmpdir(), "supervideo-c10-"));
+  const timeline = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "c01_timeline_ir_v1.json"), "utf8"));
+  const client = new PythonCoreClient({ rootDir: root });
+  const contract = { schemaVersion: 1, versioningVersion: "timeline-version-v1" };
+  try {
+    await client.start();
+    const project = await client.createProject({ name: "C10 RPC", targetPlatform: "douyin", projectRoot });
+    const rootVersion = await client.createTimelineVersion({ ...contract, projectId: project.projectId, timeline, idempotencyKey: "root-c10" });
+    assert.equal(shared.isTimelineVersionResult(rootVersion), true);
+    const repeatedRoot = await client.createTimelineVersion({ ...contract, projectId: project.projectId, timeline, idempotencyKey: "root-c10" });
+    assert.equal(repeatedRoot.activeVersionId, rootVersion.activeVersionId);
+    const edited = await client.applyTimelineEditVersion({ ...contract, projectId: project.projectId, instruction: "删除 clip-camera-a", idempotencyKey: "edit-c10" });
+    assert.equal(shared.isTimelineVersionResult(edited), true);
+    assert.equal(edited.editResult.status, "applied");
+    const list = await client.listTimelineVersions({ ...contract, projectId: project.projectId, limit: 10 });
+    assert.equal(shared.isTimelineVersionListResult(list), true);
+    assert.equal(list.items.length, 2);
+    const diff = await client.diffTimelineVersions({ ...contract, projectId: project.projectId, fromVersionId: rootVersion.activeVersionId, toVersionId: edited.activeVersionId });
+    assert.equal(shared.isTimelineVersionDiffResult(diff), true);
+    assert.deepEqual(diff.summary.removedClipIds, ["clip-camera-a"]);
+    const undone = await client.undoTimelineVersion({ ...contract, projectId: project.projectId, expectedActiveVersionId: edited.activeVersionId });
+    assert.equal(undone.activeVersionId, rootVersion.activeVersionId);
+  } finally {
+    await client.shutdown();
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});

@@ -39,6 +39,15 @@ ProjectErrorCode = Literal[
     "CONSTRAINT_VIOLATION",
     "RECORD_NOT_FOUND",
     "INVALID_RECORD",
+    "TIMELINE_VERSION_NOT_FOUND",
+    "TIMELINE_VERSION_PROJECT_MISMATCH",
+    "TIMELINE_ACTIVE_VERSION_MISSING",
+    "TIMELINE_NO_UNDO",
+    "TIMELINE_NO_REDO",
+    "TIMELINE_REDO_AMBIGUOUS",
+    "TIMELINE_VERSION_CONFLICT",
+    "TIMELINE_VERSION_INVALID",
+    "TIMELINE_DIFF_NOT_AVAILABLE",
 ]
 
 
@@ -79,6 +88,15 @@ ERRORS: Final[dict[str, ProjectErrorDefinition]] = {
     "CONSTRAINT_VIOLATION": ProjectErrorDefinition("Storage constraint was violated."),
     "RECORD_NOT_FOUND": ProjectErrorDefinition("Storage record was not found."),
     "INVALID_RECORD": ProjectErrorDefinition("Storage record is invalid."),
+    "TIMELINE_VERSION_NOT_FOUND": ProjectErrorDefinition("The requested Timeline version was not found."),
+    "TIMELINE_VERSION_PROJECT_MISMATCH": ProjectErrorDefinition("The Timeline version does not belong to the requested project."),
+    "TIMELINE_ACTIVE_VERSION_MISSING": ProjectErrorDefinition("The project has no active Timeline version."),
+    "TIMELINE_NO_UNDO": ProjectErrorDefinition("There is no previous Timeline version to undo to."),
+    "TIMELINE_NO_REDO": ProjectErrorDefinition("There is no next Timeline version to redo to."),
+    "TIMELINE_REDO_AMBIGUOUS": ProjectErrorDefinition("Redo has multiple child versions; choose a version explicitly."),
+    "TIMELINE_VERSION_CONFLICT": ProjectErrorDefinition("The active Timeline version changed concurrently."),
+    "TIMELINE_VERSION_INVALID": ProjectErrorDefinition("The Timeline version request is invalid."),
+    "TIMELINE_DIFF_NOT_AVAILABLE": ProjectErrorDefinition("The requested Timeline diff is not available."),
 }
 
 

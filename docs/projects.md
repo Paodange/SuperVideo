@@ -76,7 +76,7 @@ Core RPC protocol 仍为 v1，因为 A06 只新增显式白名单方法：
 - `asset.scan({ projectId, directory })`
 - `asset.list({ projectId, limit })`
 
-新增方法必须同时更新 Python registry、Pydantic 参数模型、共享 TypeScript runtime validator、golden fixtures、稳定错误映射和本文件。不得增加任意 SQL、路径读取、目录列举或通用 dictionary update。数据库仍是 schema version 2，`0001_initial.sql` 不可修改。
+新增方法必须同时更新 Python registry、Pydantic 参数模型、共享 TypeScript runtime validator、golden fixtures、稳定错误映射和本文件。不得增加任意 SQL、路径读取、目录列举或通用 dictionary update。C10 将数据库升级到 schema version 3；`0001_initial.sql` 和 `0002_persistent_jobs.sql` 仍不可修改。
 
 ## Smoke 与当前限制
 
@@ -91,4 +91,4 @@ npm run project:smoke
 
 该命令先使用当前 build，Electron 在 `--project-smoke` 测试模式中自行创建临时中文/空格项目目录和固定 `.mp4` fixture，走与生产相同的 Worker/Core/controller 链路。它验证创建、引用、SQLite 记录、原文件 bytes/size/mtime、Worker/Core 关闭、第二个 Worker reopen 和 asset ID 恢复，最后删除自己创建的临时树；不接受用户路径，不写 tracked 报告，不操作真实素材。
 
-A06/B01 不支持自然语言路径解析、Pi 自主选择磁盘路径、递归文件夹扫描、拖拽导入、ffprobe/转码/缩略图/ASR/VAD/镜头检测/向量化、A07 持久化 job、最近项目自动打开、项目删除/备份/导入导出、云同步或剪映草稿读取。B01 不改变 SQLite schema version（仍为 2）；`sampled-sha256-v1` 继续作为独立版本化的快速指纹算法，未来升级必须使用新前缀并保留兼容读取。
+A06/B01 不支持自然语言路径解析、Pi 自主选择磁盘路径、递归文件夹扫描、拖拽导入、ffprobe/转码/缩略图/ASR/VAD/镜头检测/向量化、A07 持久化 job、最近项目自动打开、项目删除/备份/导入导出、云同步或剪映草稿读取。C10 只增加 Timeline 版本存储和受限操作，不改变原始素材引用语义；`sampled-sha256-v1` 继续作为独立版本化的快速指纹算法，未来升级必须使用新前缀并保留兼容读取。

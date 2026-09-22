@@ -287,6 +287,11 @@ class TimelineVersionCreate(StorageModel):
     timeline_json: dict[str, Any]
     edit_intent_json: dict[str, Any] = Field(default_factory=dict)
     diff_summary_json: dict[str, Any] = Field(default_factory=dict)
+    source_type: Literal["root", "edit"] = "root"
+    timeline_id: str = Field(default="", max_length=128)
+    source_version_id: str | None = None
+    determinism_digest: str | None = Field(default=None, min_length=64, max_length=64)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
     created_at_ms: int = Field(default_factory=utc_now_ms, strict=True, ge=0)
 
     _id = field_validator("id")(validate_id)
@@ -295,6 +300,7 @@ class TimelineVersionCreate(StorageModel):
     _timeline = field_validator("timeline_json", mode="before")(_json_field)
     _intent = field_validator("edit_intent_json", mode="before")(_json_field)
     _diff = field_validator("diff_summary_json", mode="before")(_json_field)
+    _source_version = field_validator("source_version_id")(validate_optional_id)
 
 
 class TimelineVersionRecord(StorageModel):
@@ -306,6 +312,11 @@ class TimelineVersionRecord(StorageModel):
     timeline_json: dict[str, Any]
     edit_intent_json: dict[str, Any] = Field(default_factory=dict)
     diff_summary_json: dict[str, Any] = Field(default_factory=dict)
+    source_type: Literal["root", "edit"] = "root"
+    timeline_id: str = Field(default="", max_length=128)
+    source_version_id: str | None = None
+    determinism_digest: str | None = Field(default=None, min_length=64, max_length=64)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
     created_at_ms: int = Field(strict=True, ge=0)
 
     _id = field_validator("id")(validate_id)
@@ -314,6 +325,7 @@ class TimelineVersionRecord(StorageModel):
     _timeline = field_validator("timeline_json", mode="before")(_json_field)
     _intent = field_validator("edit_intent_json", mode="before")(_json_field)
     _diff = field_validator("diff_summary_json", mode="before")(_json_field)
+    _source_version = field_validator("source_version_id")(validate_optional_id)
 
 
 TimelineVersion = TimelineVersionRecord

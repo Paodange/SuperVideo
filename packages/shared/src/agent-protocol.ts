@@ -34,8 +34,19 @@ import type {
   FinalMp4ExportResult,
   TimelineEditParams,
   TimelineEditResult,
+  TimelineVersionCreateParams,
+  TimelineVersionApplyEditParams,
+  TimelineVersionListParams,
+  TimelineVersionReferenceParams,
+  TimelineVersionActivateParams,
+  TimelineVersionUndoParams,
+  TimelineVersionRedoParams,
+  TimelineVersionDiffParams,
+  TimelineVersionResult,
+  TimelineVersionListResult,
+  TimelineVersionDiffResult,
 } from "./core-rpc";
-import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult } from "./core-rpc";
+import { isBoundedText, isJobEvent, isJobEventPage, isJobPage, isJobSummary, isMediaProbeResult, isMediaProxyResult, isSentenceCacheKey, isTranscriptionResult, isVadResult, isSentenceResult, isSentenceQaContextResult, isSentenceQaSaveResult, isSentenceIndexParams, isSentenceIndexResult, isRetrievalParams, isRetrievalResult, isRerankParams, isRerankResult, isSlotAlignmentParams, isSlotAlignmentResult, isNarrativePlanParams, isNarrativePlanResult, isDurationOptimizationParams, isDurationOptimizationResult, isArollCutJoinParams, isArollCutJoinResult, isSubtitlePlanParams, isSubtitlePlanResult, isPreviewRenderParams, isPreviewRenderResult, isPreviewQualityCheckParams, isPreviewQualityCheckResult, isFinalMp4ExportParams, isFinalMp4ExportResult, isTimelineEditParams, isTimelineEditResult, isTimelineVersionCreateParams, isTimelineVersionApplyEditParams, isTimelineVersionListParams, isTimelineVersionReferenceParams, isTimelineVersionActivateParams, isTimelineVersionUndoParams, isTimelineVersionRedoParams, isTimelineVersionDiffParams, isTimelineVersionResult, isTimelineVersionListResult, isTimelineVersionDiffResult } from "./core-rpc";
 import {
   PUBLIC_A08_ERROR_CODES,
   isAgentDiagnosticEvent,
@@ -61,7 +72,7 @@ export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
 export const AGENT_WORKER_MAX_CAPABILITIES = 32;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
-export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "jobs", "diagnostics"] as const;
+export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "preview-quality", "final-export", "timeline-edit", "timeline-versions", "jobs", "diagnostics"] as const;
 
 export const AGENT_WORKER_COMMAND_TYPES = {
   runSmokeTask: "run-smoke-task",
@@ -91,6 +102,14 @@ export const AGENT_WORKER_COMMAND_TYPES = {
   mediaPreviewQualityCheck: "media-preview-quality-check",
   mediaFinalExport: "media-final-export",
   timelineEdit: "timeline-edit",
+  timelineVersionCreate: "timeline-version-create",
+  timelineVersionApplyEdit: "timeline-version-apply-edit",
+  timelineVersionList: "timeline-version-list",
+  timelineVersionGet: "timeline-version-get",
+  timelineVersionActivate: "timeline-version-activate",
+  timelineVersionUndo: "timeline-version-undo",
+  timelineVersionRedo: "timeline-version-redo",
+  timelineVersionDiff: "timeline-version-diff",
   mediaScriptAlign: "media-script-align",
   jobSmokeStart: "job-smoke-start",
   jobGet: "job-get",
@@ -141,7 +160,15 @@ export type AgentProjectOperationType =
   | "media-preview-render"
   | "media-preview-quality-check"
   | "media-final-export"
-  | "timeline-edit";
+  | "timeline-edit"
+  | "timeline-version-create"
+  | "timeline-version-apply-edit"
+  | "timeline-version-list"
+  | "timeline-version-get"
+  | "timeline-version-activate"
+  | "timeline-version-undo"
+  | "timeline-version-redo"
+  | "timeline-version-diff";
 
 export type AgentJobOperationType = "job-smoke-start" | "job-get" | "job-list" | "job-events-list" | "job-cancel" | "job-retry";
 export type AgentOperationType = AgentProjectOperationType | AgentJobOperationType;
@@ -177,6 +204,15 @@ export type ProjectOperationErrorCode =
   | "CONSTRAINT_VIOLATION"
   | "RECORD_NOT_FOUND"
   | "INVALID_RECORD"
+  | "TIMELINE_VERSION_NOT_FOUND"
+  | "TIMELINE_VERSION_PROJECT_MISMATCH"
+  | "TIMELINE_ACTIVE_VERSION_MISSING"
+  | "TIMELINE_NO_UNDO"
+  | "TIMELINE_NO_REDO"
+  | "TIMELINE_REDO_AMBIGUOUS"
+  | "TIMELINE_VERSION_CONFLICT"
+  | "TIMELINE_VERSION_INVALID"
+  | "TIMELINE_DIFF_NOT_AVAILABLE"
   | "MEDIA_TOOL_UNAVAILABLE" | "MEDIA_TOOL_TIMEOUT" | "MEDIA_PROBE_PARSE_ERROR"
   | "MEDIA_NOT_MEDIA" | "MEDIA_OUTPUT_INVALID" | "MEDIA_CANCELLED"
   | "TRANSCRIPTION_TOOL_UNAVAILABLE" | "TRANSCRIPTION_MODEL_UNAVAILABLE" | "TRANSCRIPTION_OUTPUT_INVALID" | "TRANSCRIPTION_TIMEOUT" | "TRANSCRIPTION_CANCELLED"
@@ -398,6 +434,14 @@ export const DESKTOP_IPC_CHANNELS = {
   checkPreviewQuality: "desktop:v2:check-preview-quality",
   exportFinalMp4: "desktop:v2:export-final-mp4",
   editTimeline: "desktop:v2:edit-timeline",
+  createTimelineVersion: "desktop:v2:create-timeline-version",
+  applyTimelineEditVersion: "desktop:v2:apply-timeline-edit-version",
+  listTimelineVersions: "desktop:v2:list-timeline-versions",
+  getTimelineVersion: "desktop:v2:get-timeline-version",
+  activateTimelineVersion: "desktop:v2:activate-timeline-version",
+  undoTimelineVersion: "desktop:v2:undo-timeline-version",
+  redoTimelineVersion: "desktop:v2:redo-timeline-version",
+  diffTimelineVersions: "desktop:v2:diff-timeline-versions",
   startSmokeJob: "desktop:v2:start-smoke-job",
   getJob: "desktop:v2:get-job",
   listJobs: "desktop:v2:list-jobs",
@@ -475,6 +519,14 @@ export type DesktopApi = Readonly<{
   checkPreviewQuality: (input: import("./core-rpc").PreviewQualityCheckParams) => Promise<import("./core-rpc").PreviewQualityCheckResult>;
   exportFinalMp4: (input: FinalMp4ExportParams) => Promise<FinalMp4ExportResult>;
   editTimeline: (input: import("./core-rpc").TimelineEditParams) => Promise<import("./core-rpc").TimelineEditResult>;
+  createTimelineVersion: (input: TimelineVersionCreateParams) => Promise<TimelineVersionResult>;
+  applyTimelineEditVersion: (input: TimelineVersionApplyEditParams) => Promise<TimelineVersionResult>;
+  listTimelineVersions: (input: TimelineVersionListParams) => Promise<TimelineVersionListResult>;
+  getTimelineVersion: (input: TimelineVersionReferenceParams) => Promise<TimelineVersionResult>;
+  activateTimelineVersion: (input: TimelineVersionActivateParams) => Promise<TimelineVersionResult>;
+  undoTimelineVersion: (input: TimelineVersionUndoParams) => Promise<TimelineVersionResult>;
+  redoTimelineVersion: (input: TimelineVersionRedoParams) => Promise<TimelineVersionResult>;
+  diffTimelineVersions: (input: TimelineVersionDiffParams) => Promise<TimelineVersionDiffResult>;
   startSmokeJob: (input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (input: JobListParams) => Promise<JobPage>;
@@ -536,6 +588,15 @@ const PUBLIC_ERROR_MESSAGES: Readonly<Record<DesktopPublicErrorCode, string>> = 
   CONSTRAINT_VIOLATION: "Storage constraint was violated.",
   RECORD_NOT_FOUND: "Storage record was not found.",
   INVALID_RECORD: "Storage record is invalid.",
+  TIMELINE_VERSION_NOT_FOUND: "The requested Timeline version was not found.",
+  TIMELINE_VERSION_PROJECT_MISMATCH: "The Timeline version does not belong to the requested project.",
+  TIMELINE_ACTIVE_VERSION_MISSING: "The project has no active Timeline version.",
+  TIMELINE_NO_UNDO: "There is no previous Timeline version to undo to.",
+  TIMELINE_NO_REDO: "There is no next Timeline version to redo to.",
+  TIMELINE_REDO_AMBIGUOUS: "Redo has multiple child versions; choose a version explicitly.",
+  TIMELINE_VERSION_CONFLICT: "The active Timeline version changed concurrently.",
+  TIMELINE_VERSION_INVALID: "The Timeline version request is invalid.",
+  TIMELINE_DIFF_NOT_AVAILABLE: "The requested Timeline diff is not available.",
   JOB_NOT_FOUND: "The job was not found.",
   JOB_STATE_CONFLICT: "The job state changed concurrently.",
   JOB_NOT_CANCELLABLE: "The job cannot be cancelled.",
@@ -963,7 +1024,15 @@ function isAgentProjectOperationType(value: unknown): value is AgentProjectOpera
     || value === "media-preview-render"
     || value === "media-preview-quality-check"
     || value === "media-final-export"
-    || value === "timeline-edit";
+    || value === "timeline-edit"
+    || value === "timeline-version-create"
+    || value === "timeline-version-apply-edit"
+    || value === "timeline-version-list"
+    || value === "timeline-version-get"
+    || value === "timeline-version-activate"
+    || value === "timeline-version-undo"
+    || value === "timeline-version-redo"
+    || value === "timeline-version-diff";
 }
 
 function isAgentJobOperationType(value: unknown): value is AgentJobOperationType {
@@ -1050,6 +1119,14 @@ function isProjectOperationPayload(type: AgentProjectOperationType, value: unkno
   if (type === "media-preview-quality-check") return isPreviewQualityCheckParams(value);
   if (type === "media-final-export") return isFinalMp4ExportParams(value);
   if (type === "timeline-edit") return isTimelineEditParams(value);
+  if (type === "timeline-version-create") return isTimelineVersionCreateParams(value);
+  if (type === "timeline-version-apply-edit") return isTimelineVersionApplyEditParams(value);
+  if (type === "timeline-version-list") return isTimelineVersionListParams(value);
+  if (type === "timeline-version-get") return isTimelineVersionReferenceParams(value);
+  if (type === "timeline-version-activate") return isTimelineVersionActivateParams(value);
+  if (type === "timeline-version-undo") return isTimelineVersionUndoParams(value);
+  if (type === "timeline-version-redo") return isTimelineVersionRedoParams(value);
+  if (type === "timeline-version-diff") return isTimelineVersionDiffParams(value);
   if (type === "media-vad") {
     if (!hasNoUnexpectedKeys(value, ["projectId", "assetId", "timeoutMs", "config"]) || !isUuid(value.projectId) || !isUuid(value.assetId)) return false;
     if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
@@ -1139,6 +1216,9 @@ const PROJECT_OPERATION_ERROR_CODES = new Set<string>([
   "CONSTRAINT_VIOLATION",
   "RECORD_NOT_FOUND",
   "INVALID_RECORD",
+  "TIMELINE_VERSION_NOT_FOUND", "TIMELINE_VERSION_PROJECT_MISMATCH", "TIMELINE_ACTIVE_VERSION_MISSING",
+  "TIMELINE_NO_UNDO", "TIMELINE_NO_REDO", "TIMELINE_REDO_AMBIGUOUS", "TIMELINE_VERSION_CONFLICT",
+  "TIMELINE_VERSION_INVALID", "TIMELINE_DIFF_NOT_AVAILABLE",
   "MEDIA_TOOL_UNAVAILABLE", "MEDIA_TOOL_TIMEOUT", "MEDIA_PROBE_PARSE_ERROR",
   "MEDIA_NOT_MEDIA", "MEDIA_OUTPUT_INVALID", "MEDIA_CANCELLED",
   "TRANSCRIPTION_TOOL_UNAVAILABLE", "TRANSCRIPTION_MODEL_UNAVAILABLE", "TRANSCRIPTION_OUTPUT_INVALID", "TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_CANCELLED",
@@ -1204,6 +1284,9 @@ function isProjectOperationResultPayload(type: AgentProjectOperationType, value:
   if (type === "media-preview-quality-check") return isPreviewQualityCheckResult(value);
   if (type === "media-final-export") return isFinalMp4ExportResult(value);
   if (type === "timeline-edit") return isTimelineEditResult(value);
+  if (type === "timeline-version-create" || type === "timeline-version-apply-edit" || type === "timeline-version-get" || type === "timeline-version-activate" || type === "timeline-version-undo" || type === "timeline-version-redo") return isTimelineVersionResult(value);
+  if (type === "timeline-version-list") return isTimelineVersionListResult(value);
+  if (type === "timeline-version-diff") return isTimelineVersionDiffResult(value);
   if (type === "media-sentence-qa-context") return isSentenceQaContextResult(value);
   if (type === "media-sentence-qa-save") return isSentenceQaSaveResult(value);
   return true;

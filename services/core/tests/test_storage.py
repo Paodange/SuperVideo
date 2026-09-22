@@ -91,8 +91,8 @@ class MigrationTests(StorageTestCase):
         finally:
             first_database.close()
 
-        self.assertEqual(first.current_version, 2)
-        self.assertEqual(second.applied_versions, (1, 2))
+        self.assertEqual(first.current_version, 3)
+        self.assertEqual(second.applied_versions, (1, 2, 3))
         self.assertEqual(
             self.database.pragma_values(),
             {"foreign_keys": 1, "journal_mode": "wal", "synchronous": 1, "busy_timeout": 5_000},
@@ -146,7 +146,7 @@ class MigrationTests(StorageTestCase):
                     (job_id, project_id, "preview", "queued", 0.0, "legacy", '{"steps":3}', None, None, None, 0, 1, 1, None, None),
                 )
             upgraded = database.migrate()
-            self.assertEqual(upgraded.current_version, 2)
+            self.assertEqual(upgraded.current_version, 3)
             self.assertEqual(database.connection.execute("SELECT COUNT(*) FROM job_events").fetchone()[0], 0)
             legacy = JobRepository(database).get(job_id, project_id)
             self.assertEqual((legacy.executor_version, legacy.revision, legacy.last_event_sequence, legacy.recovery_count), (1, 0, 0, 0))
@@ -190,7 +190,7 @@ class MigrationTests(StorageTestCase):
 
     def test_migration_names_and_checksum_are_normalized(self) -> None:
         self.assertEqual(migration_checksum("select 1;\n"), migration_checksum("select 1;\r\n"))
-        self.assertEqual([item.name for item in discover_migrations()], ["0001_initial", "0002_persistent_jobs"])
+        self.assertEqual([item.name for item in discover_migrations()], ["0001_initial", "0002_persistent_jobs", "0003_timeline_active"])
         with self.assertRaises(StorageError):
             MigrationRunner(self.database, [Migration(2, "0002_gap", "SELECT 1;")])
         with self.assertRaises(StorageError):
@@ -517,7 +517,7 @@ class ProcessPersistenceTests(unittest.TestCase):
                 [*command, "--phase", "verify"], cwd=ROOT, env=environment, capture_output=True, text=True, check=False
             )
             self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertIn("schema version 2", second.stdout)
+            self.assertIn("schema version 3", second.stdout)
             self.assertIn("projects=1", second.stdout)
             self.assertNotIn(str(database_path), second.stdout + second.stderr)
         finally:
