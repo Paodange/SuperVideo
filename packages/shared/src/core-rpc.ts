@@ -247,6 +247,9 @@ export const CORE_RPC_ERROR_CODES = {
   previewQualityCancelled: "PREVIEW_QUALITY_CANCELLED",
   finalExportInputInvalid: "FINAL_EXPORT_INPUT_INVALID",
   finalExportPreviewNotReady: "FINAL_EXPORT_PREVIEW_NOT_READY",
+  finalExportAudioNotReady: "FINAL_EXPORT_AUDIO_NOT_READY",
+  finalExportAudioInvalid: "FINAL_EXPORT_AUDIO_INVALID",
+  finalExportAudioTampered: "FINAL_EXPORT_AUDIO_TAMPERED",
   finalExportQualityNotReady: "FINAL_EXPORT_QUALITY_NOT_READY",
   finalExportSourceInvalid: "FINAL_EXPORT_SOURCE_INVALID",
   finalExportSourceTampered: "FINAL_EXPORT_SOURCE_TAMPERED",
@@ -417,6 +420,9 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   PREVIEW_QUALITY_CANCELLED: -32396,
   FINAL_EXPORT_INPUT_INVALID: -32397,
   FINAL_EXPORT_PREVIEW_NOT_READY: -32398,
+  FINAL_EXPORT_AUDIO_NOT_READY: -32408,
+  FINAL_EXPORT_AUDIO_INVALID: -32409,
+  FINAL_EXPORT_AUDIO_TAMPERED: -32410,
   FINAL_EXPORT_QUALITY_NOT_READY: -32399,
   FINAL_EXPORT_SOURCE_INVALID: -32400,
   FINAL_EXPORT_SOURCE_TAMPERED: -32401,
@@ -585,6 +591,9 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   PREVIEW_QUALITY_CANCELLED: "The preview quality check was cancelled.",
   FINAL_EXPORT_INPUT_INVALID: "The final export input is invalid or does not bind to the verified preview.",
   FINAL_EXPORT_PREVIEW_NOT_READY: "The preview has not completed successfully and cannot be exported.",
+  FINAL_EXPORT_AUDIO_NOT_READY: "The C04 audio result has not completed successfully and cannot be muxed.",
+  FINAL_EXPORT_AUDIO_INVALID: "The C04 audio output is not a verified AAC stream of the expected duration.",
+  FINAL_EXPORT_AUDIO_TAMPERED: "The C04 audio output changed or does not match its recorded fingerprint.",
   FINAL_EXPORT_QUALITY_NOT_READY: "The preview quality gate is not ready for final export.",
   FINAL_EXPORT_SOURCE_INVALID: "The verified preview source is missing or outside the project boundary.",
   FINAL_EXPORT_SOURCE_TAMPERED: "The verified preview source changed or does not match its recorded fingerprint.",
@@ -733,10 +742,10 @@ export type PreviewRenderResult = Readonly<{ schemaVersion: 1; planVersion: "pre
 export type PreviewQualityCheckParams = Readonly<{ projectId: string; previewResult: PreviewRenderResult; timeoutMs?: number }>;
 export type PreviewQualityIssue = Readonly<{ checkId: string; code: "QA_PLAN_BINDING_INVALID" | "QA_PLAN_DIGEST_MISMATCH" | "QA_PLAN_ORDER_INVALID" | "QA_PLAN_RANGE_INVALID" | "QA_PLAN_GAP" | "QA_EXECUTION_NOT_RUN" | "QA_OUTPUT_MISSING" | "QA_OUTPUT_PLAYBACK_URI_INVALID" | "QA_OUTPUT_PATH_INVALID" | "QA_OUTPUT_FILE_INVALID" | "QA_OUTPUT_SIZE_MISMATCH" | "QA_OUTPUT_FINGERPRINT_MISMATCH" | "QA_OUTPUT_MANIFEST_INVALID" | "QA_OUTPUT_DURATION_MISMATCH" | "QA_OUTPUT_CONTAINER_UNVERIFIED" | "QA_OUTPUT_CONTAINER_INVALID"; severity: "pass" | "warning" | "fail"; status: "verified" | "not-run"; message: string }>;
 export type PreviewQualityCheckResult = Readonly<{ schemaVersion: 1; qaVersion: "preview-quality-v1"; projectId: string; planDigest: string; phase: "plan" | "executed"; status: "pass" | "warning" | "fail"; readyForExport: boolean; executionVerified: boolean; issueCount: number; issues: readonly PreviewQualityIssue[] }>;
-export type FinalMp4ExportParams = Readonly<{ projectId: string; previewResult: PreviewRenderResult; qualityResult: PreviewQualityCheckResult; outputName?: string; timeoutMs?: number }>;
-export type FinalMp4Container = Readonly<{ formatName: string; videoCodec: string; audioCodec: string | null; width: number; height: number; frameRate: number | null }>;
+export type FinalMp4ExportParams = Readonly<{ projectId: string; previewResult: PreviewRenderResult; qualityResult: PreviewQualityCheckResult; audioResult: ArollCutJoinResult; audioFingerprint: string; outputName?: string; timeoutMs?: number }>;
+export type FinalMp4Container = Readonly<{ formatName: string; videoCodec: "h264"; audioCodec: "aac"; width: 1080; height: 1920; frameRate: number | null }>;
 export type FinalMp4Output = Readonly<{ kind: "video"; relativePath: string; manifestRelativePath: string; sizeBytes: number; durationMs: number; outputFingerprint: string; container: FinalMp4Container }>;
-export type FinalMp4ExportResult = Readonly<{ schemaVersion: 1; exportVersion: "final-mp4-export-v1"; exportPolicy: "verified-preview-copy-v1"; projectId: string; timelineId: string; planDigest: string; qualityDigest: string; status: "completed" | "cache-hit"; output: FinalMp4Output }>;
+export type FinalMp4ExportResult = Readonly<{ schemaVersion: 1; exportVersion: "final-mp4-export-v1"; exportPolicy: "verified-preview-mux-v1"; projectId: string; timelineId: string; planDigest: string; qualityDigest: string; audioPlanDigest: string; audioFingerprint: string; status: "completed" | "cache-hit"; output: FinalMp4Output }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -1556,18 +1565,20 @@ export function isPreviewQualityCheckParams(value: unknown): value is PreviewQua
 }
 
 export function isFinalMp4ExportParams(value: unknown): value is FinalMp4ExportParams {
-  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "previewResult", "qualityResult", "outputName", "timeoutMs"])) return false;
-  if (!isUuid(value.projectId) || !isPreviewRenderResult(value.previewResult) || !isPreviewQualityCheckResult(value.qualityResult)) return false;
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "previewResult", "qualityResult", "audioResult", "audioFingerprint", "outputName", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isPreviewRenderResult(value.previewResult) || !isPreviewQualityCheckResult(value.qualityResult) || !isArollCutJoinResult(value.audioResult)) return false;
   if ((value.previewResult as PreviewRenderResult).projectId !== value.projectId || (value.qualityResult as PreviewQualityCheckResult).projectId !== value.projectId) return false;
   if ((value.qualityResult as PreviewQualityCheckResult).planDigest !== (value.previewResult as PreviewRenderResult).planDigest) return false;
+  if ((value.audioResult as ArollCutJoinResult).projectId !== value.projectId || (value.audioResult as ArollCutJoinResult).timelineId !== (value.previewResult as PreviewRenderResult).timelineId) return false;
+  if (typeof value.audioFingerprint !== "string" || !isSentenceCacheKey(value.audioFingerprint)) return false;
   if (value.outputName !== undefined && (typeof value.outputName !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\.mp4$/.test(value.outputName))) return false;
   if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
   return isBoundedCoreJsonValue(value, 512 * 1024);
 }
 
 export function isFinalMp4ExportResult(value: unknown): value is FinalMp4ExportResult {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "exportVersion", "exportPolicy", "projectId", "timelineId", "planDigest", "qualityDigest", "status", "output"])) return false;
-  if (value.schemaVersion !== 1 || value.exportVersion !== "final-mp4-export-v1" || value.exportPolicy !== "verified-preview-copy-v1" || !isUuid(value.projectId) || !isTimelineId(value.timelineId) || !isSentenceCacheKey(value.planDigest) || !isSentenceCacheKey(value.qualityDigest) || (value.status !== "completed" && value.status !== "cache-hit")) return false;
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "exportVersion", "exportPolicy", "projectId", "timelineId", "planDigest", "qualityDigest", "audioPlanDigest", "audioFingerprint", "status", "output"])) return false;
+  if (value.schemaVersion !== 1 || value.exportVersion !== "final-mp4-export-v1" || value.exportPolicy !== "verified-preview-mux-v1" || !isUuid(value.projectId) || !isTimelineId(value.timelineId) || !isSentenceCacheKey(value.planDigest) || !isSentenceCacheKey(value.qualityDigest) || !isSentenceCacheKey(value.audioPlanDigest) || !isSentenceCacheKey(value.audioFingerprint) || (value.status !== "completed" && value.status !== "cache-hit")) return false;
   if (!isFinalMp4Output(value.output)) return false;
   return isBoundedCoreJsonValue(value, 64 * 1024);
 }
@@ -1582,8 +1593,8 @@ function isFinalMp4Output(value: unknown): value is FinalMp4Output {
 
 function isFinalMp4Container(value: unknown): value is FinalMp4Container {
   if (!isPlainRecord(value) || !hasOnlyKeys(value, ["formatName", "videoCodec", "audioCodec", "width", "height", "frameRate"])) return false;
-  return isSafeString(value.formatName, 128) && isSafeString(value.videoCodec, 64) && (value.audioCodec === null || isSafeString(value.audioCodec, 64))
-    && isSafeInteger(value.width, 1, 100_000) && isSafeInteger(value.height, 1, 100_000)
+  return isSafeString(value.formatName, 128) && value.formatName.split(",").some((part) => part.trim().toLowerCase() === "mp4") && value.videoCodec === "h264" && value.audioCodec === "aac"
+    && value.width === 1080 && value.height === 1920
     && (value.frameRate === null || isFiniteInRange(value.frameRate, 0, 1_000));
 }
 

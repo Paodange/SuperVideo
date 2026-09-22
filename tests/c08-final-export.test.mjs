@@ -36,17 +36,49 @@ const quality = {
 };
 
 test("C08 final export contract binds C06 and C07 and stays inside exports/videos", () => {
-  const params = { projectId, previewResult: preview, qualityResult: quality };
+  const audioPlanDigest = "e".repeat(64);
+  const audioResult = {
+    schemaVersion: 1,
+    planVersion: "aroll-cut-join-plan-v1",
+    projectId,
+    timelineId: base.timelineId,
+    trackId: "track-audio-aroll",
+    mode: "audio",
+    executionMode: "ffmpeg",
+    executionStatus: "completed",
+    status: "ready",
+    selectionPolicy: "ordered-complete-sentence-v1",
+    gapPolicy: "concatenate-without-timeline-gaps-v1",
+    planDigest: audioPlanDigest,
+    selectedDurationMs: base.timelineDurationMs,
+    segments: [{
+      order: 1,
+      clipId: "clip-audio-1",
+      sentenceId: "sentence-audio-1",
+      source: { sourceId: "source-aroll-audio-a", uri: "supervideo://asset/33333333-3333-4333-8333-333333333333", mediaType: "audio", durationMs: 10000, fingerprint: "c".repeat(64) },
+      sourceInMs: 500,
+      sourceOutMs: 4000,
+      durationMs: base.timelineDurationMs,
+      timelineStartMs: 0,
+      outputStartMs: 0,
+      outputEndMs: base.timelineDurationMs,
+    }],
+    gaps: [],
+    output: { kind: "audio", relativePath: `previews/aroll-cut-join-v1/${audioPlanDigest}.audio.m4a`, sizeBytes: 42 },
+  };
+  const params = { projectId, previewResult: preview, qualityResult: quality, audioResult, audioFingerprint: "d".repeat(64) };
   assert.equal(shared.isFinalMp4ExportParams(params), true);
   assert.equal(shared.isCoreRpcRequest({ jsonrpc: "2.0", id: "c08-1", method: "media.final.export", params }), true);
   const result = {
     schemaVersion: 1,
     exportVersion: "final-mp4-export-v1",
-    exportPolicy: "verified-preview-copy-v1",
+    exportPolicy: "verified-preview-mux-v1",
     projectId,
     timelineId: base.timelineId,
     planDigest: base.planDigest,
     qualityDigest: "b".repeat(64),
+    audioPlanDigest,
+    audioFingerprint: "d".repeat(64),
     status: "completed",
     output: {
       kind: "video",
@@ -55,7 +87,7 @@ test("C08 final export contract binds C06 and C07 and stays inside exports/video
       sizeBytes: 42,
       durationMs: base.timelineDurationMs,
       outputFingerprint: "c".repeat(64),
-      container: { formatName: "mov,mp4,m4a", videoCodec: "h264", audioCodec: null, width: 1080, height: 1920, frameRate: 30 },
+      container: { formatName: "mov,mp4,m4a", videoCodec: "h264", audioCodec: "aac", width: 1080, height: 1920, frameRate: 30 },
     },
   };
   assert.equal(shared.isFinalMp4ExportResult(result), true);
