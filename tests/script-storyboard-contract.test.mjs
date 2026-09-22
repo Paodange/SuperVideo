@@ -84,6 +84,60 @@ test("D05 rejects malformed C03 duration/status/change accounting", () => {
   }
 });
 
+test("D05 accepts a C03 source-gap without a change record", () => {
+  const candidate = structuredClone(input);
+  const durationPlan = c03Plan();
+  const gapReason = { segmentId: "segment-2", slotId: "slot-2", role: "body", code: "alignment-gap", detail: "no complete sentence candidate" };
+  const gap = durationPlan.segments[1];
+  Object.assign(gap, {
+    status: "gap",
+    candidateSentenceId: null,
+    candidateRank: null,
+    sentenceText: null,
+    source: null,
+    durationMs: 0,
+    selectionReason: null,
+    gapReason,
+  });
+  durationPlan.selectedDurationMs = 2000;
+  durationPlan.durationStatus = "outside-tolerance";
+  durationPlan.status = "gaps";
+  durationPlan.changes = durationPlan.changes.filter((change) => change.segmentId !== "segment-2");
+  durationPlan.gaps = [gapReason, { segmentId: "duration-optimization", slotId: "duration", role: "body", code: "duration-outside-tolerance", detail: "selected duration remains outside tolerance" }];
+  candidate.durationPlan = durationPlan;
+  assert.equal(isScriptStoryboardInput(candidate), true);
+});
+
+test("D05 enforces complete shot priorities, fallback binding, and stable identities", () => {
+  const planned = structuredClone(result);
+  planned.shots = planned.shots.map((shot) => ({
+    ...shot,
+    fallbackReason: "planned",
+    visualSourcePriority: ["user-material", "licensed-stock", "ai-image", "remotion-template", "text-card"],
+  }));
+  assert.equal(isScriptStoryboardResult(planned), true);
+
+  const sourceGap = structuredClone(result);
+  sourceGap.script.body[0] = { ...sourceGap.script.body[0], status: "gap", sentenceId: null, text: null, source: null, durationMs: 0, factIds: [], confirmation: "not-required" };
+  sourceGap.facts = sourceGap.facts.map((fact) => ({ ...fact, status: "unbound", segmentIds: [] }));
+  sourceGap.selectedDurationMs = 2000;
+  sourceGap.durationStatus = "outside-tolerance";
+  sourceGap.status = "gaps";
+  sourceGap.shots[1] = { ...sourceGap.shots[1], durationMs: 0, fallbackReason: "source-gap", visualSourcePriority: ["remotion-template", "ai-image", "text-card"] };
+  assert.equal(isScriptStoryboardResult(sourceGap), true);
+
+  for (const mutate of [
+    (value) => { value.shots[1].shotId = value.shots[0].shotId; },
+    (value) => { value.shots[1].segmentId = value.shots[0].segmentId; },
+    (value) => { value.shots[1].order = 3; },
+    (value) => { value.shots[0].fallbackReason = "planned"; },
+  ]) {
+    const candidate = structuredClone(result);
+    mutate(candidate);
+    assert.equal(isScriptStoryboardResult(candidate), false);
+  }
+});
+
 test("D05 rejects forged result status, fact confirmation, relation, identity, and fallback priority", () => {
   const cases = [
     (value) => { value.status = "needs-user-confirmation"; },

@@ -198,7 +198,30 @@ function validateSource(value: unknown, path: string, errors: ScriptStoryboardVa
 function sourceDuration(value: unknown): number { const item = value as { timecode?: { startMs?: number; endMs?: number } }; return Number(item.timecode?.endMs) - Number(item.timecode?.startMs); }
 function validateGaps(value: unknown, path: string, errors: ScriptStoryboardValidationError[]): void { const values = array(value, 33, path, errors); values?.forEach((raw, index) => { const item = record(raw, `${path}[${index}]`, errors); if (!item) return; only(item, ["segmentId", "slotId", "role", "code", "detail"], `${path}[${index}]`, errors); checkId(item.segmentId, `${path}[${index}].segmentId`, errors); checkId(item.slotId, `${path}[${index}].slotId`, errors); checkText(item.detail, `${path}[${index}].detail`, errors, 160); if (!["hook", "body", "cta"].includes(String(item.role)) || !["alignment-gap", "missing-narrative-role", "duration-outside-tolerance"].includes(String(item.code))) add(errors, `${path}[${index}]`, "has an invalid gap enum"); }); }
 function validateChanges(value: unknown, path: string, errors: ScriptStoryboardValidationError[]): void { const values = array(value, 64, path, errors); values?.forEach((raw, index) => { const item = record(raw, `${path}[${index}]`, errors); if (!item) return; only(item, ["segmentId", "slotId", "role", "operation", "before", "after", "selectionReason"], `${path}[${index}]`, errors); checkId(item.segmentId, `${path}[${index}].segmentId`, errors); checkId(item.slotId, `${path}[${index}].slotId`, errors); checkText(item.selectionReason, `${path}[${index}].selectionReason`, errors, 160); if (!["hook", "body", "cta"].includes(String(item.role)) || !["keep", "replace", "add", "remove"].includes(String(item.operation))) add(errors, `${path}[${index}]`, "has an invalid C03 change enum"); if (item.before !== null && item.before !== undefined) validateDurationSentence(item.before, `${path}[${index}].before`, errors); if (item.after !== null && item.after !== undefined) validateDurationSentence(item.after, `${path}[${index}].after`, errors); const operation = String(item.operation); const before = item.before; const after = item.after; const valid = operation === "keep" ? before !== null && before !== undefined && after !== null && after !== undefined && JSON.stringify(before) === JSON.stringify(after) : operation === "replace" ? before !== null && before !== undefined && after !== null && after !== undefined && before.sentenceId !== after.sentenceId : operation === "add" ? (before === null || before === undefined) && after !== null && after !== undefined : (before !== null && before !== undefined) && (after === null || after === undefined); if (!valid) add(errors, `${path}[${index}]`, "has invalid C03 change accounting"); }); }
-function validateChangeBindings(segments: unknown, changes: unknown, path: string, errors: ScriptStoryboardValidationError[]): void { const segmentValues = Array.isArray(segments) ? segments.map((item) => record(item, "$.segment", [])) : []; const changeValues = Array.isArray(changes) ? changes.map((item) => record(item, "$.change", [])) : []; const segmentById = new Map(segmentValues.filter((item): item is Record<string, any> => item !== undefined && typeof item.segmentId === "string").map((item) => [item.segmentId, item])); const changeById = new Map<string, Record<string, any>>(); for (const change of changeValues) { if (!change || typeof change.segmentId !== "string") continue; if (changeById.has(change.segmentId)) add(errors, `${path}.changes`, "contains duplicate segment ids"); changeById.set(change.segmentId, change); } for (const segment of segmentById.values()) { const change = changeById.get(String(segment.segmentId)); if (!change) add(errors, `${path}.segments`, "every selected C03 segment must have a change record"); else { if (change.operation !== segment.operation) add(errors, `${path}.segments.${segment.segmentId}`, "segment operation must match change operation"); if (change.role !== segment.role || change.slotId !== segment.slotId) add(errors, `${path}.segments.${segment.segmentId}`, "segment role/slot must match change record"); } } for (const change of changeById.values()) { if (change.operation !== "remove" && !segmentById.has(String(change.segmentId))) add(errors, `${path}.changes.${change.segmentId}`, "non-remove change must have a selected segment"); } }
+function validateChangeBindings(segments: unknown, changes: unknown, path: string, errors: ScriptStoryboardValidationError[]): void {
+  const segmentValues = Array.isArray(segments) ? segments.map((item) => record(item, "$.segment", [])) : [];
+  const changeValues = Array.isArray(changes) ? changes.map((item) => record(item, "$.change", [])) : [];
+  const segmentById = new Map(segmentValues.filter((item): item is Record<string, any> => item !== undefined && typeof item.segmentId === "string").map((item) => [item.segmentId, item]));
+  const changeById = new Map<string, Record<string, any>>();
+  for (const change of changeValues) {
+    if (!change || typeof change.segmentId !== "string") continue;
+    if (changeById.has(change.segmentId)) add(errors, `${path}.changes`, "contains duplicate segment ids");
+    changeById.set(change.segmentId, change);
+  }
+  for (const segment of segmentById.values()) {
+    const change = changeById.get(String(segment.segmentId));
+    const requiresChange = segment.status === "matched";
+    if (!change) {
+      if (requiresChange) add(errors, `${path}.segments.${segment.segmentId}`, "matched C03 segment must have a change record");
+      continue;
+    }
+    if (change.operation !== segment.operation) add(errors, `${path}.segments.${segment.segmentId}`, "segment operation must match change operation");
+    if (change.role !== segment.role || change.slotId !== segment.slotId) add(errors, `${path}.segments.${segment.segmentId}`, "segment role/slot must match change record");
+  }
+  for (const change of changeById.values()) {
+    if (change.operation !== "remove" && !segmentById.has(String(change.segmentId))) add(errors, `${path}.changes.${change.segmentId}`, "non-remove change must have a selected segment");
+  }
+}
 function validateDurationSentence(value: unknown, path: string, errors: ScriptStoryboardValidationError[]): void { const item = record(value, path, errors); if (!item) return; only(item, ["sentenceId", "sentenceText", "source", "durationMs", "candidateRank"], path, errors); checkDigest(item.sentenceId, `${path}.sentenceId`, errors); checkText(item.sentenceText, `${path}.sentenceText`, errors, 512); validateSource(item.source, `${path}.source`, errors); checkInteger(item.durationMs, 1, 86_400_000, `${path}.durationMs`, errors); if (!Number.isInteger(item.candidateRank) || item.candidateRank < 1 || item.candidateRank > 8) add(errors, `${path}.candidateRank`, "must be between 1 and 8"); if (item.durationMs !== sourceDuration(item.source)) add(errors, `${path}.durationMs`, "must equal source duration"); }
 function validateFactBindings(value: unknown, path: string, facts: Map<string, ScriptStoryboardFact>, plan: ScriptStoryboardNarrativePlan | undefined, errors: ScriptStoryboardValidationError[]): void { const values = array(value, 32, path, errors); const segmentIds = new Set(plan?.segments.map((item) => item.segmentId) ?? []); values?.forEach((raw, index) => { const item = record(raw, `${path}[${index}]`, errors); if (!item) return; only(item, ["segmentId", "factIds"], `${path}[${index}]`, errors); checkId(item.segmentId, `${path}[${index}].segmentId`, errors); if (!segmentIds.has(String(item.segmentId))) add(errors, `${path}[${index}].segmentId`, "must reference sourcePlan segment"); validateIdArray(item.factIds, `${path}[${index}].factIds`, 16, errors, facts); }); }
 function validateDurationPlan(value: unknown, path: string, plan: ScriptStoryboardNarrativePlan | undefined, errors: ScriptStoryboardValidationError[]): void {
@@ -222,7 +245,6 @@ function validateDurationPlan(value: unknown, path: string, plan: ScriptStoryboa
   const ids = new Set<string>();
   let total = 0;
   const segmentGaps: unknown[] = [];
-  const operations: string[] = [];
   segments?.forEach((raw, index) => {
     const segment = record(raw, `${path}.segments[${index}]`, errors);
     if (!segment) return;
@@ -237,7 +259,6 @@ function validateDurationPlan(value: unknown, path: string, plan: ScriptStoryboa
     checkText(segment.sourceText, `${path}.segments[${index}].sourceText`, errors, 512);
     checkInteger(segment.durationMs, 0, 86_400_000, `${path}.segments[${index}].durationMs`, errors);
     if (!["hook", "body", "cta"].includes(String(segment.role)) || !["hook", "context", "claim", "evidence", "benefit", "requirement", "process", "cta", "closing", "other"].includes(String(segment.slotKind)) || !["matched", "gap"].includes(String(segment.status)) || !["keep", "replace", "add"].includes(String(segment.operation))) add(errors, `${path}.segments[${index}]`, "has an invalid C03 segment enum");
-    operations.push(String(segment.operation));
     if (segment.status === "matched") {
       checkDigest(segment.candidateSentenceId, `${path}.segments[${index}].candidateSentenceId`, errors);
       if (typeof segment.candidateRank !== "number" || !Number.isInteger(segment.candidateRank) || segment.candidateRank < 1 || segment.candidateRank > 8) add(errors, `${path}.segments[${index}].candidateRank`, "must be between 1 and 8");
