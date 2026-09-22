@@ -5,7 +5,7 @@ import hashlib
 import unittest
 
 from supervideo_core.media.narrative_planner import NarrativePlannerService
-from supervideo_core.media.narrative_planner_models import NarrativePlanParams
+from supervideo_core.media.narrative_planner_models import NarrativePlanParams, narrative_plan_digest
 from supervideo_core.media.slot_alignment_models import (
     InformationSlot,
     SlotAlignmentCandidate,
@@ -96,6 +96,8 @@ class NarrativePlannerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.plan_version, "narrative-remix-plan-v1")
         self.assertEqual(result.status, "ready")
         self.assertEqual(result.selected_duration_ms, 3_000)
+        self.assertNotEqual(result.plan_digest, "0" * 64)
+        self.assertEqual(result.plan_digest, narrative_plan_digest(result))
         self.assertEqual([segment.role for segment in result.segments], ["hook", "body", "cta"])
         self.assertEqual([segment.sentence_text for segment in result.segments], ["开头说明机会。", "主体介绍岗位。", "最后请私信咨询。"])
         self.assertEqual(alignment.request.input_text, "开头说明机会。\n主体介绍岗位。\n最后请私信咨询。")

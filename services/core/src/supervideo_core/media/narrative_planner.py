@@ -87,7 +87,7 @@ class NarrativePlannerService:
                 segments=segments,
                 gaps=gaps,
             )
-            result = result.model_copy(update={"planDigest": narrative_plan_digest(result)})
+            result = result.model_copy(update={"plan_digest": narrative_plan_digest(result)})
             return validate_narrative_plan_size(result)
         except MediaError as error:
             self._raise_plan_error(error)

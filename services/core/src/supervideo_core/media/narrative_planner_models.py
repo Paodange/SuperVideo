@@ -253,7 +253,7 @@ class NarrativePlanResult(NarrativePlanModel):
 
 
 def narrative_plan_digest(result: NarrativePlanResult) -> str:
-    payload = result.model_dump(by_alias=True, exclude={"planDigest"})
+    payload = result.model_dump(by_alias=True, exclude={"plan_digest"})
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
