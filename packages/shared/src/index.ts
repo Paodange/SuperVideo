@@ -12,3 +12,4 @@ export * from "./provider-contract";
 export * from "./tts-contract";
 export * from "./remotion-contract";
 export * from "./recruitment-template-contract";
+export * from "./script-storyboard-contract";

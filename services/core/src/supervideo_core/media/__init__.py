@@ -12,6 +12,7 @@ from .rerank_models import RerankConfig, RerankParams, RerankResult
 from .slot_alignment_models import InformationSlot, SlotAlignmentCandidate, SlotAlignmentParams, SlotAlignmentResult
 from .narrative_planner_models import NarrativePlanParams, NarrativePlanResult
 from .duration_optimizer_models import DurationOptimizationParams, DurationOptimizationResult
+from .script_storyboard_models import ScriptStoryboardParams, ScriptStoryboardResult
 from .aroll_cut_join_models import ArollCutJoinParams, ArollCutJoinResult
 from .subtitle_plan_models import SubtitlePlanParams, SubtitlePlanResult
 from .preview_render_models import PreviewRenderParams, PreviewRenderResult
@@ -21,7 +22,7 @@ from .edit_models import EditIntent, TimelineEditParams, TimelineEditResult
 from .tts_models import TtsJobInput, TtsJobStartParams, TtsSynthesisResult
 from .tts import DeterministicFakeTtsAdapter, TtsAdapter, TtsAdapterRegistry, TtsExecutionCancelled, TtsExecutionShutdown, TtsSynthesisService
 from .recruitment_template_models import RecruitmentTemplateProps, RecruitmentTemplateRenderPlan, build_recruitment_template_render_plan
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService", "ArollCutJoinParams", "ArollCutJoinResult", "ArollCutJoinService", "SubtitlePlanParams", "SubtitlePlanResult", "SubtitlePlanService", "PreviewRenderParams", "PreviewRenderResult", "PreviewRenderService", "PreviewQualityCheckParams", "PreviewQualityCheckResult", "PreviewQualityCheckService", "FinalMp4ExportParams", "FinalMp4ExportResult", "FinalMp4ExportService", "EditIntent", "TimelineEditParams", "TimelineEditResult", "TimelineEditService", "TtsJobInput", "TtsJobStartParams", "TtsSynthesisResult", "TtsAdapter", "DeterministicFakeTtsAdapter", "TtsAdapterRegistry", "TtsExecutionCancelled", "TtsExecutionShutdown", "TtsSynthesisService", "RecruitmentTemplateProps", "RecruitmentTemplateRenderPlan", "build_recruitment_template_render_plan"]
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService", "ScriptStoryboardParams", "ScriptStoryboardResult", "ScriptStoryboardPlannerService", "ArollCutJoinParams", "ArollCutJoinResult", "ArollCutJoinService", "SubtitlePlanParams", "SubtitlePlanResult", "SubtitlePlanService", "PreviewRenderParams", "PreviewRenderResult", "PreviewRenderService", "PreviewQualityCheckParams", "PreviewQualityCheckResult", "PreviewQualityCheckService", "FinalMp4ExportParams", "FinalMp4ExportResult", "FinalMp4ExportService", "EditIntent", "TimelineEditParams", "TimelineEditResult", "TimelineEditService", "TtsJobInput", "TtsJobStartParams", "TtsSynthesisResult", "TtsAdapter", "DeterministicFakeTtsAdapter", "TtsAdapterRegistry", "TtsExecutionCancelled", "TtsExecutionShutdown", "TtsSynthesisService", "RecruitmentTemplateProps", "RecruitmentTemplateRenderPlan", "build_recruitment_template_render_plan"]
 
 
 def __getattr__(name: str):
@@ -69,6 +70,10 @@ def __getattr__(name: str):
         from .duration_optimizer import DurationOptimizerService
 
         return DurationOptimizerService
+    if name == "ScriptStoryboardPlannerService":
+        from .script_storyboard import ScriptStoryboardPlannerService
+
+        return ScriptStoryboardPlannerService
     if name == "ArollCutJoinService":
         from .aroll_cut_join import ArollCutJoinService
 
