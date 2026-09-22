@@ -226,6 +226,8 @@ class ArollCutJoinService:
         inputs: list[tuple[Path, tuple[int, int], str]] = []
         for segment in segments:
             self._check_budget(cancelled, deadline)
+            if segment.source.fingerprint is None:
+                raise MediaError("AROLL_CUT_JOIN_SOURCE_INVALID")
             source_id = self._asset_id_from_uri(segment.source.uri)
             try:
                 asset = AssetRepository(self._database).get(source_id, request.project_id)
@@ -235,7 +237,9 @@ class ArollCutJoinService:
                 if isinstance(error, MediaError):
                     raise
                 raise MediaError("AROLL_CUT_JOIN_SOURCE_INVALID", cause=error) from error
-            if segment.source.fingerprint is not None and segment.source.fingerprint != fingerprint:
+            if signature != (asset.size_bytes, asset.modified_at_ms) or fingerprint != asset.content_fingerprint:
+                raise MediaError("AROLL_CUT_JOIN_SOURCE_INVALID")
+            if not self._timeline_fingerprint_matches(segment.source.fingerprint, fingerprint):
                 raise MediaError("AROLL_CUT_JOIN_SOURCE_INVALID")
             inputs.append((path, signature, fingerprint))
         previews_dir = self._project_root / "previews"
@@ -303,6 +307,15 @@ class ArollCutJoinService:
         if match is None:
             raise MediaError("AROLL_CUT_JOIN_SOURCE_INVALID")
         return match.group(1)
+
+    @staticmethod
+    def _timeline_fingerprint_matches(timeline_fingerprint: str | None, asset_fingerprint: str) -> bool:
+        if timeline_fingerprint is None:
+            return False
+        if timeline_fingerprint == asset_fingerprint:
+            return True
+        algorithm, separator, digest = asset_fingerprint.partition(":")
+        return separator == ":" and algorithm == "sampled-sha256-v1" and timeline_fingerprint == digest
 
     @staticmethod
     def _canonical_asset_path(value: str) -> tuple[Path, object]:

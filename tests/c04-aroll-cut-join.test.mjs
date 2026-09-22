@@ -63,5 +63,10 @@ test("C04 result validator enforces contiguous output spans and execution honest
   const dishonest = structuredClone(result);
   dishonest.executionStatus = "completed";
   assert.equal(shared.isArollCutJoinResult(dishonest), false);
-  assert.equal(shared.isArollCutJoinResult({ ...result, output: { kind: "video", relativePath: "C:\\secret.mp4", sizeBytes: 1 } }), false);
+  const sourceOverrun = structuredClone(result);
+  sourceOverrun.segments[0].source.durationMs = 1500;
+  assert.equal(shared.isArollCutJoinResult(sourceOverrun), false);
+  for (const relativePath of ["/absolute.mp4", "\\\\absolute.mp4", "C:relative.mp4", "previews/../output.mp4", "previews/./output.mp4", "previews//output.mp4"]) {
+    assert.equal(shared.isArollCutJoinResult({ ...result, output: { kind: "video", relativePath, sizeBytes: 1 } }), false, relativePath);
+  }
 });

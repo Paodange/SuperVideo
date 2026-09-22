@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
 from supervideo_core.media.aroll_cut_join import ArollCutJoinService
-from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams, ArollCutJoinSegment
+from supervideo_core.media.aroll_cut_join_models import ArollCutJoinOutput, ArollCutJoinParams, ArollCutJoinSegment
 from supervideo_core.media.errors import MediaError
+from supervideo_core.media.service import MediaService
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -69,6 +73,60 @@ class ArollCutJoinTests(unittest.IsolatedAsyncioTestCase):
         timeline["tracks"][0]["clips"][0]["sourceId"] = "source-not-declared"
         with self.assertRaises(ValidationError):
             ArollCutJoinParams(projectId=PROJECT_ID, timeline=timeline, mode="video")
+
+    def test_output_and_segment_models_reject_unsafe_paths_and_source_overrun(self) -> None:
+        for relative_path in ("/absolute.mp4", "\\absolute.mp4", "C:relative.mp4", "previews/../output.mp4", "previews/./output.mp4", "previews//output.mp4"):
+            with self.subTest(relative_path=relative_path), self.assertRaises(ValidationError):
+                ArollCutJoinOutput(kind="video", relativePath=relative_path, sizeBytes=1)
+
+        with self.assertRaises(ValidationError):
+            ArollCutJoinSegment.model_validate({
+                "order": 1,
+                "clipId": "clip-video-1",
+                "sentenceId": "sentence-video-1",
+                "source": {
+                    "sourceId": "source-aroll-video-a",
+                    "uri": "supervideo://asset/11111111-1111-4111-8111-111111111111",
+                    "mediaType": "video",
+                    "durationMs": 1_500,
+                    "fingerprint": "a" * 64,
+                },
+                "sourceInMs": 1_000,
+                "sourceOutMs": 3_000,
+                "durationMs": 2_000,
+                "timelineStartMs": 0,
+                "outputStartMs": 0,
+                "outputEndMs": 2_000,
+            })
+
+    async def test_ffmpeg_execution_requires_timeline_fingerprint(self) -> None:
+        timeline = fixture_timeline()
+        timeline["sources"][0]["fingerprint"] = None
+        request = ArollCutJoinParams(projectId=PROJECT_ID, timeline=timeline, mode="video", executionMode="ffmpeg")
+        with tempfile.TemporaryDirectory() as root, patch.object(MediaService, "_resolve_tool", return_value="C:\\Program Files\\ffmpeg\\ffmpeg.exe"):
+            service = ArollCutJoinService(ffmpeg_path="C:\\Program Files\\ffmpeg\\ffmpeg.exe")
+            service.bind_session(Path(root), object())
+            with self.assertRaises(MediaError) as context:
+                await service.cut_join(request, asyncio.Event())
+        self.assertEqual(context.exception.code, "AROLL_CUT_JOIN_SOURCE_INVALID")
+
+    async def test_ffmpeg_execution_rejects_asset_record_mismatch(self) -> None:
+        timeline = fixture_timeline()
+        timeline["sources"][0]["fingerprint"] = "f" * 64
+        request = ArollCutJoinParams(projectId=PROJECT_ID, timeline=timeline, mode="video", executionMode="ffmpeg")
+        current_fingerprint = "sampled-sha256-v1:" + "f" * 64
+        asset = SimpleNamespace(
+            absolute_path="C:\\assets\\source.mp4",
+            size_bytes=10,
+            modified_at_ms=20,
+            content_fingerprint="sampled-sha256-v1:" + "e" * 64,
+        )
+        with tempfile.TemporaryDirectory() as root, patch.object(MediaService, "_resolve_tool", return_value="C:\\Program Files\\ffmpeg\\ffmpeg.exe"), patch("supervideo_core.media.aroll_cut_join.AssetRepository.get", return_value=asset), patch.object(ArollCutJoinService, "_canonical_asset_path", return_value=(Path("C:\\assets\\source.mp4"), object())), patch.object(MediaService, "_asset_signature", return_value=((10, 20), current_fingerprint)):
+            service = ArollCutJoinService(ffmpeg_path="C:\\Program Files\\ffmpeg\\ffmpeg.exe")
+            service.bind_session(Path(root), object())
+            with self.assertRaises(MediaError) as context:
+                await service.cut_join(request, asyncio.Event())
+        self.assertEqual(context.exception.code, "AROLL_CUT_JOIN_SOURCE_INVALID")
 
     async def test_cancel_timeout_and_tool_unavailable_have_stable_codes(self) -> None:
         cancelled = asyncio.Event()

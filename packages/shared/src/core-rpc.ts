@@ -1509,7 +1509,8 @@ function isArollCutJoinSegment(value: unknown, order: number, mode: "audio" | "v
   if (!isArollSourceRef(value.source, mode)) return false;
   if (!isSafeInteger(value.sourceInMs, 0, 86_400_000) || !isSafeInteger(value.sourceOutMs, 1, 86_400_000) || !isSafeInteger(value.durationMs, 1, 86_400_000)) return false;
   if (!isSafeInteger(value.timelineStartMs, 0, 86_400_000) || !isSafeInteger(value.outputStartMs, 0, 86_400_000) || !isSafeInteger(value.outputEndMs, 1, 86_400_000)) return false;
-  return value.sourceOutMs > value.sourceInMs && value.sourceOutMs - value.sourceInMs === value.durationMs && value.outputEndMs - value.outputStartMs === value.durationMs;
+  return value.sourceOutMs > value.sourceInMs && value.sourceOutMs <= value.source.durationMs
+    && value.sourceOutMs - value.sourceInMs === value.durationMs && value.outputEndMs - value.outputStartMs === value.durationMs;
 }
 
 function isArollSourceRef(value: unknown, mode: "audio" | "video"): value is ArollSourceRef {
@@ -1529,7 +1530,9 @@ function isArollCutJoinGap(value: unknown): value is ArollCutJoinGap {
 function isArollCutJoinOutput(value: unknown): value is ArollCutJoinOutput {
   return isPlainRecord(value) && hasOnlyKeys(value, ["kind", "relativePath", "sizeBytes"])
     && (value.kind === "audio" || value.kind === "video") && isSafeString(value.relativePath, 512)
-    && !value.relativePath.includes("\\") && !value.relativePath.includes(":") && !value.relativePath.split("/").includes("..")
+    && !value.relativePath.startsWith("/") && !value.relativePath.startsWith("\\")
+    && !value.relativePath.includes("\\") && !value.relativePath.includes(":")
+    && !value.relativePath.split("/").some((part) => part === "" || part === "." || part === "..")
     && isSafeInteger(value.sizeBytes, 1, 2 ** 53 - 1);
 }
 

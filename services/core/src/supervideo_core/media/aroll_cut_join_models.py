@@ -101,6 +101,8 @@ class ArollCutJoinSegment(ArollCutJoinModel):
     def validate_ranges(self) -> "ArollCutJoinSegment":
         if self.source_out_ms - self.source_in_ms != self.duration_ms:
             raise ValueError("A-roll source span must equal clip duration")
+        if self.source_out_ms > self.source.duration_ms:
+            raise ValueError("A-roll source span exceeds source duration")
         if self.output_end_ms - self.output_start_ms != self.duration_ms:
             raise ValueError("A-roll output span must equal clip duration")
         if self.output_start_ms + self.duration_ms > 86_400_000:
@@ -133,8 +135,10 @@ class ArollCutJoinOutput(ArollCutJoinModel):
     @field_validator("relative_path")
     @classmethod
     def validate_relative_path(cls, value: str) -> str:
-        if value.startswith(("/", "\\")) or "\\" in value or ":" in value or ".." in value.split("/"):
+        if value.startswith(("/", "\\")) or "\\" in value or ":" in value:
             raise ValueError("A-roll output path must be relative")
+        if any(part in {"", ".", ".."} for part in value.split("/")):
+            raise ValueError("A-roll output path contains an unsafe segment")
         return value
 
 
