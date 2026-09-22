@@ -52,6 +52,7 @@ import {
  */
 export const AGENT_WORKER_PROTOCOL_VERSION = 1 as const;
 export const AGENT_WORKER_MAX_MESSAGE_BYTES = 64 * 1024;
+export const AGENT_WORKER_MAX_CAPABILITIES = 32;
 export const AGENT_WORKER_VERSION = "0.1.0" as const;
 
 export const AGENT_WORKER_CAPABILITIES = ["smoke-task", "cancel", "project", "transcription", "vad", "sentences", "sentence-index", "retrieval", "quality-rerank", "slot-alignment", "narrative-planner", "duration-optimization", "aroll-cut-join", "subtitle-plan", "preview-render", "jobs", "diagnostics"] as const;
@@ -726,7 +727,7 @@ export function isValidAgentWorkerMessage(value: unknown): value is AgentWorkerM
       && value.workerVersion.length > 0
       && value.workerVersion.length <= 32
       && Array.isArray(value.capabilities)
-      && value.capabilities.length <= 16
+      && value.capabilities.length <= AGENT_WORKER_MAX_CAPABILITIES
       && value.capabilities.every((capability) => typeof capability === "string" && capability.length <= 64);
   }
   if (value.type === "pong") {
@@ -838,7 +839,7 @@ export function isAgentWorkerStatusSnapshot(value: unknown): value is AgentWorke
     && (value.lastErrorCode === null || isAgentPublicErrorCode(value.lastErrorCode))
     && (value.workerVersion === null || (typeof value.workerVersion === "string" && value.workerVersion.length <= 32))
     && Array.isArray(value.capabilities)
-    && value.capabilities.length <= 16
+    && value.capabilities.length <= AGENT_WORKER_MAX_CAPABILITIES
     && value.capabilities.every((capability) => typeof capability === "string" && capability.length <= 64);
 }
 

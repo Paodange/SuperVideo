@@ -129,7 +129,10 @@ test("diagnostic export is bounded, redacted, cancellable, and returns no target
     assert.deepEqual(result, { status: "saved" });
     const output = fs.readFileSync(outputPath, "utf8");
     assert.ok(output.length > 0 && Buffer.byteLength(output) <= shared.DIAGNOSTICS_MAX_FILE_BYTES);
-    assert.equal(shared.isDiagnosticDocument(JSON.parse(output)), true);
+    const diagnostic = JSON.parse(output);
+    assert.equal(shared.isDiagnosticDocument(diagnostic), true);
+    assert.equal(shared.isDiagnosticDocument({ ...diagnostic, worker: { ...diagnostic.worker, capabilityCount: shared.DIAGNOSTICS_MAX_WORKER_CAPABILITIES } }), true);
+    assert.equal(shared.isDiagnosticDocument({ ...diagnostic, worker: { ...diagnostic.worker, capabilityCount: shared.DIAGNOSTICS_MAX_WORKER_CAPABILITIES + 1 } }), false);
     assert.doesNotMatch(output, /A08_FAKE_SENTINEL|credentials\.v1|Fake TTS/i);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
