@@ -23,5 +23,22 @@ test("C06 preview result is versioned, bounded, and honest about plan mode", () 
   unmapped.gaps = [{ code: "subtitle-cue-unmapped", clipId: "clip-missing", cueId: "cue-missing", detail: "not bound" }];
   unmapped.status = "gaps";
   assert.equal(shared.isPreviewRenderResult(unmapped), true);
+  const executed = {
+    ...fixture,
+    executionMode: "ffmpeg",
+    executionStatus: "completed",
+    log: { status: "completed", stdout: "", stderr: "" },
+    output: {
+      kind: "video",
+      relativePath: `previews/preview-render-v1/${"a".repeat(64)}.mp4`,
+      playbackUri: `supervideo://preview/${projectId}/${"a".repeat(64)}`,
+      sizeBytes: 1,
+      durationMs: 3500,
+      outputFingerprint: "b".repeat(64),
+    },
+  };
+  assert.equal(shared.isPreviewRenderResult(executed), true);
+  assert.equal(shared.isPreviewRenderResult({ ...executed, output: { ...executed.output, relativePath: `previews/preview-render-v1/${"a".repeat(64)}.mkv` } }), false);
+  assert.equal(shared.isPreviewRenderResult({ ...executed, output: { ...executed.output, relativePath: `previews/preview-render-v1/../${"a".repeat(64)}.mp4` } }), false);
+  assert.equal(shared.isPreviewRenderResult({ ...executed, output: { ...executed.output, playbackUri: `supervideo://preview/not-a-project/${"a".repeat(64)}` } }), false);
 });
-

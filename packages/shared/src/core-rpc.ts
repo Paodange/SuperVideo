@@ -1700,8 +1700,8 @@ function isPreviewRenderLog(value: unknown): value is PreviewRenderLog {
 
 function isPreviewRenderOutput(value: unknown): value is PreviewRenderOutput {
   return isPlainRecord(value) && hasOnlyKeys(value, ["kind", "relativePath", "playbackUri", "sizeBytes", "durationMs", "outputFingerprint"])
-    && value.kind === "video" && isSafeString(value.relativePath, 512) && value.relativePath.startsWith("previews/preview-render-v1/")
-    && isSafeString(value.playbackUri, 256) && /^supervideo:\/\/preview\/[A-Za-z0-9._-]+\/[0-9a-f]{64}$/.test(value.playbackUri)
+    && value.kind === "video" && isSafeString(value.relativePath, 512) && /^previews\/preview-render-v1\/[0-9a-f]{64}\.mp4$/.test(value.relativePath)
+    && isSafeString(value.playbackUri, 256) && /^supervideo:\/\/preview\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{64}$/.test(value.playbackUri)
     && isSafeInteger(value.sizeBytes, 1, 512 * 1024 * 1024) && isSafeInteger(value.durationMs, 1, 86_400_000) && isSentenceCacheKey(value.outputFingerprint);
 }
 

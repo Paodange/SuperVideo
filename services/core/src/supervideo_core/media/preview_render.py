@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import tempfile
 import time
 from collections.abc import Awaitable, Callable
@@ -30,6 +31,9 @@ from .preview_render_models import (
     PreviewSourceBinding,
     validate_preview_render_size,
 )
+
+AROLL_OUTPUT_RELATIVE_PATTERN = re.compile(r"^previews/aroll-cut-join-v1/[0-9a-f]{64}\.video\.mp4$")
+PREVIEW_MANIFEST_MAX_BYTES = 16 * 1024
 
 ProgressEmitter = Callable[[int, float, str], Awaitable[None]]
 
@@ -132,6 +136,8 @@ class PreviewRenderService:
                     raise MediaError("PREVIEW_RENDER_INPUT_INVALID")
                 gaps.append(PreviewRenderGap(code="subtitle-cue-range-invalid", clipId=cue.clip_id, cueId=cue.cue_id, detail="Subtitle cue is outside its A-roll segment."))
                 continue
+            if cue.source_id is not None and cue.source_id != segment.source.source_id:
+                raise MediaError("PREVIEW_RENDER_SUBTITLE_INVALID")
             source_counts[segment.source.source_id] = source_counts.get(segment.source.source_id, 0) + 1
             source_values[segment.source.source_id] = PreviewSourceBinding(
                 sourceId=segment.source.source_id,
@@ -192,17 +198,19 @@ class PreviewRenderService:
             raise MediaError("PREVIEW_RENDER_TOOL_UNAVAILABLE")
         if self._project_root is None or self._database is None or aroll.output is None or aroll.output.kind != "video":
             raise MediaError("PREVIEW_RENDER_SOURCE_INVALID")
-        input_path = self._resolve_project_file(aroll.output.relative_path)
-        self._ensure_regular_file(input_path, "PREVIEW_RENDER_SOURCE_INVALID")
+        input_path = self._resolve_aroll_output_path(aroll)
+        input_size = self._ensure_regular_file(input_path, "PREVIEW_RENDER_SOURCE_INVALID")
+        if input_size != aroll.output.size_bytes:
+            raise MediaError("PREVIEW_RENDER_SOURCE_INVALID")
         output_dir = self._project_root / "previews" / "preview-render-v1"
         self._ensure_output_directory(output_dir)
         output_path = output_dir / f"{digest}.mp4"
         if output_path.exists():
-            self._ensure_regular_file(output_path)
-            size = output_path.stat().st_size
-            if size > 0:
-                output = self._output(output_path, request.project_id, digest, aroll.selected_duration_ms)
-                return output, PreviewRenderLog(status="cache-hit")
+            if output_path.is_symlink():
+                raise MediaError("PREVIEW_RENDER_OUTPUT_INVALID")
+            cached = self._read_verified_cache(output_path, request.project_id, digest, aroll.selected_duration_ms)
+            if cached is not None:
+                return cached, PreviewRenderLog(status="cache-hit")
         ass_fd, ass_name = tempfile.mkstemp(prefix=f".{digest[:16]}-", suffix=".ass", dir=str(output_dir))
         temp_fd, temp_name = tempfile.mkstemp(prefix=f".{digest[:16]}-", suffix=".mp4", dir=str(output_dir))
         os.close(ass_fd)
@@ -230,6 +238,7 @@ class PreviewRenderService:
                 raise MediaError("PREVIEW_RENDER_OUTPUT_INVALID")
             os.replace(temp_path, output_path)
             output = self._output(output_path, request.project_id, digest, aroll.selected_duration_ms)
+            self._write_manifest(output_dir / f"{digest}.manifest.json", request.project_id, digest, output)
             return output, PreviewRenderLog(status="completed")
         finally:
             ass_path.unlink(missing_ok=True)
@@ -268,10 +277,73 @@ class PreviewRenderService:
             raise MediaError("PREVIEW_RENDER_SOURCE_INVALID")
         return candidate
 
+    def _resolve_aroll_output_path(self, aroll: ArollCutJoinResult) -> Path:
+        assert aroll.output is not None
+        if AROLL_OUTPUT_RELATIVE_PATTERN.fullmatch(aroll.output.relative_path) is None:
+            raise MediaError("PREVIEW_RENDER_SOURCE_INVALID")
+        expected = f"previews/aroll-cut-join-v1/{aroll.plan_digest}.video.mp4"
+        if aroll.output.relative_path != expected:
+            raise MediaError("PREVIEW_RENDER_SOURCE_INVALID")
+        return self._resolve_project_file(aroll.output.relative_path)
+
     @staticmethod
-    def _ensure_regular_file(path: Path, code: str = "PREVIEW_RENDER_OUTPUT_INVALID") -> None:
+    def _ensure_regular_file(path: Path, code: str = "PREVIEW_RENDER_OUTPUT_INVALID") -> int:
         if not path.exists() or path.is_symlink() or not path.is_file() or path.stat().st_size <= 0:
             raise MediaError(code)  # type: ignore[arg-type]
+        return path.stat().st_size
+
+    def _read_verified_cache(
+        self,
+        output_path: Path,
+        project_id: str,
+        digest: str,
+        duration_ms: int,
+    ) -> PreviewRenderOutput | None:
+        manifest_path = output_path.with_name(f"{digest}.manifest.json")
+        try:
+            if manifest_path.is_symlink() or not manifest_path.is_file() or manifest_path.stat().st_size > PREVIEW_MANIFEST_MAX_BYTES:
+                return None
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if not isinstance(manifest, dict) or set(manifest) != {"schemaVersion", "projectId", "planDigest", "relativePath", "sizeBytes", "durationMs", "outputFingerprint"}:
+            return None
+        try:
+            size = output_path.stat().st_size
+            if manifest["schemaVersion"] != 1 or manifest["projectId"] != project_id or manifest["planDigest"] != digest:
+                return None
+            if manifest["relativePath"] != self._relative_path(output_path) or manifest["sizeBytes"] != size or manifest["durationMs"] != duration_ms:
+                return None
+            fingerprint = _sha256_file(output_path)
+            if manifest["outputFingerprint"] != fingerprint:
+                return None
+            return self._output(output_path, project_id, digest, duration_ms)
+        except (KeyError, OSError, MediaError):
+            return None
+
+    def _write_manifest(self, path: Path, project_id: str, digest: str, output: PreviewRenderOutput) -> None:
+        payload = {
+            "schemaVersion": 1,
+            "projectId": project_id,
+            "planDigest": digest,
+            "relativePath": output.relative_path,
+            "sizeBytes": output.size_bytes,
+            "durationMs": output.duration_ms,
+            "outputFingerprint": output.output_fingerprint,
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        if len(encoded) > PREVIEW_MANIFEST_MAX_BYTES:
+            raise MediaError("PREVIEW_RENDER_OUTPUT_INVALID")
+        fd, temp_name = tempfile.mkstemp(prefix=f".{digest[:16]}-", suffix=".manifest.json", dir=str(path.parent))
+        os.close(fd)
+        temp_path = Path(temp_name)
+        try:
+            temp_path.write_bytes(encoded)
+            os.replace(temp_path, path)
+        except OSError as error:
+            raise MediaError("PREVIEW_RENDER_OUTPUT_INVALID", cause=error) from error
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     @staticmethod
     def _ensure_output_directory(path: Path) -> None:

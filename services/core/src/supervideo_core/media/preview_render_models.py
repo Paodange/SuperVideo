@@ -21,6 +21,7 @@ PREVIEW_RENDER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024
 UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+PREVIEW_OUTPUT_RELATIVE_PATTERN = re.compile(r"^previews/preview-render-v1/[0-9a-f]{64}\.mp4$")
 
 
 class PreviewRenderModel(BaseModel):
@@ -142,8 +143,15 @@ class PreviewRenderOutput(PreviewRenderModel):
             raise ValueError("preview output path must be relative")
         if any(part in {"", ".", ".."} for part in value.split("/")):
             raise ValueError("preview output path contains an unsafe segment")
-        if not value.startswith("previews/preview-render-v1/"):
+        if PREVIEW_OUTPUT_RELATIVE_PATTERN.fullmatch(value) is None:
             raise ValueError("preview output is outside the preview boundary")
+        return value
+
+    @field_validator("playback_uri")
+    @classmethod
+    def validate_playback_uri(cls, value: str) -> str:
+        if re.fullmatch(r"supervideo://preview/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{64}", value) is None:
+            raise ValueError("invalid preview playback URI")
         return value
 
     @field_validator("output_fingerprint")

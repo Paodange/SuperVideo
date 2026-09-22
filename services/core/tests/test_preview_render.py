@@ -12,9 +12,11 @@ from pydantic import ValidationError
 
 from supervideo_core.media.aroll_cut_join import ArollCutJoinService
 from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams
+from supervideo_core.media.aroll_cut_join_models import ArollCutJoinOutput
 from supervideo_core.media.errors import MediaError
 from supervideo_core.media.preview_render import PreviewRenderService
 from supervideo_core.media.preview_render_models import PreviewRenderParams
+from supervideo_core.media.preview_render_models import PreviewRenderOutput
 from supervideo_core.media.service import MediaService
 from supervideo_core.media.subtitle_plan import SubtitlePlanService
 from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
@@ -72,6 +74,73 @@ class PreviewRenderTests(unittest.TestCase):
         changed["timelineId"] = "another-timeline"
         with self.assertRaises(ValidationError):
             PreviewRenderParams(projectId=PROJECT_ID, arollPlan=aroll, subtitlePlan=changed)
+
+    def test_subtitle_source_cannot_override_the_bound_aroll_source(self) -> None:
+        aroll, subtitle = plans()
+        changed_cue = subtitle.cues[0].model_copy(update={"source_id": "source-aroll-video-b"})
+        changed_subtitle = subtitle.model_copy(update={"cues": [changed_cue, subtitle.cues[1]]})
+        request = PreviewRenderParams(projectId=PROJECT_ID, arollPlan=aroll, subtitlePlan=changed_subtitle)
+        with self.assertRaises(MediaError) as error:
+            asyncio.run(PreviewRenderService().render(request, asyncio.Event()))
+        self.assertEqual(error.exception.code, "PREVIEW_RENDER_SUBTITLE_INVALID")
+
+    def test_execution_rechecks_c04_path_and_declared_size(self) -> None:
+        aroll, subtitle = plans()
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            with patch.object(MediaService, "_resolve_tool", return_value="ffmpeg"):
+                service = PreviewRenderService(ffmpeg_path="ffmpeg")
+                service.bind_session(root, object())
+                wrong_path = aroll.model_copy(update={
+                    "execution_mode": "ffmpeg",
+                    "execution_status": "completed",
+                    "output": ArollCutJoinOutput(kind="video", relativePath="previews/other/input.mp4", sizeBytes=1),
+                })
+                with self.assertRaises(MediaError) as wrong_error:
+                    asyncio.run(service.render(PreviewRenderParams(projectId=PROJECT_ID, arollPlan=wrong_path, subtitlePlan=subtitle, executionMode="ffmpeg"), asyncio.Event()))
+                self.assertEqual(wrong_error.exception.code, "PREVIEW_RENDER_SOURCE_INVALID")
+
+                expected_path = root / "previews" / "aroll-cut-join-v1" / f"{aroll.plan_digest}.video.mp4"
+                expected_path.parent.mkdir(parents=True)
+                expected_path.write_bytes(b"source")
+                stale_size = aroll.model_copy(update={
+                    "execution_mode": "ffmpeg",
+                    "execution_status": "completed",
+                    "output": ArollCutJoinOutput(kind="video", relativePath=f"previews/aroll-cut-join-v1/{aroll.plan_digest}.video.mp4", sizeBytes=999),
+                })
+                with self.assertRaises(MediaError) as size_error:
+                    asyncio.run(service.render(PreviewRenderParams(projectId=PROJECT_ID, arollPlan=stale_size, subtitlePlan=subtitle, executionMode="ffmpeg"), asyncio.Event()))
+                self.assertEqual(size_error.exception.code, "PREVIEW_RENDER_SOURCE_INVALID")
+
+    def test_cache_requires_a_matching_manifest_and_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            service = PreviewRenderService()
+            service.bind_session(root, object())
+            digest = "d" * 64
+            output_path = root / "previews" / "preview-render-v1" / f"{digest}.mp4"
+            output_path.parent.mkdir(parents=True)
+            output_path.write_bytes(b"preview")
+            output = service._output(output_path, PROJECT_ID, digest, 1_000)
+            service._write_manifest(output_path.with_name(f"{digest}.manifest.json"), PROJECT_ID, digest, output)
+            self.assertIsNotNone(service._read_verified_cache(output_path, PROJECT_ID, digest, 1_000))
+            output_path.write_bytes(b"tampered")
+            self.assertIsNone(service._read_verified_cache(output_path, PROJECT_ID, digest, 1_000))
+
+    def test_output_model_rejects_non_c06_paths_and_playback_uris(self) -> None:
+        base = {
+            "kind": "video",
+            "relativePath": f"previews/preview-render-v1/{'a' * 64}.mp4",
+            "playbackUri": f"supervideo://preview/{PROJECT_ID}/{'a' * 64}",
+            "sizeBytes": 1,
+            "durationMs": 1,
+            "outputFingerprint": "b" * 64,
+        }
+        PreviewRenderOutput.model_validate(base)
+        for key, value in (("relativePath", f"previews/preview-render-v1/{'a' * 64}.mkv"), ("relativePath", f"previews/preview-render-v1/../{'a' * 64}.mp4"), ("playbackUri", f"supervideo://preview/not-a-uuid/{'a' * 64}")):
+            invalid = {**base, key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(ValidationError):
+                PreviewRenderOutput.model_validate(invalid)
 
     def test_execution_requires_ffmpeg_and_plan_never_fabricates_output(self) -> None:
         aroll, subtitle = plans()
