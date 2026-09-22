@@ -10,7 +10,8 @@ from .index_models import SentenceIndexParams, SentenceIndexResult
 from .retrieval_models import RetrievalFilters, RetrievalParams, RetrievalResult
 from .rerank_models import RerankConfig, RerankParams, RerankResult
 from .slot_alignment_models import InformationSlot, SlotAlignmentCandidate, SlotAlignmentParams, SlotAlignmentResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService"]
+from .narrative_planner_models import NarrativePlanParams, NarrativePlanResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService"]
 
 
 def __getattr__(name: str):
@@ -50,4 +51,8 @@ def __getattr__(name: str):
         from .slot_alignment import InformationSlotAlignmentService
 
         return InformationSlotAlignmentService
+    if name == "NarrativePlannerService":
+        from .narrative_planner import NarrativePlannerService
+
+        return NarrativePlannerService
     raise AttributeError(name)

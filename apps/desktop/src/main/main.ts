@@ -19,6 +19,7 @@ import {
   isRetrievalResult,
   isRerankResult,
   isSlotAlignmentResult,
+  isNarrativePlanResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -44,6 +45,8 @@ import {
   type RerankResult,
   type SlotAlignmentParams,
   type SlotAlignmentResult,
+  type NarrativePlanParams,
+  type NarrativePlanResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -714,6 +717,11 @@ app.whenReady().then(() => {
     alignScript: async (_event, input: SlotAlignmentParams): Promise<SlotAlignmentResult> => {
       const result = await agentController.runProjectOperation("media-script-align", input, input.projectId);
       if (!isSlotAlignmentResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    createRemixPlan: async (_event, input: NarrativePlanParams): Promise<NarrativePlanResult> => {
+      const result = await agentController.runProjectOperation("plan-create-remix", input, input.projectId);
+      if (!isNarrativePlanResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(

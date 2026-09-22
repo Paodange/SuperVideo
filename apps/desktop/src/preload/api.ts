@@ -30,6 +30,8 @@ import {
   isRerankResult,
   isSlotAlignmentParams,
   isSlotAlignmentResult,
+  isNarrativePlanParams,
+  isNarrativePlanResult,
   type AgentRunHandle,
   type AgentWorkerStatusSnapshot,
   type DesktopAgentEvent,
@@ -70,6 +72,8 @@ import {
   type RerankResult,
   type SlotAlignmentParams,
   type SlotAlignmentResult,
+  type NarrativePlanParams,
+  type NarrativePlanResult,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -88,6 +92,7 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.retrieveSentences
     | typeof DESKTOP_IPC_CHANNELS.rerankSentences
     | typeof DESKTOP_IPC_CHANNELS.alignScript
+    | typeof DESKTOP_IPC_CHANNELS.createRemixPlan
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.listJobs
@@ -186,6 +191,10 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
     alignScript: (input: SlotAlignmentParams) => {
       if (!isSlotAlignmentParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.alignScript, input, invoke, isSlotAlignmentResult);
+    },
+    createRemixPlan: (input: NarrativePlanParams) => {
+      if (!isNarrativePlanParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.createRemixPlan, input, invoke, isNarrativePlanResult);
     },
     startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),

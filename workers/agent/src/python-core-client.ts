@@ -39,6 +39,7 @@ import {
   isRetrievalResult,
   isRerankResult,
   isSlotAlignmentResult,
+  isNarrativePlanResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -70,6 +71,8 @@ import {
   type SentenceIndexResult,
   type SlotAlignmentParams,
   type SlotAlignmentResult,
+  type NarrativePlanParams,
+  type NarrativePlanResult,
   type ProjectCreateParams,
   type ProjectOpenParams,
   type ProjectSummary,
@@ -355,6 +358,12 @@ export class PythonCoreClient {
   async alignScript(params: SlotAlignmentParams, options: CoreRpcRequestOptions = {}): Promise<SlotAlignmentResult> {
     const result = await this.request<unknown>(CORE_RPC_METHODS.mediaScriptAlign, params, options);
     if (!isSlotAlignmentResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async createRemixPlan(params: NarrativePlanParams, options: CoreRpcRequestOptions = {}): Promise<NarrativePlanResult> {
+    const result = await this.request<unknown>(CORE_RPC_METHODS.planCreateRemix, params, options);
+    if (!isNarrativePlanResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 

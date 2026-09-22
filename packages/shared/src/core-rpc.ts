@@ -36,6 +36,7 @@ export const CORE_RPC_METHODS = {
   mediaSentenceRetrieve: "media.sentences.retrieve",
   mediaSentenceRerank: "media.sentences.rerank",
   mediaScriptAlign: "media.script.align",
+  planCreateRemix: "plan.create_remix",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -66,6 +67,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaSentenceRetrieve
   | typeof CORE_RPC_METHODS.mediaSentenceRerank
   | typeof CORE_RPC_METHODS.mediaScriptAlign
+  | typeof CORE_RPC_METHODS.planCreateRemix
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -185,6 +187,13 @@ export const CORE_RPC_ERROR_CODES = {
   slotOutputInvalid: "SLOT_OUTPUT_INVALID",
   slotTimeout: "SLOT_TIMEOUT",
   slotCancelled: "SLOT_CANCELLED",
+  planInputInvalid: "PLAN_INPUT_INVALID",
+  planSourceInvalid: "PLAN_SOURCE_INVALID",
+  planSourceStale: "PLAN_SOURCE_STALE",
+  planAlignmentInvalid: "PLAN_ALIGNMENT_INVALID",
+  planOutputInvalid: "PLAN_OUTPUT_INVALID",
+  planTimeout: "PLAN_TIMEOUT",
+  planCancelled: "PLAN_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -300,6 +309,13 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   SLOT_OUTPUT_INVALID: -32350,
   SLOT_TIMEOUT: -32351,
   SLOT_CANCELLED: -32352,
+  PLAN_INPUT_INVALID: -32353,
+  PLAN_SOURCE_INVALID: -32354,
+  PLAN_SOURCE_STALE: -32355,
+  PLAN_ALIGNMENT_INVALID: -32356,
+  PLAN_OUTPUT_INVALID: -32357,
+  PLAN_TIMEOUT: -32358,
+  PLAN_CANCELLED: -32359,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -413,6 +429,13 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   SLOT_OUTPUT_INVALID: "The information-slot alignment output was invalid.",
   SLOT_TIMEOUT: "The information-slot alignment operation timed out.",
   SLOT_CANCELLED: "The information-slot alignment operation was cancelled.",
+  PLAN_INPUT_INVALID: "The narrative plan input is invalid or exceeds its bounds.",
+  PLAN_SOURCE_INVALID: "The B10 source is invalid for narrative planning.",
+  PLAN_SOURCE_STALE: "The B10 source is stale for narrative planning.",
+  PLAN_ALIGNMENT_INVALID: "The B10 alignment result is invalid for narrative planning.",
+  PLAN_OUTPUT_INVALID: "The narrative plan output was invalid.",
+  PLAN_TIMEOUT: "The narrative planning operation timed out.",
+  PLAN_CANCELLED: "The narrative planning operation was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -520,6 +543,12 @@ export type SlotAlignmentTimecode = Readonly<{ startMs: number; endMs: number }>
 export type SlotAlignmentCandidate = Readonly<{ rank: number; origin: "b08-retrieval" | "b09-quality-rerank"; sentenceId: string; sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: SlotAlignmentTimecode; text: string; score: number; quality: "complete"; previewUri: string; selectionReason: string; preservedFacts: readonly string[] }>;
 export type InformationSlot = Readonly<{ slotId: string; order: number; kind: "hook" | "context" | "claim" | "evidence" | "benefit" | "requirement" | "process" | "cta" | "closing" | "other"; sourceText: string; query: string; keyFacts: readonly string[]; status: "matched" | "gap"; selectedCandidateRank: number | null; candidates: readonly SlotAlignmentCandidate[]; selectionReason: string | null; gapReason: string | null }>;
 export type SlotAlignmentResult = Readonly<{ schemaVersion: 1; alignmentVersion: "information-slot-alignment-v1"; splitterVersion: "deterministic-slot-split-v1"; projectId: string; inputKind: "copy" | "outline"; inputText: string; sourceDigest: string; slotCount: number; matchedCount: number; slots: readonly InformationSlot[] }>;
+export type NarrativePlanParams = Readonly<{ projectId: string; theme: string; audience: string; targetDurationMs: number; outline?: string | null; assetIds?: readonly string[]; candidateLimit?: number; useRerank?: boolean; timeoutMs?: number }>;
+export type NarrativePlanTimecode = Readonly<{ startMs: number; endMs: number }>;
+export type NarrativePlanSource = Readonly<{ sourceAssetId: string; sourceSentenceCacheKey: string; sentenceIndex: number; timecode: NarrativePlanTimecode; previewUri: string }>;
+export type NarrativePlanGap = Readonly<{ segmentId: string; slotId: string; role: "hook" | "body" | "cta"; code: "alignment-gap" | "missing-narrative-role" | "duration-outside-tolerance"; detail: string }>;
+export type NarrativePlanSegment = Readonly<{ segmentId: string; order: number; role: "hook" | "body" | "cta"; slotId: string; slotKind: InformationSlot["kind"]; sourceText: string; status: "matched" | "gap"; candidateSentenceId: string | null; candidateRank: number | null; sentenceText: string | null; source: NarrativePlanSource | null; durationMs: number; selectionReason: string | null; gapReason: NarrativePlanGap | null }>;
+export type NarrativePlanResult = Readonly<{ schemaVersion: 1; planVersion: "narrative-remix-plan-v1"; inputVersion: "deterministic-narrative-input-v1"; projectId: string; theme: string; audience: string; outline: string | null; targetDurationMs: number; toleranceLowerMs: number; toleranceUpperMs: number; selectedDurationMs: number; durationStatus: "within-tolerance" | "outside-tolerance"; status: "ready" | "gaps" | "needs-duration-optimization"; selectionPolicy: "b10-first-complete-candidate-v1"; alignmentVersion: "information-slot-alignment-v1"; planDigest: string; segments: readonly NarrativePlanSegment[]; gaps: readonly NarrativePlanGap[] }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -671,6 +700,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaSentenceRetrieve) return isRetrievalParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaSentenceRerank) return isRerankParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaScriptAlign) return isSlotAlignmentParams(value.params);
+  if (value.method === CORE_RPC_METHODS.planCreateRemix) return isNarrativePlanParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -902,6 +932,26 @@ export function isSlotAlignmentResult(value: unknown): value is SlotAlignmentRes
     && value.slots.every((slot, index) => isInformationSlot(slot, index + 1))
     && value.matchedCount === value.slots.filter((slot) => (slot as Record<string, unknown>).status === "matched").length
     && isBoundedCoreJsonValue(value, 60 * 1024);
+}
+
+export function isNarrativePlanResult(value: unknown): value is NarrativePlanResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "planVersion", "inputVersion", "projectId", "theme", "audience", "outline", "targetDurationMs", "toleranceLowerMs", "toleranceUpperMs", "selectedDurationMs", "durationStatus", "status", "selectionPolicy", "alignmentVersion", "planDigest", "segments", "gaps"])) return false;
+  if (value.schemaVersion !== 1 || value.planVersion !== "narrative-remix-plan-v1" || value.inputVersion !== "deterministic-narrative-input-v1" || !isUuid(value.projectId)) return false;
+  if (!isBoundedText(value.theme, 512) || !isBoundedText(value.audience, 256) || (value.outline !== null && !isBoundedMultilineText(value.outline, 8_192))) return false;
+  if (!isSafeInteger(value.targetDurationMs, 1_000, 600_000) || !isSafeInteger(value.toleranceLowerMs, 800, 600_000) || !isSafeInteger(value.toleranceUpperMs, 800, 720_000)) return false;
+  if (value.toleranceLowerMs !== Math.floor(value.targetDurationMs * 0.8) || value.toleranceUpperMs !== Math.floor(value.targetDurationMs * 1.2)) return false;
+  if (!isSafeInteger(value.selectedDurationMs, 0, 86_400_000) || (value.durationStatus !== "within-tolerance" && value.durationStatus !== "outside-tolerance")) return false;
+  if (value.status !== "ready" && value.status !== "gaps" && value.status !== "needs-duration-optimization") return false;
+  if (value.selectionPolicy !== "b10-first-complete-candidate-v1" || value.alignmentVersion !== "information-slot-alignment-v1" || !isSentenceCacheKey(value.planDigest)) return false;
+  if (!Array.isArray(value.segments) || value.segments.length < 1 || value.segments.length > 32 || !value.segments.every((segment, index) => isNarrativePlanSegment(segment, index + 1))) return false;
+  if (value.selectedDurationMs !== value.segments.reduce((total, segment) => total + (segment as NarrativePlanSegment).durationMs, 0)) return false;
+  const expectedDurationStatus = value.toleranceLowerMs <= value.selectedDurationMs && value.selectedDurationMs <= value.toleranceUpperMs ? "within-tolerance" : "outside-tolerance";
+  if (value.durationStatus !== expectedDurationStatus) return false;
+  if (!Array.isArray(value.gaps) || value.gaps.length > 32 || !value.gaps.every(isNarrativePlanGap)) return false;
+  const segmentGaps = value.segments.filter((segment) => (segment as NarrativePlanSegment).gapReason !== null).map((segment) => (segment as NarrativePlanSegment).gapReason);
+  if (value.gaps.length !== segmentGaps.length || value.gaps.some((gap, index) => JSON.stringify(gap) !== JSON.stringify(segmentGaps[index]))) return false;
+  const expectedStatus = value.gaps.length > 0 ? "gaps" : value.durationStatus === "within-tolerance" ? "ready" : "needs-duration-optimization";
+  return value.status === expectedStatus && isBoundedCoreJsonValue(value, 60 * 1024);
 }
 
 export function isSentenceQaContextResult(value: unknown): value is SentenceQaContextResult {
@@ -1167,6 +1217,17 @@ export function isSlotAlignmentParams(value: unknown): value is SlotAlignmentPar
     && value.assetIds.length === new Set(value.assetIds).size && value.assetIds.every(isUuid);
 }
 
+export function isNarrativePlanParams(value: unknown): value is NarrativePlanParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "theme", "audience", "targetDurationMs", "outline", "assetIds", "candidateLimit", "useRerank", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isBoundedText(value.theme, 512) || !isBoundedText(value.audience, 256) || !isSafeInteger(value.targetDurationMs, 1_000, 600_000)) return false;
+  if (value.outline !== undefined && value.outline !== null && !isBoundedMultilineText(value.outline, 8_192)) return false;
+  if (value.candidateLimit !== undefined && !isSafeInteger(value.candidateLimit, 1, 8)) return false;
+  if (value.useRerank !== undefined && typeof value.useRerank !== "boolean") return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  return value.assetIds === undefined || Array.isArray(value.assetIds) && value.assetIds.length >= 1 && value.assetIds.length <= 100
+    && value.assetIds.length === new Set(value.assetIds).size && value.assetIds.every(isUuid);
+}
+
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
   if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "assetId", "sentenceCacheKey", "sentenceIndex", "contextBefore", "contextAfter", "markers"])) return false;
   const base = { ...value };
@@ -1301,6 +1362,32 @@ function isRerankCandidate(value: unknown, rank: number): value is RerankCandida
   return isSafeInteger(value.explanation.selectedSourceAssetCount, 1, 50)
     && (value.explanation.visualQualityStatus === "measured" || value.explanation.visualQualityStatus === "degraded")
     && isSafeString(value.explanation.visualQualityReason, 96);
+}
+
+function isNarrativePlanGap(value: unknown): value is NarrativePlanGap {
+  return isPlainRecord(value) && hasOnlyKeys(value, ["segmentId", "slotId", "role", "code", "detail"])
+    && isSafeString(value.segmentId, 64) && isSafeString(value.slotId, 32)
+    && ["hook", "body", "cta"].includes(value.role as string)
+    && ["alignment-gap", "missing-narrative-role", "duration-outside-tolerance"].includes(value.code as string)
+    && isSafeString(value.detail, 160);
+}
+
+function isNarrativePlanSource(value: unknown): value is NarrativePlanSource {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["sourceAssetId", "sourceSentenceCacheKey", "sentenceIndex", "timecode", "previewUri"])) return false;
+  if (!isUuid(value.sourceAssetId) || !isSentenceCacheKey(value.sourceSentenceCacheKey) || !isSafeInteger(value.sentenceIndex, 0, 1_999) || !isBoundedText(value.previewUri, 256)) return false;
+  if (!isPlainRecord(value.timecode) || !hasOnlyKeys(value.timecode, ["startMs", "endMs"]) || !isSafeInteger(value.timecode.startMs, 0, 86_400_000) || !isSafeInteger(value.timecode.endMs, 1, 86_400_000) || value.timecode.endMs <= value.timecode.startMs) return false;
+  return value.previewUri === `supervideo://asset/${value.sourceAssetId}?kind=audio&startMs=${value.timecode.startMs}&endMs=${value.timecode.endMs}`;
+}
+
+function isNarrativePlanSegment(value: unknown, order: number): value is NarrativePlanSegment {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["segmentId", "order", "role", "slotId", "slotKind", "sourceText", "status", "candidateSentenceId", "candidateRank", "sentenceText", "source", "durationMs", "selectionReason", "gapReason"])) return false;
+  if (!isSafeString(value.segmentId, 64) || value.order !== order || !["hook", "body", "cta"].includes(value.role as string) || !isSafeString(value.slotId, 32) || !["hook", "context", "claim", "evidence", "benefit", "requirement", "process", "cta", "closing", "other"].includes(value.slotKind as string) || !isBoundedText(value.sourceText, 512)) return false;
+  if (!isSafeInteger(value.durationMs, 0, 86_400_000) || !isNarrativePlanGap(value.gapReason) && value.gapReason !== null) return false;
+  if (value.status === "matched") {
+    return isSentenceCacheKey(value.candidateSentenceId) && value.candidateRank === 1 && isBoundedText(value.sentenceText, 2_048)
+      && isNarrativePlanSource(value.source) && value.durationMs > 0 && isSafeString(value.selectionReason, 160) && value.gapReason === null;
+  }
+  return value.status === "gap" && value.candidateSentenceId === null && value.candidateRank === null && value.sentenceText === null && value.source === null && value.durationMs === 0 && value.selectionReason === null && isNarrativePlanGap(value.gapReason);
 }
 
 function isInformationSlot(value: unknown, order: number): value is InformationSlot {

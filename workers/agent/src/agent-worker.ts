@@ -21,6 +21,7 @@ import {
   isRetrievalResult,
   isRerankResult,
   isSlotAlignmentResult,
+  isNarrativePlanResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -159,6 +160,7 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-sentence-retrieve":
     case "media-sentence-rerank":
     case "media-script-align":
+    case "plan-create-remix":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -214,8 +216,10 @@ async function handleProjectOperation(
                   ? isSentenceIndexResult(result)
               : operation === "media-sentence-rerank"
                 ? isRerankResult(result)
-                : operation === "media-script-align"
-                  ? isSlotAlignmentResult(result)
+              : operation === "media-script-align"
+                ? isSlotAlignmentResult(result)
+                : operation === "plan-create-remix"
+                  ? isNarrativePlanResult(result)
                 : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
@@ -330,6 +334,7 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-sentence-retrieve") return CORE_RPC_METHODS.mediaSentenceRetrieve;
   if (operation === "media-sentence-rerank") return CORE_RPC_METHODS.mediaSentenceRerank;
   if (operation === "media-script-align") return CORE_RPC_METHODS.mediaScriptAlign;
+  if (operation === "plan-create-remix") return CORE_RPC_METHODS.planCreateRemix;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 
