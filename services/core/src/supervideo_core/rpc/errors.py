@@ -187,6 +187,15 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "EDIT_TIMELINE_EMPTY": RpcErrorDefinition(-32425, "The edit would produce an empty Timeline IR."),
     "EDIT_OPERATION_UNSAFE": RpcErrorDefinition(-32426, "The requested edit cannot be applied without guessing or losing source fidelity."),
     "EDIT_TIMELINE_INVALID": RpcErrorDefinition(-32427, "The edited Timeline IR failed validation."),
+    "TIMELINE_VERSION_NOT_FOUND": RpcErrorDefinition(-32430, "The requested Timeline version was not found."),
+    "TIMELINE_VERSION_PROJECT_MISMATCH": RpcErrorDefinition(-32431, "The Timeline version does not belong to the requested project."),
+    "TIMELINE_ACTIVE_VERSION_MISSING": RpcErrorDefinition(-32432, "The project has no active Timeline version."),
+    "TIMELINE_NO_UNDO": RpcErrorDefinition(-32433, "There is no previous Timeline version to undo to."),
+    "TIMELINE_NO_REDO": RpcErrorDefinition(-32434, "There is no next Timeline version to redo to."),
+    "TIMELINE_REDO_AMBIGUOUS": RpcErrorDefinition(-32435, "Redo has multiple child versions; choose a version explicitly."),
+    "TIMELINE_VERSION_CONFLICT": RpcErrorDefinition(-32436, "The active Timeline version changed concurrently."),
+    "TIMELINE_VERSION_INVALID": RpcErrorDefinition(-32437, "The Timeline version request is invalid."),
+    "TIMELINE_DIFF_NOT_AVAILABLE": RpcErrorDefinition(-32438, "The requested Timeline diff is not available."),
 }
 
 

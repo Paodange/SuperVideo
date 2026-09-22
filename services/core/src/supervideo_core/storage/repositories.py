@@ -27,6 +27,7 @@ from .models import (
     STORAGE_MAX_LIST_LIMIT,
     deserialize_json_value,
     serialize_json_value,
+    utc_now_ms,
     validate_id,
 )
 
@@ -762,8 +763,9 @@ class TimelineVersionRepository:
                     INSERT INTO timeline_versions(
                         id, project_id, version_number, parent_version_id,
                         schema_version, timeline_json, edit_intent_json,
-                        diff_summary_json, created_at_ms
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        diff_summary_json, source_type_v3, timeline_id,
+                        source_version_id, determinism_digest, idempotency_key, created_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         record.id,
@@ -774,6 +776,11 @@ class TimelineVersionRepository:
                         _stored_json(record.timeline_json),
                         _stored_json(record.edit_intent_json),
                         _stored_json(record.diff_summary_json),
+                        record.source_type,
+                        record.timeline_id,
+                        record.source_version_id,
+                        record.determinism_digest,
+                        record.idempotency_key,
                         record.created_at_ms,
                     ),
                 )
@@ -784,6 +791,33 @@ class TimelineVersionRepository:
         except sqlite3.Error as error:
             raise _write_error(error) from error
         return record
+
+    def get_by_idempotency(self, project_id: str, idempotency_key: str) -> TimelineVersionRecord | None:
+        scope = _project_id(project_id)
+        if not isinstance(idempotency_key, str) or not idempotency_key or len(idempotency_key) > 128:
+            raise StorageError("INVALID_RECORD")
+        try:
+            row = self.database.connection.execute(
+                _TIMELINE_SELECT + " WHERE project_id = ? AND idempotency_key = ?",
+                (scope, idempotency_key),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _timeline_from_row(row)
+
+    def list_for_timeline(self, project_id: str, timeline_id: str, limit: int = STORAGE_DEFAULT_LIST_LIMIT) -> list[TimelineVersionRecord]:
+        scope = _project_id(project_id)
+        if not isinstance(timeline_id, str) or not timeline_id or len(timeline_id) > 128:
+            raise StorageError("INVALID_RECORD")
+        bounded_limit = _limit(limit)
+        try:
+            rows = self.database.connection.execute(
+                _TIMELINE_SELECT + " WHERE project_id = ? AND timeline_id = ? ORDER BY version_number ASC, id ASC LIMIT ?",
+                (scope, timeline_id, bounded_limit),
+            ).fetchall()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return [_timeline_from_row(row) for row in rows]
 
     def get(self, version_id: str, project_id: str | None = None) -> TimelineVersionRecord:
         record_id = _record_id(version_id)
@@ -815,6 +849,76 @@ class TimelineVersionRepository:
             raise _write_error(error) from error
         return [_timeline_from_row(row) for row in rows]
 
+    def get_active(self, project_id: str) -> TimelineVersionRecord | None:
+        scope = _project_id(project_id)
+        try:
+            row = self.database.connection.execute(
+                """SELECT tv.id, tv.project_id, tv.version_number, tv.parent_version_id,
+                          tv.schema_version, tv.timeline_json, tv.edit_intent_json,
+                          tv.diff_summary_json, tv.source_type_v3, tv.timeline_id,
+                          tv.source_version_id, tv.determinism_digest, tv.idempotency_key, tv.created_at_ms
+                   FROM timeline_active ta
+                   JOIN timeline_versions tv ON tv.id = ta.active_version_id
+                   WHERE ta.project_id = ? AND tv.project_id = ?""",
+                (scope, scope),
+            ).fetchone()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return None if row is None else _timeline_from_row(row)
+
+    def activate(self, project_id: str, version_id: str, expected_revision: int | None = None) -> tuple[TimelineVersionRecord, int]:
+        scope = _project_id(project_id)
+        record_id = _record_id(version_id)
+        if expected_revision is not None and (not isinstance(expected_revision, int) or isinstance(expected_revision, bool) or expected_revision < 0):
+            raise StorageError("INVALID_RECORD")
+        try:
+            with self.database.transaction() as connection:
+                version = connection.execute(
+                    _TIMELINE_SELECT + " WHERE id = ? AND project_id = ?", (record_id, scope)
+                ).fetchone()
+                if version is None:
+                    raise StorageError("RECORD_NOT_FOUND")
+                state = connection.execute(
+                    "SELECT revision FROM timeline_active WHERE project_id = ?", (scope,)
+                ).fetchone()
+                if state is None:
+                    if expected_revision not in (None, 0):
+                        raise StorageError("CONSTRAINT_VIOLATION")
+                    revision = 1
+                    connection.execute(
+                        "INSERT INTO timeline_active(project_id, active_version_id, updated_at_ms, revision) VALUES (?, ?, ?, ?)",
+                        (scope, record_id, utc_now_ms(), revision),
+                    )
+                else:
+                    current_revision = int(state[0])
+                    if expected_revision is not None and expected_revision != current_revision:
+                        raise StorageError("CONSTRAINT_VIOLATION")
+                    revision = current_revision + 1
+                    connection.execute(
+                        "UPDATE timeline_active SET active_version_id = ?, updated_at_ms = ?, revision = ? WHERE project_id = ? AND revision = ?",
+                        (record_id, utc_now_ms(), revision, scope, current_revision),
+                    )
+                    if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                        raise StorageError("CONSTRAINT_VIOLATION")
+        except StorageError:
+            raise
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return _timeline_from_row(version), revision
+
+    def children(self, project_id: str, parent_version_id: str, limit: int = STORAGE_DEFAULT_LIST_LIMIT) -> list[TimelineVersionRecord]:
+        scope = _project_id(project_id)
+        parent_id = _record_id(parent_version_id)
+        bounded_limit = _limit(limit)
+        try:
+            rows = self.database.connection.execute(
+                _TIMELINE_SELECT + " WHERE project_id = ? AND parent_version_id = ? ORDER BY version_number ASC, id ASC LIMIT ?",
+                (scope, parent_id, bounded_limit),
+            ).fetchall()
+        except sqlite3.Error as error:
+            raise _write_error(error) from error
+        return [_timeline_from_row(row) for row in rows]
+
 
 _JOB_SELECT = """
 SELECT id, project_id, job_type, status, progress, stage,
@@ -832,7 +936,8 @@ _TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled", "needs_attention"}
 
 _TIMELINE_SELECT = """
 SELECT id, project_id, version_number, parent_version_id, schema_version,
-       timeline_json, edit_intent_json, diff_summary_json, created_at_ms
+       timeline_json, edit_intent_json, diff_summary_json, source_type_v3, timeline_id,
+       source_version_id, determinism_digest, idempotency_key, created_at_ms
 FROM timeline_versions
 """
 
@@ -990,6 +1095,11 @@ def _timeline_from_row(row: Sequence[object]) -> TimelineVersionRecord:
             "timeline_json": _json_from_row(row[5]),
             "edit_intent_json": _json_from_row(row[6]),
             "diff_summary_json": _json_from_row(row[7]),
-            "created_at_ms": row[8],
+            "source_type": row[8],
+            "timeline_id": row[9],
+            "source_version_id": row[10],
+            "determinism_digest": row[11],
+            "idempotency_key": row[12],
+            "created_at_ms": row[13],
         },
     )

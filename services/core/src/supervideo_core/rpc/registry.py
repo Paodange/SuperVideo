@@ -35,6 +35,11 @@ from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
 from supervideo_core.media.final_export_models import FinalMp4ExportParams
 from supervideo_core.media.edit_models import TimelineEditParams
+from supervideo_core.timeline.version_models import (
+    TimelineVersionActivateParams, TimelineVersionApplyEditParams, TimelineVersionCreateParams,
+    TimelineVersionDiffParams, TimelineVersionListParams, TimelineVersionRedoParams,
+    TimelineVersionReferenceParams, TimelineVersionUndoParams,
+)
 
 from .errors import RpcServiceError
 from .models import (
@@ -308,6 +313,64 @@ async def timeline_edit_handler(
     return payload
 
 
+async def timeline_version_handler(params, _emit: ProgressEmitter, _cancelled: asyncio.Event, service: ProjectService) -> dict[str, object]:
+    handlers = {
+        "TimelineVersionCreateParams": service.create_timeline_version,
+        "TimelineVersionApplyEditParams": service.apply_timeline_edit,
+        "TimelineVersionListParams": service.list_timeline_versions,
+        "TimelineVersionReferenceParams": service.get_timeline_version,
+        "TimelineVersionActivateParams": service.activate_timeline_version,
+        "TimelineVersionUndoParams": service.undo_timeline_version,
+        "TimelineVersionRedoParams": service.redo_timeline_version,
+        "TimelineVersionDiffParams": service.diff_timeline_versions,
+    }
+    result = handlers[type(params).__name__](params)
+    payload = result.model_dump(by_alias=True, exclude_none=True)
+    if "operation" in payload:
+        # Keep the result discriminators addressable even when no snapshot or
+        # edit result is returned.
+        payload.setdefault("version", None)
+        payload.setdefault("editResult", None)
+    version = payload.get("version")
+    if isinstance(version, dict):
+        _compact_version_snapshot_wire(version)
+    items = payload.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict):
+                _compact_version_snapshot_wire(item)
+    edit_result = payload.get("editResult")
+    if isinstance(edit_result, dict) and isinstance(edit_result.get("resultTimeline"), dict):
+        edit_result["resultTimeline"] = _compact_timeline_wire(edit_result["resultTimeline"])
+    if isinstance(edit_result, dict) and isinstance(edit_result.get("intent"), dict):
+        edit_result["intent"] = _compact_timeline_wire(edit_result["intent"])
+    if isinstance(edit_result, dict):
+        edit_result.setdefault("rejection", None)
+    return payload
+
+
+def _compact_version_snapshot_wire(value: dict[str, object]) -> None:
+    """Compact only embedded Timeline IR and preserve version nullable fields."""
+
+    value.setdefault("parentVersionId", None)
+    timeline = value.get("timeline")
+    if isinstance(timeline, dict):
+        value["timeline"] = _compact_timeline_wire(timeline)
+
+
+def _compact_timeline_wire(value: dict[str, object]) -> dict[str, object]:
+    """Omit optional null IR fields while preserving explicit contract nulls."""
+
+    def compact(item: object) -> object:
+        if isinstance(item, dict):
+            return {key: compact(child) for key, child in item.items() if child is not None}
+        if isinstance(item, list):
+            return [compact(child) for child in item]
+        return item
+
+    return compact(value)  # type: ignore[return-value]
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -452,6 +515,14 @@ class RpcRegistry:
                 TimelineEditParams,
                 lambda params, emit, cancelled: timeline_edit_handler(params, emit, cancelled, self.project_service),
             ),
+            "timeline.version.create": (TimelineVersionCreateParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.apply_edit": (TimelineVersionApplyEditParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.list": (TimelineVersionListParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.get": (TimelineVersionReferenceParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.activate": (TimelineVersionActivateParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.undo": (TimelineVersionUndoParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.redo": (TimelineVersionRedoParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
+            "timeline.version.diff": (TimelineVersionDiffParams, lambda params, emit, cancelled: timeline_version_handler(params, emit, cancelled, self.project_service)),
             "job.smoke.start": (
                 JobSmokeStartParams,
                 lambda params, _emit, _cancelled: job_smoke_start_handler(params, self.job_manager),

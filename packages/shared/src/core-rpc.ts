@@ -46,6 +46,14 @@ export const CORE_RPC_METHODS = {
   mediaPreviewQualityCheck: "media.preview.quality_check",
   mediaFinalExport: "media.final.export",
   timelineEdit: "timeline.edit",
+  timelineVersionCreate: "timeline.version.create",
+  timelineVersionApplyEdit: "timeline.version.apply_edit",
+  timelineVersionList: "timeline.version.list",
+  timelineVersionGet: "timeline.version.get",
+  timelineVersionActivate: "timeline.version.activate",
+  timelineVersionUndo: "timeline.version.undo",
+  timelineVersionRedo: "timeline.version.redo",
+  timelineVersionDiff: "timeline.version.diff",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -84,6 +92,14 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaPreviewQualityCheck
   | typeof CORE_RPC_METHODS.mediaFinalExport
   | typeof CORE_RPC_METHODS.timelineEdit
+  | typeof CORE_RPC_METHODS.timelineVersionCreate
+  | typeof CORE_RPC_METHODS.timelineVersionApplyEdit
+  | typeof CORE_RPC_METHODS.timelineVersionList
+  | typeof CORE_RPC_METHODS.timelineVersionGet
+  | typeof CORE_RPC_METHODS.timelineVersionActivate
+  | typeof CORE_RPC_METHODS.timelineVersionUndo
+  | typeof CORE_RPC_METHODS.timelineVersionRedo
+  | typeof CORE_RPC_METHODS.timelineVersionDiff
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -269,6 +285,15 @@ export const CORE_RPC_ERROR_CODES = {
   editTimelineEmpty: "EDIT_TIMELINE_EMPTY",
   editOperationUnsafe: "EDIT_OPERATION_UNSAFE",
   editTimelineInvalid: "EDIT_TIMELINE_INVALID",
+  timelineVersionNotFound: "TIMELINE_VERSION_NOT_FOUND",
+  timelineVersionProjectMismatch: "TIMELINE_VERSION_PROJECT_MISMATCH",
+  timelineActiveVersionMissing: "TIMELINE_ACTIVE_VERSION_MISSING",
+  timelineNoUndo: "TIMELINE_NO_UNDO",
+  timelineNoRedo: "TIMELINE_NO_REDO",
+  timelineRedoAmbiguous: "TIMELINE_REDO_AMBIGUOUS",
+  timelineVersionConflict: "TIMELINE_VERSION_CONFLICT",
+  timelineVersionInvalid: "TIMELINE_VERSION_INVALID",
+  timelineDiffNotAvailable: "TIMELINE_DIFF_NOT_AVAILABLE",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -450,6 +475,15 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   EDIT_TIMELINE_EMPTY: -32425,
   EDIT_OPERATION_UNSAFE: -32426,
   EDIT_TIMELINE_INVALID: -32427,
+  TIMELINE_VERSION_NOT_FOUND: -32430,
+  TIMELINE_VERSION_PROJECT_MISMATCH: -32431,
+  TIMELINE_ACTIVE_VERSION_MISSING: -32432,
+  TIMELINE_NO_UNDO: -32433,
+  TIMELINE_NO_REDO: -32434,
+  TIMELINE_REDO_AMBIGUOUS: -32435,
+  TIMELINE_VERSION_CONFLICT: -32436,
+  TIMELINE_VERSION_INVALID: -32437,
+  TIMELINE_DIFF_NOT_AVAILABLE: -32438,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -629,6 +663,15 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   EDIT_TIMELINE_EMPTY: "The edit would produce an empty Timeline IR.",
   EDIT_OPERATION_UNSAFE: "The requested edit cannot be applied without guessing or losing source fidelity.",
   EDIT_TIMELINE_INVALID: "The edited Timeline IR failed validation.",
+  TIMELINE_VERSION_NOT_FOUND: "The requested Timeline version was not found.",
+  TIMELINE_VERSION_PROJECT_MISMATCH: "The Timeline version does not belong to the requested project.",
+  TIMELINE_ACTIVE_VERSION_MISSING: "The project has no active Timeline version.",
+  TIMELINE_NO_UNDO: "There is no previous Timeline version to undo to.",
+  TIMELINE_NO_REDO: "There is no next Timeline version to redo to.",
+  TIMELINE_REDO_AMBIGUOUS: "Redo has multiple child versions; choose a version explicitly.",
+  TIMELINE_VERSION_CONFLICT: "The active Timeline version changed concurrently.",
+  TIMELINE_VERSION_INVALID: "The Timeline version request is invalid.",
+  TIMELINE_DIFF_NOT_AVAILABLE: "The requested Timeline diff is not available.",
 };
 
 export type CoreRpcId = string;
@@ -710,6 +753,19 @@ export type TimelineEditResult = Readonly<{
   resultTimeline: TimelineProject; intent: EditIntent; diff: TimelineEditDiff;
   rejection: Readonly<{ code: string; message: string; targetClipId?: string }> | null; determinismDigest: string;
 }>;
+export type TimelineVersionContract = Readonly<{ schemaVersion: 1; versioningVersion: "timeline-version-v1" }>;
+export type TimelineVersionCreateParams = TimelineVersionContract & Readonly<{ projectId: string; timeline: TimelineProject; expectedActiveVersionId?: string; idempotencyKey?: string }>;
+export type TimelineVersionListParams = TimelineVersionContract & Readonly<{ projectId: string; limit?: number }>;
+export type TimelineVersionReferenceParams = TimelineVersionContract & Readonly<{ projectId: string; versionId: string }>;
+export type TimelineVersionActivateParams = TimelineVersionReferenceParams & Readonly<{ expectedActiveVersionId?: string }>;
+export type TimelineVersionUndoParams = TimelineVersionContract & Readonly<{ projectId: string; expectedActiveVersionId?: string }>;
+export type TimelineVersionRedoParams = TimelineVersionUndoParams & Readonly<{ versionId?: string }>;
+export type TimelineVersionApplyEditParams = TimelineVersionContract & Readonly<{ projectId: string; sourceVersionId?: string; expectedActiveVersionId?: string; instruction?: string; intent?: EditIntent; idempotencyKey?: string }>;
+export type TimelineVersionSnapshot = TimelineVersionContract & Readonly<{ projectId: string; versionId: string; timelineId: string; versionNumber: number; parentVersionId: string | null; sourceType: "root" | "edit"; createdAtMs: number; isActive: boolean; editIntent: Readonly<Record<string, unknown>>; diffSummary: Readonly<Record<string, unknown>>; timeline: TimelineProject }>;
+export type TimelineVersionResult = TimelineVersionContract & Readonly<{ projectId: string; operation: "created" | "applied" | "activated" | "undo" | "redo"; activeVersionId: string | null; activeRevision: number; version: TimelineVersionSnapshot | null; editResult?: TimelineEditResult | null; status?: "rejected" }>;
+export type TimelineVersionListResult = TimelineVersionContract & Readonly<{ projectId: string; activeVersionId: string | null; items: readonly TimelineVersionSnapshot[] }>;
+export type TimelineVersionDiffParams = TimelineVersionContract & Readonly<{ projectId: string; fromVersionId: string; toVersionId: string }>;
+export type TimelineVersionDiffResult = TimelineVersionContract & Readonly<{ projectId: string; fromVersionId: string; toVersionId: string; summary: Readonly<Record<string, unknown>> }>;
 export type VadConfig = Readonly<{
   thresholdDb: number;
   minSpeechMs: number;
@@ -951,6 +1007,14 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaPreviewQualityCheck) return isPreviewQualityCheckParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaFinalExport) return isFinalMp4ExportParams(value.params);
   if (value.method === CORE_RPC_METHODS.timelineEdit) return isTimelineEditParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionCreate) return isTimelineVersionCreateParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionApplyEdit) return isTimelineVersionApplyEditParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionList) return isTimelineVersionListParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionGet) return isTimelineVersionReferenceParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionActivate) return isTimelineVersionActivateParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionUndo) return isTimelineVersionUndoParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionRedo) return isTimelineVersionRedoParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineVersionDiff) return isTimelineVersionDiffParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -1672,6 +1736,65 @@ function isTimelineEditRejection(value: unknown): boolean {
   return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["code", "message", "targetClipId"])
     && typeof value.code === "string" && ["EDIT_UNSUPPORTED_INSTRUCTION", "EDIT_TARGET_NOT_FOUND", "EDIT_AMBIGUOUS_TARGET", "EDIT_REPLACEMENT_NOT_FOUND", "EDIT_COMPLETE_SENTENCE_REQUIRED", "EDIT_TIMELINE_EMPTY", "EDIT_OPERATION_UNSAFE", "EDIT_TIMELINE_INVALID"].includes(value.code)
     && isBoundedText(value.message, 256) && (value.targetClipId === undefined || isTimelineId(value.targetClipId));
+}
+
+export function isTimelineVersionSnapshot(value: unknown): value is TimelineVersionSnapshot {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "versioningVersion", "projectId", "versionId", "timelineId", "versionNumber", "parentVersionId", "sourceType", "createdAtMs", "isActive", "editIntent", "diffSummary", "timeline"])) return false;
+  return value.schemaVersion === 1 && value.versioningVersion === "timeline-version-v1" && isUuid(value.projectId) && isUuid(value.versionId) && isTimelineId(value.timelineId) && isSafeInteger(value.versionNumber, 1, 1_000_000) && (value.parentVersionId === null || isUuid(value.parentVersionId)) && (value.sourceType === "root" || value.sourceType === "edit") && isSafeInteger(value.createdAtMs, 0, Number.MAX_SAFE_INTEGER) && typeof value.isActive === "boolean" && isPlainRecord(value.editIntent) && isPlainRecord(value.diffSummary) && isTimelineProject(value.timeline);
+}
+export function isTimelineVersionResult(value: unknown): value is TimelineVersionResult {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["schemaVersion", "versioningVersion", "projectId", "operation", "activeVersionId", "activeRevision", "version", "editResult", "status"])) return false;
+  return value.schemaVersion === 1 && value.versioningVersion === "timeline-version-v1" && isUuid(value.projectId) && ["created", "applied", "activated", "undo", "redo"].includes(value.operation as string) && (value.activeVersionId === null || isUuid(value.activeVersionId)) && isSafeInteger(value.activeRevision, 0, Number.MAX_SAFE_INTEGER) && (value.version === null || (isTimelineVersionSnapshot(value.version) && value.version.projectId === value.projectId)) && (value.editResult === undefined || value.editResult === null || isTimelineEditResult(value.editResult)) && (value.status === undefined || value.status === "rejected") && isBoundedCoreJsonValue(value, 512 * 1024);
+}
+export function isTimelineVersionListResult(value: unknown): value is TimelineVersionListResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "versioningVersion", "projectId", "activeVersionId", "items"])) return false;
+  return value.schemaVersion === 1 && value.versioningVersion === "timeline-version-v1" && isUuid(value.projectId) && (value.activeVersionId === null || isUuid(value.activeVersionId)) && Array.isArray(value.items) && value.items.length <= 100 && value.items.every((item) => isTimelineVersionSnapshot(item) && item.projectId === value.projectId) && isBoundedCoreJsonValue(value, 512 * 1024);
+}
+export function isTimelineVersionDiffResult(value: unknown): value is TimelineVersionDiffResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "versioningVersion", "projectId", "fromVersionId", "toVersionId", "summary"])) return false;
+  return value.schemaVersion === 1 && value.versioningVersion === "timeline-version-v1" && isUuid(value.projectId) && isUuid(value.fromVersionId) && isUuid(value.toVersionId) && isPlainRecord(value.summary) && isBoundedCoreJsonValue(value, 32 * 1024);
+}
+
+type TimelineVersionContractValue = { schemaVersion: 1; versioningVersion: "timeline-version-v1"; projectId: string };
+function isTimelineVersionContract(value: unknown, keys: readonly string[]): value is TimelineVersionContractValue & Record<string, any> {
+  return isPlainRecord(value) && hasNoUnexpectedKeys(value, keys) && value.schemaVersion === 1 && value.versioningVersion === "timeline-version-v1" && isUuid(value.projectId);
+}
+function isOptionalVersionId(value: unknown): boolean { return value === undefined || isUuid(value); }
+function isOptionalVersionKey(value: unknown): boolean { return value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 128); }
+export function isTimelineVersionCreateParams(value: unknown): value is TimelineVersionCreateParams {
+  if (!isTimelineVersionContract(value, ["schemaVersion", "versioningVersion", "projectId", "timeline", "expectedActiveVersionId", "idempotencyKey"]) || !isTimelineProject(value.timeline)) return false;
+  if (!isOptionalVersionId(value.expectedActiveVersionId) || !isOptionalVersionKey(value.idempotencyKey)) return false;
+  return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+export function isTimelineVersionListParams(value: unknown): value is TimelineVersionListParams {
+  if (!isTimelineVersionContract(value, ["schemaVersion", "versioningVersion", "projectId", "limit"])) return false;
+  return (value.limit === undefined || isSafeInteger(value.limit, 1, 100)) && isBoundedCoreJsonValue(value, 32 * 1024);
+}
+export function isTimelineVersionReferenceParams(value: unknown): value is TimelineVersionReferenceParams {
+  if (!isTimelineVersionContract(value, ["schemaVersion", "versioningVersion", "projectId", "versionId"])) return false;
+  return isUuid(value.versionId) && isBoundedCoreJsonValue(value, 16 * 1024);
+}
+export function isTimelineVersionActivateParams(value: unknown): value is TimelineVersionActivateParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["schemaVersion", "versioningVersion", "projectId", "versionId", "expectedActiveVersionId"]) || !isUuid(value.projectId) || value.schemaVersion !== 1 || value.versioningVersion !== "timeline-version-v1") return false;
+  return isUuid(value.versionId) && isOptionalVersionId(value.expectedActiveVersionId) && isBoundedCoreJsonValue(value, 16 * 1024);
+}
+export function isTimelineVersionUndoParams(value: unknown): value is TimelineVersionUndoParams {
+  if (!isTimelineVersionContract(value, ["schemaVersion", "versioningVersion", "projectId", "expectedActiveVersionId"])) return false;
+  return isOptionalVersionId(value.expectedActiveVersionId) && isBoundedCoreJsonValue(value, 16 * 1024);
+}
+export function isTimelineVersionRedoParams(value: unknown): value is TimelineVersionRedoParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["schemaVersion", "versioningVersion", "projectId", "expectedActiveVersionId", "versionId"]) || !isUuid(value.projectId) || value.schemaVersion !== 1 || value.versioningVersion !== "timeline-version-v1") return false;
+  return isOptionalVersionId(value.expectedActiveVersionId) && isOptionalVersionId(value.versionId) && isBoundedCoreJsonValue(value, 16 * 1024);
+}
+export function isTimelineVersionApplyEditParams(value: unknown): value is TimelineVersionApplyEditParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["schemaVersion", "versioningVersion", "projectId", "sourceVersionId", "expectedActiveVersionId", "instruction", "intent", "idempotencyKey"]) || value.schemaVersion !== 1 || value.versioningVersion !== "timeline-version-v1" || !isUuid(value.projectId)) return false;
+  const hasInstruction = typeof value.instruction === "string" && value.instruction.trim().length > 0 && isBoundedText(value.instruction, 2_048);
+  const hasIntent = value.intent !== undefined && isEditIntent(value.intent);
+  return hasInstruction !== hasIntent && isOptionalVersionId(value.sourceVersionId) && isOptionalVersionId(value.expectedActiveVersionId) && isOptionalVersionKey(value.idempotencyKey) && isBoundedCoreJsonValue(value, 64 * 1024);
+}
+export function isTimelineVersionDiffParams(value: unknown): value is TimelineVersionDiffParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["schemaVersion", "versioningVersion", "projectId", "fromVersionId", "toVersionId"]) || value.schemaVersion !== 1 || value.versioningVersion !== "timeline-version-v1" || !isUuid(value.projectId)) return false;
+  return isUuid(value.fromVersionId) && isUuid(value.toVersionId) && isBoundedCoreJsonValue(value, 16 * 1024);
 }
 
 export function isFinalMp4ExportResult(value: unknown): value is FinalMp4ExportResult {

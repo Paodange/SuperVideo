@@ -46,6 +46,17 @@ import {
   isFinalMp4ExportResult,
   isTimelineEditParams,
   isTimelineEditResult,
+  isTimelineVersionCreateParams,
+  isTimelineVersionApplyEditParams,
+  isTimelineVersionListParams,
+  isTimelineVersionReferenceParams,
+  isTimelineVersionActivateParams,
+  isTimelineVersionUndoParams,
+  isTimelineVersionRedoParams,
+  isTimelineVersionDiffParams,
+  isTimelineVersionResult,
+  isTimelineVersionListResult,
+  isTimelineVersionDiffResult,
   type AgentRunHandle,
   type AgentWorkerStatusSnapshot,
   type DesktopAgentEvent,
@@ -102,6 +113,17 @@ import {
   type FinalMp4ExportResult,
   type TimelineEditParams,
   type TimelineEditResult,
+  type TimelineVersionCreateParams,
+  type TimelineVersionApplyEditParams,
+  type TimelineVersionListParams,
+  type TimelineVersionReferenceParams,
+  type TimelineVersionActivateParams,
+  type TimelineVersionUndoParams,
+  type TimelineVersionRedoParams,
+  type TimelineVersionDiffParams,
+  type TimelineVersionResult,
+  type TimelineVersionListResult,
+  type TimelineVersionDiffResult,
 } from "@supervideo/shared";
 import type { AssetListResult, AssetReferenceBatchResult, ProjectSummary } from "@supervideo/shared";
 
@@ -128,6 +150,14 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.checkPreviewQuality
     | typeof DESKTOP_IPC_CHANNELS.exportFinalMp4
     | typeof DESKTOP_IPC_CHANNELS.editTimeline
+    | typeof DESKTOP_IPC_CHANNELS.createTimelineVersion
+    | typeof DESKTOP_IPC_CHANNELS.applyTimelineEditVersion
+    | typeof DESKTOP_IPC_CHANNELS.listTimelineVersions
+    | typeof DESKTOP_IPC_CHANNELS.getTimelineVersion
+    | typeof DESKTOP_IPC_CHANNELS.activateTimelineVersion
+    | typeof DESKTOP_IPC_CHANNELS.undoTimelineVersion
+    | typeof DESKTOP_IPC_CHANNELS.redoTimelineVersion
+    | typeof DESKTOP_IPC_CHANNELS.diffTimelineVersions
     | typeof DESKTOP_IPC_CHANNELS.startSmokeJob
     | typeof DESKTOP_IPC_CHANNELS.getJob
     | typeof DESKTOP_IPC_CHANNELS.listJobs
@@ -258,6 +288,38 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
     editTimeline: (input: TimelineEditParams) => {
       if (!isTimelineEditParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
       return invokeValue(DESKTOP_IPC_CHANNELS.editTimeline, input, invoke, isTimelineEditResult);
+    },
+    createTimelineVersion: (input: TimelineVersionCreateParams) => {
+      if (!isTimelineVersionCreateParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.createTimelineVersion, input, invoke, isTimelineVersionResult);
+    },
+    applyTimelineEditVersion: (input: TimelineVersionApplyEditParams) => {
+      if (!isTimelineVersionApplyEditParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.applyTimelineEditVersion, input, invoke, isTimelineVersionResult);
+    },
+    listTimelineVersions: (input: TimelineVersionListParams) => {
+      if (!isTimelineVersionListParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.listTimelineVersions, input, invoke, isTimelineVersionListResult);
+    },
+    getTimelineVersion: (input: TimelineVersionReferenceParams) => {
+      if (!isTimelineVersionReferenceParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.getTimelineVersion, input, invoke, isTimelineVersionResult);
+    },
+    activateTimelineVersion: (input: TimelineVersionActivateParams) => {
+      if (!isTimelineVersionActivateParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.activateTimelineVersion, input, invoke, isTimelineVersionResult);
+    },
+    undoTimelineVersion: (input: TimelineVersionUndoParams) => {
+      if (!isTimelineVersionUndoParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.undoTimelineVersion, input, invoke, isTimelineVersionResult);
+    },
+    redoTimelineVersion: (input: TimelineVersionRedoParams) => {
+      if (!isTimelineVersionRedoParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.redoTimelineVersion, input, invoke, isTimelineVersionResult);
+    },
+    diffTimelineVersions: (input: TimelineVersionDiffParams) => {
+      if (!isTimelineVersionDiffParams(input)) return Promise.reject(createDesktopPublicError("invalid-payload"));
+      return invokeValue(DESKTOP_IPC_CHANNELS.diffTimelineVersions, input, invoke, isTimelineVersionDiffResult);
     },
     startSmokeJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.startSmokeJob, input, invoke, isJobSummary),
     getJob: (input) => invokeValue(DESKTOP_IPC_CHANNELS.getJob, input, invoke, isJobSummary),

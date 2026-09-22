@@ -22,6 +22,14 @@ import {
   isPreviewRenderParams,
   isPreviewQualityCheckParams,
   isFinalMp4ExportParams,
+  isTimelineVersionCreateParams,
+  isTimelineVersionApplyEditParams,
+  isTimelineVersionListParams,
+  isTimelineVersionReferenceParams,
+  isTimelineVersionActivateParams,
+  isTimelineVersionUndoParams,
+  isTimelineVersionRedoParams,
+  isTimelineVersionDiffParams,
   isValidAgentRunId,
   isCredentialRemoveRequest,
   isCredentialReplaceRequest,
@@ -84,6 +92,17 @@ import {
   type FinalMp4ExportResult,
   type TimelineEditParams,
   type TimelineEditResult,
+  type TimelineVersionCreateParams,
+  type TimelineVersionApplyEditParams,
+  type TimelineVersionListParams,
+  type TimelineVersionReferenceParams,
+  type TimelineVersionActivateParams,
+  type TimelineVersionUndoParams,
+  type TimelineVersionRedoParams,
+  type TimelineVersionDiffParams,
+  type TimelineVersionResult,
+  type TimelineVersionListResult,
+  type TimelineVersionDiffResult,
   isTimelineEditParams,
 } from "@supervideo/shared";
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
@@ -113,6 +132,14 @@ export type DesktopIpcDependencies = Readonly<{
   checkPreviewQuality: (event: IpcMainInvokeEvent, input: PreviewQualityCheckParams) => Promise<PreviewQualityCheckResult>;
   exportFinalMp4: (event: IpcMainInvokeEvent, input: FinalMp4ExportParams) => Promise<FinalMp4ExportResult>;
   editTimeline: (event: IpcMainInvokeEvent, input: TimelineEditParams) => Promise<TimelineEditResult>;
+  createTimelineVersion: (event: IpcMainInvokeEvent, input: TimelineVersionCreateParams) => Promise<TimelineVersionResult>;
+  applyTimelineEditVersion: (event: IpcMainInvokeEvent, input: TimelineVersionApplyEditParams) => Promise<TimelineVersionResult>;
+  listTimelineVersions: (event: IpcMainInvokeEvent, input: TimelineVersionListParams) => Promise<TimelineVersionListResult>;
+  getTimelineVersion: (event: IpcMainInvokeEvent, input: TimelineVersionReferenceParams) => Promise<TimelineVersionResult>;
+  activateTimelineVersion: (event: IpcMainInvokeEvent, input: TimelineVersionActivateParams) => Promise<TimelineVersionResult>;
+  undoTimelineVersion: (event: IpcMainInvokeEvent, input: TimelineVersionUndoParams) => Promise<TimelineVersionResult>;
+  redoTimelineVersion: (event: IpcMainInvokeEvent, input: TimelineVersionRedoParams) => Promise<TimelineVersionResult>;
+  diffTimelineVersions: (event: IpcMainInvokeEvent, input: TimelineVersionDiffParams) => Promise<TimelineVersionDiffResult>;
   startSmokeJob: (event: IpcMainInvokeEvent, input: JobSmokeStartParams) => Promise<JobSummary>;
   getJob: (event: IpcMainInvokeEvent, input: JobReferenceParams) => Promise<JobSummary>;
   listJobs: (event: IpcMainInvokeEvent, input: JobListParams) => Promise<JobPage>;
@@ -174,6 +201,14 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.checkPreviewQuality, isPreviewQualityCheckParams, dependencies, (payload, event) => dependencies.checkPreviewQuality(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.exportFinalMp4, isFinalMp4ExportParams, dependencies, (payload, event) => dependencies.exportFinalMp4(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.editTimeline, isTimelineEditParams, dependencies, (payload, event) => dependencies.editTimeline(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.createTimelineVersion, isTimelineVersionCreateParams, dependencies, (payload, event) => dependencies.createTimelineVersion(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.applyTimelineEditVersion, isTimelineVersionApplyEditParams, dependencies, (payload, event) => dependencies.applyTimelineEditVersion(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listTimelineVersions, isTimelineVersionListParams, dependencies, (payload, event) => dependencies.listTimelineVersions(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getTimelineVersion, isTimelineVersionReferenceParams, dependencies, (payload, event) => dependencies.getTimelineVersion(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.activateTimelineVersion, isTimelineVersionActivateParams, dependencies, (payload, event) => dependencies.activateTimelineVersion(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.undoTimelineVersion, isTimelineVersionUndoParams, dependencies, (payload, event) => dependencies.undoTimelineVersion(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.redoTimelineVersion, isTimelineVersionRedoParams, dependencies, (payload, event) => dependencies.redoTimelineVersion(event, payload)),
+    registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.diffTimelineVersions, isTimelineVersionDiffParams, dependencies, (payload, event) => dependencies.diffTimelineVersions(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.startSmokeJob, isValidJobSmokeStartPayload, dependencies, (payload, event) => dependencies.startSmokeJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.getJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.getJob(event, payload)),
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.listJobs, isValidJobListPayload, dependencies, (payload, event) => dependencies.listJobs(event, payload)),

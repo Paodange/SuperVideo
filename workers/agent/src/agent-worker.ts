@@ -29,6 +29,9 @@ import {
   isPreviewQualityCheckResult,
   isFinalMp4ExportResult,
   isTimelineEditResult,
+  isTimelineVersionResult,
+  isTimelineVersionListResult,
+  isTimelineVersionDiffResult,
   isAgentDiagnosticEvent,
   isJobEvent,
   isProjectSummary,
@@ -175,6 +178,14 @@ async function handleCommand(command: AgentWorkerCommand): Promise<void> {
     case "media-preview-quality-check":
     case "media-final-export":
     case "timeline-edit":
+    case "timeline-version-create":
+    case "timeline-version-apply-edit":
+    case "timeline-version-list":
+    case "timeline-version-get":
+    case "timeline-version-activate":
+    case "timeline-version-undo":
+    case "timeline-version-redo":
+    case "timeline-version-diff":
       await handleProjectOperation(command.type, command.operationId, command.payload);
       return;
     case "job-smoke-start":
@@ -248,7 +259,13 @@ async function handleProjectOperation(
                   ? isFinalMp4ExportResult(result)
                 : operation === "timeline-edit"
                   ? isTimelineEditResult(result)
-                : isRetrievalResult(result);
+                : operation === "timeline-version-list"
+                  ? isTimelineVersionListResult(result)
+                : operation === "timeline-version-diff"
+                  ? isTimelineVersionDiffResult(result)
+                : operation.startsWith("timeline-version-")
+                  ? isTimelineVersionResult(result)
+                  : isRetrievalResult(result);
     if (!valid) {
       sendProjectError(operationId, operation, "CORE_UNAVAILABLE");
       return;
@@ -370,6 +387,14 @@ function coreMethod(operation: AgentProjectOperationType): string {
   if (operation === "media-preview-quality-check") return CORE_RPC_METHODS.mediaPreviewQualityCheck;
   if (operation === "media-final-export") return CORE_RPC_METHODS.mediaFinalExport;
   if (operation === "timeline-edit") return CORE_RPC_METHODS.timelineEdit;
+  if (operation === "timeline-version-create") return CORE_RPC_METHODS.timelineVersionCreate;
+  if (operation === "timeline-version-apply-edit") return CORE_RPC_METHODS.timelineVersionApplyEdit;
+  if (operation === "timeline-version-list") return CORE_RPC_METHODS.timelineVersionList;
+  if (operation === "timeline-version-get") return CORE_RPC_METHODS.timelineVersionGet;
+  if (operation === "timeline-version-activate") return CORE_RPC_METHODS.timelineVersionActivate;
+  if (operation === "timeline-version-undo") return CORE_RPC_METHODS.timelineVersionUndo;
+  if (operation === "timeline-version-redo") return CORE_RPC_METHODS.timelineVersionRedo;
+  if (operation === "timeline-version-diff") return CORE_RPC_METHODS.timelineVersionDiff;
   return CORE_RPC_METHODS.mediaSentenceIndex;
 }
 
@@ -408,6 +433,15 @@ function isProjectOperationErrorCode(value: string): value is ProjectOperationEr
     || value === "CONSTRAINT_VIOLATION"
     || value === "RECORD_NOT_FOUND"
     || value === "INVALID_RECORD"
+    || value === "TIMELINE_VERSION_NOT_FOUND"
+    || value === "TIMELINE_VERSION_PROJECT_MISMATCH"
+    || value === "TIMELINE_ACTIVE_VERSION_MISSING"
+    || value === "TIMELINE_NO_UNDO"
+    || value === "TIMELINE_NO_REDO"
+    || value === "TIMELINE_REDO_AMBIGUOUS"
+    || value === "TIMELINE_VERSION_CONFLICT"
+    || value === "TIMELINE_VERSION_INVALID"
+    || value === "TIMELINE_DIFF_NOT_AVAILABLE"
     || value === "MEDIA_TOOL_UNAVAILABLE"
     || value === "MEDIA_TOOL_TIMEOUT"
     || value === "MEDIA_PROBE_PARSE_ERROR"

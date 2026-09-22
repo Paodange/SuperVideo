@@ -84,10 +84,14 @@ The first migration creates these tables and fixed indexes:
   `user`, `assistant`, `tool`, and `system`; sequence numbers are positive and
   unique within a project conversation.
 - `timeline_versions` stores append-only Timeline IR JSON, an independent
-  Timeline `schema_version`, edit intent, and diff summary. Version numbers
-  are positive and unique within a project. A parent must belong to the same
-  project. Parent deletion cascades to its child versions, and the database
-  trigger rejects updates.
+  Timeline `schema_version`, edit intent, and diff summary. C10 adds the
+  immutable source/timeline metadata, deterministic edit digest, and optional
+  idempotency key. Version numbers are positive and unique within a project.
+  A parent and source version must belong to the same project. Parent deletion
+  cascades to its child versions, and the database trigger rejects updates.
+- `timeline_active` stores one active-version pointer per project. Pointer
+  changes are transactional and use a compare-and-swap revision, so stale
+  undo/redo or activation requests fail without changing the active version.
 
 All resource IDs are application-generated lowercase UUID strings. Timestamps
 use UTC Unix epoch milliseconds and end in `_at_ms`. JSON is validated as
@@ -160,13 +164,15 @@ with the temporary tree.
 
 ## Version boundaries and current limits
 
-`DATABASE_SCHEMA_VERSION` is currently 2 and versions SQLite migrations. It is independent from
+`DATABASE_SCHEMA_VERSION` is currently 3 and versions SQLite migrations. It is independent from
 A04 `CORE_RPC_PROTOCOL_VERSION` and from the Timeline IR `schemaVersion` stored
 in `timeline_versions`. None of these constants may be reused for another
 boundary.
 
-A05 does not include project create/open UI or manifest handling, trusted path
-selection, media analysis, complete Timeline IR validation or active-version
-switching, A08 credentials, backup and restore, or any Renderer IPC/RPC method
-for database access. A07's job manager remains a controlled Core service above
-this storage layer.
+A05's base tables and A07's job migration remain immutable. C10's `0003` is a
+forward-only migration for the active pointer and version metadata; it also
+backfills `source_type_v3` from existing parent links. C10 does not rewrite or
+delete old Timeline IR rows. The version service exposes bounded create,
+edit-save, list/get, activate, undo, redo, and diff operations; it does not
+render media. Downstream renderers consume the complete `version.timeline`
+snapshot returned by the version contract.

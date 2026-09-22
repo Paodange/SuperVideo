@@ -51,6 +51,17 @@ import {
   isFinalMp4ExportResult,
   isTimelineEditParams,
   isTimelineEditResult,
+  isTimelineVersionCreateParams,
+  isTimelineVersionApplyEditParams,
+  isTimelineVersionListParams,
+  isTimelineVersionReferenceParams,
+  isTimelineVersionActivateParams,
+  isTimelineVersionUndoParams,
+  isTimelineVersionRedoParams,
+  isTimelineVersionDiffParams,
+  isTimelineVersionResult,
+  isTimelineVersionListResult,
+  isTimelineVersionDiffResult,
   isProjectSummary,
   serializeCoreRpcMessage,
   type CoreHealth,
@@ -61,6 +72,17 @@ import {
   type FinalMp4ExportResult,
   type TimelineEditParams,
   type TimelineEditResult,
+  type TimelineVersionCreateParams,
+  type TimelineVersionApplyEditParams,
+  type TimelineVersionListParams,
+  type TimelineVersionReferenceParams,
+  type TimelineVersionActivateParams,
+  type TimelineVersionUndoParams,
+  type TimelineVersionRedoParams,
+  type TimelineVersionDiffParams,
+  type TimelineVersionResult,
+  type TimelineVersionListResult,
+  type TimelineVersionDiffResult,
   type CoreSmokeCountdownParams,
   type CoreSmokeCountdownResult,
   type AssetListParams,
@@ -428,6 +450,62 @@ export class PythonCoreClient {
     if (!isTimelineEditParams(params)) throw new CoreRpcError("INVALID_PARAMS");
     const result = await this.request<unknown>(CORE_RPC_METHODS.timelineEdit, params, options);
     if (!isTimelineEditResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async createTimelineVersion(params: TimelineVersionCreateParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionResult> {
+    if (!isTimelineVersionCreateParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionCreate, params, options);
+    if (!isTimelineVersionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async applyTimelineEditVersion(params: TimelineVersionApplyEditParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionResult> {
+    if (!isTimelineVersionApplyEditParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionApplyEdit, params, options);
+    if (!isTimelineVersionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async listTimelineVersions(params: TimelineVersionListParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionListResult> {
+    if (!isTimelineVersionListParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionList, params, options);
+    if (!isTimelineVersionListResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async getTimelineVersion(params: TimelineVersionReferenceParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionResult> {
+    if (!isTimelineVersionReferenceParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionGet, params, options);
+    if (!isTimelineVersionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async activateTimelineVersion(params: TimelineVersionActivateParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionResult> {
+    if (!isTimelineVersionActivateParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionActivate, params, options);
+    if (!isTimelineVersionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async undoTimelineVersion(params: TimelineVersionUndoParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionResult> {
+    if (!isTimelineVersionUndoParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionUndo, params, options);
+    if (!isTimelineVersionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async redoTimelineVersion(params: TimelineVersionRedoParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionResult> {
+    if (!isTimelineVersionRedoParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionRedo, params, options);
+    if (!isTimelineVersionResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
+    return result;
+  }
+
+  async diffTimelineVersions(params: TimelineVersionDiffParams, options: CoreRpcRequestOptions = {}): Promise<TimelineVersionDiffResult> {
+    if (!isTimelineVersionDiffParams(params)) throw new CoreRpcError("INVALID_PARAMS");
+    const result = await this.request<unknown>(CORE_RPC_METHODS.timelineVersionDiff, params, options);
+    if (!isTimelineVersionDiffResult(result)) throw new CoreRpcError("PROTOCOL_ERROR");
     return result;
   }
 
