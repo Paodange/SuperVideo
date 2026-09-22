@@ -10,6 +10,8 @@ IDs, both upstream plan digests, A-roll source URI/fingerprint bindings, mapped
 subtitle timecodes, cue provenance, and explicit gaps. C05 cues are translated
 from timeline time to the concatenated C04 output time. A plan with no tool run
 has `executionStatus: "not-run"`, `log.status: "not-run"`, and `output: null`.
+`sourceBindings` covers every C04 segment, including segments without a subtitle
+cue; `segmentCount` counts unique C04 segments per source, not subtitle cues.
 
 `executionMode: "ffmpeg"` is optional and Core-owned. It requires a completed
 C04 video output at `previews/aroll-cut-join-v1/<C04-plan-digest>.video.mp4`,

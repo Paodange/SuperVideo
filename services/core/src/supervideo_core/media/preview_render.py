@@ -118,6 +118,18 @@ class PreviewRenderService:
         segments = {segment.clip_id: segment for segment in aroll.segments}
         source_counts: dict[str, int] = {}
         source_values: dict[str, PreviewSourceBinding] = {}
+        for segment in aroll.segments:
+            source_id = segment.source.source_id
+            source_counts[source_id] = source_counts.get(source_id, 0) + 1
+            if source_id not in source_values:
+                source_values[source_id] = PreviewSourceBinding(
+                    sourceId=source_id,
+                    uri=segment.source.uri,
+                    fingerprint=segment.source.fingerprint,
+                    segmentCount=source_counts[source_id],
+                )
+            else:
+                source_values[source_id] = source_values[source_id].model_copy(update={"segmentCount": source_counts[source_id]})
         cues: list[PreviewRenderCue] = []
         gaps: list[PreviewRenderGap] = [
             PreviewRenderGap(code="subtitle-plan-gap", clipId=gap.clip_id, cueId=None, detail=gap.detail)
@@ -138,13 +150,6 @@ class PreviewRenderService:
                 continue
             if cue.source_id is not None and cue.source_id != segment.source.source_id:
                 raise MediaError("PREVIEW_RENDER_SUBTITLE_INVALID")
-            source_counts[segment.source.source_id] = source_counts.get(segment.source.source_id, 0) + 1
-            source_values[segment.source.source_id] = PreviewSourceBinding(
-                sourceId=segment.source.source_id,
-                uri=segment.source.uri,
-                fingerprint=segment.source.fingerprint,
-                segmentCount=source_counts[segment.source.source_id],
-            )
             cues.append(PreviewRenderCue(
                 order=len(cues) + 1,
                 cueId=cue.cue_id,

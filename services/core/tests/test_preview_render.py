@@ -19,6 +19,7 @@ from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.preview_render_models import PreviewRenderOutput
 from supervideo_core.media.service import MediaService
 from supervideo_core.media.subtitle_plan import SubtitlePlanService
+from supervideo_core.media.subtitle_plan_models import SubtitlePlanGap
 from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 
 
@@ -65,6 +66,52 @@ class PreviewRenderTests(unittest.TestCase):
         self.assertEqual(first.plan_digest, second.plan_digest)
         self.assertEqual(first.model_dump(by_alias=True), second.model_dump(by_alias=True))
         self.assertEqual([item.source_id for item in first.source_bindings], ["source-aroll-video-a", "source-aroll-video-b"])
+        self.assertEqual([item.segment_count for item in first.source_bindings], [1, 1])
+
+    def test_source_binding_counts_segments_not_subtitle_cues(self) -> None:
+        aroll, subtitle = plans()
+        first_cue = subtitle.cues[0]
+        first_part = first_cue.model_copy(update={
+            "cue_id": "subtitle-clip-video-1-a",
+            "duration_ms": 1_000,
+            "timeline_end_ms": 1_000,
+        })
+        second_part = first_cue.model_copy(update={
+            "order": 2,
+            "cue_id": "subtitle-clip-video-1-b",
+            "timeline_start_ms": 1_000,
+            "duration_ms": 1_000,
+            "timeline_end_ms": 2_000,
+        })
+        third_cue = subtitle.cues[1].model_copy(update={"order": 3})
+        split_subtitle = subtitle.model_copy(update={
+            "cues": [first_part, second_part, third_cue],
+            "cue_count": 3,
+            "total_duration_ms": 3_500,
+        })
+        result = asyncio.run(PreviewRenderService().render(
+            PreviewRenderParams(projectId=PROJECT_ID, arollPlan=aroll, subtitlePlan=split_subtitle), asyncio.Event()
+        ))
+        self.assertEqual(result.cue_count, 3)
+        self.assertEqual([item.segment_count for item in result.source_bindings], [1, 1])
+
+    def test_source_bindings_include_segments_without_subtitle_cues(self) -> None:
+        aroll, subtitle = plans()
+        gap = SubtitlePlanGap(code="missing-subtitle-text", clipId="clip-video-2", sentenceId=None, detail="No subtitle text was available.")
+        gapped_subtitle = subtitle.model_copy(update={
+            "status": "gaps",
+            "cues": [subtitle.cues[0]],
+            "cue_count": 1,
+            "total_duration_ms": 2_000,
+            "gaps": [gap],
+        })
+        result = asyncio.run(PreviewRenderService().render(
+            PreviewRenderParams(projectId=PROJECT_ID, arollPlan=aroll, subtitlePlan=gapped_subtitle), asyncio.Event()
+        ))
+        self.assertEqual(result.status, "gaps")
+        self.assertEqual(result.gaps[0].code, "subtitle-plan-gap")
+        self.assertEqual([item.source_id for item in result.source_bindings], ["source-aroll-video-a", "source-aroll-video-b"])
+        self.assertEqual([item.segment_count for item in result.source_bindings], [1, 1])
 
     def test_plans_are_bound_to_one_project_and_timeline(self) -> None:
         aroll, subtitle = plans()
