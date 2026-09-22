@@ -103,6 +103,8 @@ import { denyWindowOpen, isTrustedRendererUrl, sanitizeUrlForDiagnostics } from 
 import { registerSessionSecurity } from "./security/session";
 import { createAgentWorkerController, type AgentWorkerController, type UtilityProcessLike } from "./agent-worker-controller";
 import { parseSuperVideoPlaybackRequest, resolveProxyOutput, parseSuperVideoPreviewRequest, resolvePreviewOutput } from "./media-playback";
+import { ProviderConfigService, createDeterministicProviderRegistry } from "./providers/provider-service";
+import { ProviderConfigStore } from "./providers/provider-config-store";
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "supervideo",
@@ -684,6 +686,7 @@ app.whenReady().then(() => {
     filePath: path.join(app.getPath("userData"), "security", "credentials.v1.json"),
     encryption: createElectronCredentialEncryptionAdapter(safeStorage),
   });
+  const providerService = new ProviderConfigService(credentialVault, new ProviderConfigStore(path.join(app.getPath("userData"), "security", "providers.v1.json")), createDeterministicProviderRegistry());
   let diagnosticProject = { open: false, manifestSchemaVersion: null as number | null, databaseSchemaVersion: null as number | null };
   let diagnosticJobs: JobSummary[] = [];
   const rememberJob = (job: JobSummary): JobSummary => {
@@ -904,6 +907,10 @@ app.whenReady().then(() => {
       log("credential-removed", { configured: false });
       return result;
     },
+    providersList: (input) => providerService.list(input.projectId),
+    providersUpsert: (input) => providerService.upsert(input),
+    providersRemove: (input) => providerService.remove(input),
+    providersHealth: (input) => providerService.health(input),
     diagnosticsExport: async (event) => {
       log("diagnostic-export-started");
       try {

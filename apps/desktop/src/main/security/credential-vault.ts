@@ -92,6 +92,19 @@ export class CredentialVault {
     });
   }
 
+  /** Main-only callback boundary for provider adapters; the secret is never a return value. */
+  async runWithSecret<T>(credentialRef: string, operation: (secret: string) => Promise<T>): Promise<T> {
+    if (typeof credentialRef !== "string" || credentialRef.length === 0) throw new CredentialVaultError("CREDENTIAL_NOT_FOUND");
+    return this.withAvailable(async () => {
+      const stored = this.readStore().credentials.find((item) => item.credentialRef === credentialRef);
+      if (!stored) throw new CredentialVaultError("CREDENTIAL_NOT_FOUND");
+      let secret: string;
+      try { secret = this.encryption.decryptString(Buffer.from(stored.encryptedValueBase64, "base64")); }
+      catch { throw new CredentialVaultError("CREDENTIAL_STORE_CORRUPT"); }
+      return operation(secret);
+    });
+  }
+
   async save(input: CredentialSaveRequest): Promise<CredentialMetadata> {
     if (!isCredentialSaveRequest(input)) throw new CredentialVaultError("INVALID_CREDENTIAL_INPUT");
     return this.mutate(async () => {

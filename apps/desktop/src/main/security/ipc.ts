@@ -34,6 +34,9 @@ import {
   isCredentialRemoveRequest,
   isCredentialReplaceRequest,
   isCredentialSaveRequest,
+  isProviderConfigListRequest,
+  isProviderConfigInput,
+  isProviderConfigDeleteRequest,
   type CredentialListResult,
   type CredentialMetadata,
   type CredentialRemoveRequest,
@@ -41,6 +44,13 @@ import {
   type CredentialReplaceRequest,
   type CredentialSaveRequest,
   type CredentialStorageStatus,
+  type ProviderConfigInput,
+  type ProviderConfig,
+  type ProviderConfigDeleteRequest,
+  type ProviderConfigListRequest,
+  type ProviderConfigListResult,
+  type ProviderDeleteResult,
+  type ProviderHealth,
   type DiagnosticExportResult,
   type AgentRunHandle,
   type AgentWorkerMessage,
@@ -151,6 +161,10 @@ export type DesktopIpcDependencies = Readonly<{
   credentialsSave?: (input: CredentialSaveRequest) => Promise<CredentialMetadata>;
   credentialsReplace?: (input: CredentialReplaceRequest) => Promise<CredentialMetadata>;
   credentialsRemove?: (input: CredentialRemoveRequest) => Promise<CredentialRemoveResult>;
+  providersList?: (input: ProviderConfigListRequest) => ProviderConfigListResult;
+  providersUpsert?: (input: ProviderConfigInput) => Promise<ProviderConfig>;
+  providersRemove?: (input: ProviderConfigDeleteRequest) => Promise<ProviderDeleteResult>;
+  providersHealth?: (input: ProviderConfigDeleteRequest) => Promise<ProviderHealth>;
   diagnosticsExport?: (event: IpcMainInvokeEvent) => Promise<DiagnosticExportResult>;
   rendererTrustPolicy: RendererTrustPolicy;
   log: SecurityLog;
@@ -217,7 +231,7 @@ export function registerDesktopIpcHandlers(
     registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.retryJob, isValidJobReferencePayload, dependencies, (payload, event) => dependencies.retryJob(event, payload)),
   ];
 
-  if (dependencies.credentialsStatus && dependencies.credentialsList && dependencies.credentialsSave && dependencies.credentialsReplace && dependencies.credentialsRemove && dependencies.diagnosticsExport) {
+  if (dependencies.credentialsStatus && dependencies.credentialsList && dependencies.credentialsSave && dependencies.credentialsReplace && dependencies.credentialsRemove && dependencies.diagnosticsExport && dependencies.providersList && dependencies.providersUpsert && dependencies.providersRemove && dependencies.providersHealth) {
     disposers.push(
       registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsStatus, isValidEmptyPayload, dependencies, () => dependencies.credentialsStatus!()),
       registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsList, isValidEmptyPayload, dependencies, () => dependencies.credentialsList!()),
@@ -225,6 +239,10 @@ export function registerDesktopIpcHandlers(
       registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsReplace, isValidCredentialReplacePayload, dependencies, (payload) => dependencies.credentialsReplace!(payload)),
       registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.credentialsRemove, isValidCredentialRemovePayload, dependencies, (payload) => dependencies.credentialsRemove!(payload)),
       registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.diagnosticsExport, isValidEmptyPayload, dependencies, (_payload, event) => dependencies.diagnosticsExport!(event)),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.providersList, isProviderConfigListRequest, dependencies, (payload) => dependencies.providersList!(payload)),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.providersUpsert, isProviderConfigInput, dependencies, (payload) => dependencies.providersUpsert!(payload)),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.providersRemove, isProviderConfigDeleteRequest, dependencies, (payload) => dependencies.providersRemove!(payload)),
+      registerInvokeHandler(ipc, DESKTOP_IPC_CHANNELS.providersHealth, isProviderConfigDeleteRequest, dependencies, (payload) => dependencies.providersHealth!(payload)),
     );
   }
 

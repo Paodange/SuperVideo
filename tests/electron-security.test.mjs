@@ -250,7 +250,7 @@ test("preload exposes one frozen typed capability and no arbitrary channel", asy
     "getEnvironment", "getAgentStatus", "runSmokeTask", "cancelSmokeRun", "onAgentEvent",
     "createProject", "openProject", "addAssetReferences", "listProjectAssets", "inspectSentenceQa", "saveSentenceQa", "retrieveSentences", "rerankSentences", "alignScript", "createRemixPlan", "optimizeDuration", "cutJoinAroll", "planSubtitles", "renderPreview", "checkPreviewQuality", "exportFinalMp4", "editTimeline", "createTimelineVersion", "applyTimelineEditVersion", "listTimelineVersions", "getTimelineVersion", "activateTimelineVersion", "undoTimelineVersion", "redoTimelineVersion", "diffTimelineVersions",
     "startSmokeJob", "getJob", "listJobs", "listJobEvents", "cancelJob", "retryJob", "onJobEvent",
-    "credentials", "diagnostics",
+    "credentials", "diagnostics", "providers",
   ]);
   assert.equal("invoke" in api, false);
   assert.equal("send" in api, false);

@@ -20,6 +20,13 @@ import {
   isCredentialSaveRequest,
   isCredentialStorageStatus,
   isDiagnosticExportResult,
+  isProviderConfigListRequest,
+  isProviderConfigInput,
+  isProviderConfigDeleteRequest,
+  isProviderConfigListResult,
+  isProviderDeleteResult,
+  isProviderConfig,
+  isProviderHealth,
   isSentenceQaParams,
   isSentenceQaSaveParams,
   isSentenceQaContextResult,
@@ -87,6 +94,10 @@ import {
   type CredentialSaveRequest,
   type CredentialStorageStatus,
   type DiagnosticExportResult,
+  type ProviderConfig,
+  type ProviderConfigListRequest,
+  type ProviderConfigInput,
+  type ProviderConfigDeleteRequest,
   type SentenceQaParams,
   type SentenceQaSaveParams,
   type SentenceQaContextResult,
@@ -169,7 +180,11 @@ type Invoke = (
     | typeof DESKTOP_IPC_CHANNELS.credentialsSave
     | typeof DESKTOP_IPC_CHANNELS.credentialsReplace
     | typeof DESKTOP_IPC_CHANNELS.credentialsRemove
-    | typeof DESKTOP_IPC_CHANNELS.diagnosticsExport,
+    | typeof DESKTOP_IPC_CHANNELS.diagnosticsExport
+    | typeof DESKTOP_IPC_CHANNELS.providersList
+    | typeof DESKTOP_IPC_CHANNELS.providersUpsert
+    | typeof DESKTOP_IPC_CHANNELS.providersRemove
+    | typeof DESKTOP_IPC_CHANNELS.providersHealth,
   payload: unknown,
 ) => Promise<unknown>;
 
@@ -353,6 +368,24 @@ export function createDesktopApi(invoke: Invoke, subscribe: Subscribe = () => ()
     }),
     diagnostics: Object.freeze({
       export: () => invokeValue(DESKTOP_IPC_CHANNELS.diagnosticsExport, {}, invoke, isDiagnosticExportResult),
+    }),
+    providers: Object.freeze({
+      list: (input: ProviderConfigListRequest) => {
+        if (!isProviderConfigListRequest(input)) return Promise.reject(createDesktopPublicError("PROVIDER_INVALID_CONFIG"));
+        return invokeValue(DESKTOP_IPC_CHANNELS.providersList, input, invoke, isProviderConfigListResult);
+      },
+      upsert: (input: ProviderConfigInput) => {
+        if (!isProviderConfigInput(input)) return Promise.reject(createDesktopPublicError("PROVIDER_INVALID_CONFIG"));
+        return invokeValue(DESKTOP_IPC_CHANNELS.providersUpsert, input, invoke, isProviderConfig);
+      },
+      remove: (input: ProviderConfigDeleteRequest) => {
+        if (!isProviderConfigDeleteRequest(input)) return Promise.reject(createDesktopPublicError("PROVIDER_INVALID_CONFIG"));
+        return invokeValue(DESKTOP_IPC_CHANNELS.providersRemove, input, invoke, isProviderDeleteResult);
+      },
+      health: (input: ProviderConfigDeleteRequest) => {
+        if (!isProviderConfigDeleteRequest(input)) return Promise.reject(createDesktopPublicError("PROVIDER_INVALID_CONFIG"));
+        return invokeValue(DESKTOP_IPC_CHANNELS.providersHealth, input, invoke, isProviderHealth);
+      },
     }),
   };
 

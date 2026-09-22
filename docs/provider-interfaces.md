@@ -1,0 +1,11 @@
+# D01 Provider interfaces
+
+D01 defines `provider-contract` version 1 for LLM, TTS, image and video services. A provider configuration is bounded, rejects unknown fields at every JSON boundary, and contains only non-sensitive metadata: project identity, service kind, provider/model identifiers, an optional HTTPS endpoint, capability declarations, and the opaque A08 `credentialRef`. It never contains a secret, encrypted value, prompt, command, or arbitrary executable URL.
+
+Electron Main owns `ProviderConfigStore` (`<userData>/security/providers.v1.json`) and `ProviderConfigService`. The store is separate from the A08 credential vault and is keyed by `(projectId, serviceKind, providerId)`, so listing, updating, deleting, and health checks cannot cross project boundaries. Version 1 is a new metadata store; future project-manifest/SQLite persistence must migrate by schema version and continue storing only `credentialRef`.
+
+The fixed Desktop IPC channels are `providers-list`, `providers-upsert`, `providers-remove`, and `providers-health`. Preload validates requests and responses again. No provider channels are exposed to the Agent Worker or Python Core: Main resolves a credential reference and passes the secret only to a Main-owned adapter callback during health checking. Logs and health results contain status/error codes and bounded timing only.
+
+`InMemoryProviderRegistry` is the adapter/registry seam. The default registry contains four offline deterministic `fake` adapters. Their model values `fake-fail`, `fake-auth`, and `fake-timeout` exercise failure, authentication failure, and timeout without network access or API keys. Real providers will register an adapter with a fixed provider ID and capability set; adapters, not user configuration, own transport behavior and endpoint policy.
+
+D02 consumes the service-kind/capability negotiation and `credentialRef` without moving secrets into jobs or Core. D03 consumes the same non-sensitive provider selection when choosing a render/TTS input, while Remotion remains a local renderer and is not a provider adapter.
