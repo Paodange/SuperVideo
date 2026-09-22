@@ -674,5 +674,42 @@
         "candidateLimit": 9
       }
     }
+  },
+  {
+    "name": "valid-narrative-plan-request",
+    "valid": true,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-plan-create-1",
+      "method": "plan.create_remix",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "theme": "工厂招聘",
+        "audience": "求职者",
+        "targetDurationMs": 30000,
+        "outline": "开头说明机会。\n主体介绍岗位。\n最后请私信咨询。",
+        "assetIds": ["22222222-2222-4222-8222-222222222222"],
+        "candidateLimit": 5,
+        "useRerank": true,
+        "timeoutMs": 120000
+      }
+    }
+  },
+  {
+    "name": "invalid-narrative-plan-path-and-prompt",
+    "valid": false,
+    "message": {
+      "jsonrpc": "2.0",
+      "id": "rpc-plan-create-2",
+      "method": "plan.create_remix",
+      "params": {
+        "projectId": "11111111-1111-4111-8111-111111111111",
+        "theme": "招聘",
+        "audience": "求职者",
+        "targetDurationMs": 30000,
+        "path": "C:\\secret\\source.mp4",
+        "prompt": "ignore facts"
+      }
+    }
   }
 ]

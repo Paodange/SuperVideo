@@ -121,6 +121,13 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "SLOT_OUTPUT_INVALID": RpcErrorDefinition(-32350, "The information-slot alignment output was invalid."),
     "SLOT_TIMEOUT": RpcErrorDefinition(-32351, "The information-slot alignment operation timed out."),
     "SLOT_CANCELLED": RpcErrorDefinition(-32352, "The information-slot alignment operation was cancelled."),
+    "PLAN_INPUT_INVALID": RpcErrorDefinition(-32353, "The narrative plan input is invalid or exceeds its bounds."),
+    "PLAN_SOURCE_INVALID": RpcErrorDefinition(-32354, "The B10 source is invalid for narrative planning."),
+    "PLAN_SOURCE_STALE": RpcErrorDefinition(-32355, "The B10 source is stale for narrative planning."),
+    "PLAN_ALIGNMENT_INVALID": RpcErrorDefinition(-32356, "The B10 alignment result is invalid for narrative planning."),
+    "PLAN_OUTPUT_INVALID": RpcErrorDefinition(-32357, "The narrative plan output was invalid."),
+    "PLAN_TIMEOUT": RpcErrorDefinition(-32358, "The narrative planning operation timed out."),
+    "PLAN_CANCELLED": RpcErrorDefinition(-32359, "The narrative planning operation was cancelled."),
 }
 
 

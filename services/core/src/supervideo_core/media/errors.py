@@ -59,6 +59,13 @@ MediaErrorCode = Literal[
     "SLOT_OUTPUT_INVALID",
     "SLOT_TIMEOUT",
     "SLOT_CANCELLED",
+    "PLAN_INPUT_INVALID",
+    "PLAN_SOURCE_INVALID",
+    "PLAN_SOURCE_STALE",
+    "PLAN_ALIGNMENT_INVALID",
+    "PLAN_OUTPUT_INVALID",
+    "PLAN_TIMEOUT",
+    "PLAN_CANCELLED",
 ]
 
 
@@ -121,6 +128,13 @@ ERRORS: Final[dict[str, MediaErrorDefinition]] = {
     "SLOT_OUTPUT_INVALID": MediaErrorDefinition("The information-slot alignment output was invalid."),
     "SLOT_TIMEOUT": MediaErrorDefinition("The information-slot alignment operation timed out."),
     "SLOT_CANCELLED": MediaErrorDefinition("The information-slot alignment operation was cancelled."),
+    "PLAN_INPUT_INVALID": MediaErrorDefinition("The narrative plan input is invalid or exceeds its bounds."),
+    "PLAN_SOURCE_INVALID": MediaErrorDefinition("The B10 source is invalid for narrative planning."),
+    "PLAN_SOURCE_STALE": MediaErrorDefinition("The B10 source is stale for narrative planning."),
+    "PLAN_ALIGNMENT_INVALID": MediaErrorDefinition("The B10 alignment result is invalid for narrative planning."),
+    "PLAN_OUTPUT_INVALID": MediaErrorDefinition("The narrative plan output was invalid."),
+    "PLAN_TIMEOUT": MediaErrorDefinition("The narrative planning operation timed out."),
+    "PLAN_CANCELLED": MediaErrorDefinition("The narrative planning operation was cancelled."),
 }
 
 

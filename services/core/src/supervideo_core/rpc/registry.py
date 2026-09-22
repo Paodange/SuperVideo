@@ -27,6 +27,7 @@ from supervideo_core.media.index_models import SentenceIndexParams
 from supervideo_core.media.retrieval_models import RetrievalParams
 from supervideo_core.media.rerank_models import RerankParams
 from supervideo_core.media.slot_alignment_models import SlotAlignmentParams
+from supervideo_core.media.narrative_planner_models import NarrativePlanParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -221,6 +222,15 @@ async def media_script_align_handler(
     return (await service.align_information_slots(params, cancelled)).model_dump(by_alias=True)
 
 
+async def plan_create_remix_handler(
+    params: NarrativePlanParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.create_remix_plan(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -332,6 +342,10 @@ class RpcRegistry:
             "media.script.align": (
                 SlotAlignmentParams,
                 lambda params, emit, cancelled: media_script_align_handler(params, emit, cancelled, self.project_service),
+            ),
+            "plan.create_remix": (
+                NarrativePlanParams,
+                lambda params, emit, cancelled: plan_create_remix_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

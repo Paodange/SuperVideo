@@ -25,6 +25,7 @@ from supervideo_core.media.index_models import SentenceIndexParams
 from supervideo_core.media.retrieval_models import RetrievalParams
 from supervideo_core.media.rerank_models import RerankParams
 from supervideo_core.media.slot_alignment_models import SlotAlignmentParams
+from supervideo_core.media.narrative_planner_models import NarrativePlanParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -298,6 +299,8 @@ def validate_request(value: Any) -> RpcRequest:
         RerankParams.model_validate(request.params)
     elif request.method == "media.script.align":
         SlotAlignmentParams.model_validate(request.params)
+    elif request.method == "plan.create_remix":
+        NarrativePlanParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -366,6 +369,7 @@ def health_result() -> dict[str, object]:
             "media.sentences.retrieve",
             "media.sentences.rerank",
             "media.script.align",
+            "plan.create_remix",
             "job.smoke.start",
             "job.get",
             "job.list",

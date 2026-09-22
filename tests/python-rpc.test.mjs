@@ -101,6 +101,30 @@ test("B10 slot alignment validators enforce bounded input, order, and source bin
   assert.equal(shared.isSlotAlignmentResult(incomplete), false, "matched candidates must cover every slot fact");
 });
 
+test("C02 narrative plan validators keep hook-body-CTA provenance and deterministic gaps bounded", () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const assetId = "22222222-2222-4222-8222-222222222222";
+  const source = (startMs, endMs, index) => ({
+    sourceAssetId: assetId, sourceSentenceCacheKey: "b".repeat(64), sentenceIndex: index,
+    timecode: { startMs, endMs }, previewUri: `supervideo://asset/${assetId}?kind=audio&startMs=${startMs}&endMs=${endMs}`,
+  });
+  const segments = [
+    { segmentId: "segment-1", order: 1, role: "hook", slotId: "slot-1", slotKind: "hook", sourceText: "开头。", status: "matched", candidateSentenceId: "a".repeat(64), candidateRank: 1, sentenceText: "开头。", source: source(0, 1000, 0), durationMs: 1000, selectionReason: "b09-quality-rerank;rank-1;complete;facts-preserved", gapReason: null },
+    { segmentId: "segment-2", order: 2, role: "body", slotId: "slot-2", slotKind: "claim", sourceText: "主体。", status: "matched", candidateSentenceId: "c".repeat(64), candidateRank: 1, sentenceText: "主体。", source: source(1000, 2000, 1), durationMs: 1000, selectionReason: "b09-quality-rerank;rank-1;complete;facts-preserved", gapReason: null },
+    { segmentId: "segment-3", order: 3, role: "cta", slotId: "slot-3", slotKind: "cta", sourceText: "CTA。", status: "gap", candidateSentenceId: null, candidateRank: null, sentenceText: null, source: null, durationMs: 0, selectionReason: null, gapReason: { segmentId: "segment-3", slotId: "slot-3", role: "cta", code: "alignment-gap", detail: "no-retrieval-candidates" } },
+  ];
+  const result = {
+    schemaVersion: 1, planVersion: "narrative-remix-plan-v1", inputVersion: "deterministic-narrative-input-v1", projectId,
+    theme: "招聘", audience: "求职者", outline: "开头。\n主体。\nCTA。", targetDurationMs: 2000, toleranceLowerMs: 1600, toleranceUpperMs: 2400,
+    selectedDurationMs: 2000, durationStatus: "within-tolerance", status: "gaps", selectionPolicy: "b10-first-complete-candidate-v1", alignmentVersion: "information-slot-alignment-v1", planDigest: "d".repeat(64),
+    segments, gaps: [segments[2].gapReason],
+  };
+  assert.equal(shared.isNarrativePlanParams({ projectId, theme: "招聘", audience: "求职者", targetDurationMs: 2000 }), true);
+  assert.equal(shared.isNarrativePlanResult(result), true);
+  assert.equal(shared.isNarrativePlanResult({ ...result, segments: [{ ...segments[0], sentenceText: "截断" }, ...segments.slice(1)] }), true, "runtime preserves bounded source text; Core owns source sentence completeness");
+  assert.equal(shared.isNarrativePlanResult({ ...result, segments: [{ ...segments[0], source: { ...segments[0].source, timecode: { startMs: 0, endMs: 900 } } }, ...segments.slice(1)] }), false);
+});
+
 test("VAD runtime validator rejects a gap between otherwise valid intervals", () => {
   const base = {
     schemaVersion: 1,
