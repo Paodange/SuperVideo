@@ -34,6 +34,7 @@ from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
 from supervideo_core.media.final_export_models import FinalMp4ExportParams
+from supervideo_core.media.edit_models import TimelineEditParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -291,6 +292,22 @@ async def media_final_export_handler(
     return (await service.export_final_mp4(params, cancelled)).model_dump(by_alias=True)
 
 
+async def timeline_edit_handler(
+    params: TimelineEditParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    result = await service.edit_timeline(params, cancelled)
+    # Shared/Node treats optional wire fields as omitted, not explicit nulls.
+    # Keep the top-level rejection discriminator present because it is required
+    # by the versioned result contract in both applied and rejected responses.
+    payload = result.model_dump(by_alias=True, exclude_none=True)
+    if result.rejection is None:
+        payload["rejection"] = None
+    return payload
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -430,6 +447,10 @@ class RpcRegistry:
             "media.final.export": (
                 FinalMp4ExportParams,
                 lambda params, emit, cancelled: media_final_export_handler(params, emit, cancelled, self.project_service),
+            ),
+            "timeline.edit": (
+                TimelineEditParams,
+                lambda params, emit, cancelled: timeline_edit_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

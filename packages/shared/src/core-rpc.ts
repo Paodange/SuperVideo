@@ -45,6 +45,7 @@ export const CORE_RPC_METHODS = {
   mediaPreviewRender: "media.preview.render",
   mediaPreviewQualityCheck: "media.preview.quality_check",
   mediaFinalExport: "media.final.export",
+  timelineEdit: "timeline.edit",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -82,6 +83,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaPreviewRender
   | typeof CORE_RPC_METHODS.mediaPreviewQualityCheck
   | typeof CORE_RPC_METHODS.mediaFinalExport
+  | typeof CORE_RPC_METHODS.timelineEdit
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -259,6 +261,14 @@ export const CORE_RPC_ERROR_CODES = {
   finalExportToolUnavailable: "FINAL_EXPORT_TOOL_UNAVAILABLE",
   finalExportTimeout: "FINAL_EXPORT_TIMEOUT",
   finalExportCancelled: "FINAL_EXPORT_CANCELLED",
+  editUnsupportedInstruction: "EDIT_UNSUPPORTED_INSTRUCTION",
+  editTargetNotFound: "EDIT_TARGET_NOT_FOUND",
+  editAmbiguousTarget: "EDIT_AMBIGUOUS_TARGET",
+  editReplacementNotFound: "EDIT_REPLACEMENT_NOT_FOUND",
+  editCompleteSentenceRequired: "EDIT_COMPLETE_SENTENCE_REQUIRED",
+  editTimelineEmpty: "EDIT_TIMELINE_EMPTY",
+  editOperationUnsafe: "EDIT_OPERATION_UNSAFE",
+  editTimelineInvalid: "EDIT_TIMELINE_INVALID",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -432,6 +442,14 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   FINAL_EXPORT_TOOL_UNAVAILABLE: -32405,
   FINAL_EXPORT_TIMEOUT: -32406,
   FINAL_EXPORT_CANCELLED: -32407,
+  EDIT_UNSUPPORTED_INSTRUCTION: -32420,
+  EDIT_TARGET_NOT_FOUND: -32421,
+  EDIT_AMBIGUOUS_TARGET: -32422,
+  EDIT_REPLACEMENT_NOT_FOUND: -32423,
+  EDIT_COMPLETE_SENTENCE_REQUIRED: -32424,
+  EDIT_TIMELINE_EMPTY: -32425,
+  EDIT_OPERATION_UNSAFE: -32426,
+  EDIT_TIMELINE_INVALID: -32427,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -603,6 +621,14 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   FINAL_EXPORT_TOOL_UNAVAILABLE: "The final export media verification tool is unavailable.",
   FINAL_EXPORT_TIMEOUT: "The final MP4 export timed out.",
   FINAL_EXPORT_CANCELLED: "The final MP4 export was cancelled.",
+  EDIT_UNSUPPORTED_INSTRUCTION: "The edit instruction is not a supported deterministic C09 template.",
+  EDIT_TARGET_NOT_FOUND: "The C09 edit target was not found.",
+  EDIT_AMBIGUOUS_TARGET: "The C09 edit target is ambiguous.",
+  EDIT_REPLACEMENT_NOT_FOUND: "The C09 replacement clip was not found.",
+  EDIT_COMPLETE_SENTENCE_REQUIRED: "The requested edit would violate the complete-sentence constraint.",
+  EDIT_TIMELINE_EMPTY: "The edit would produce an empty Timeline IR.",
+  EDIT_OPERATION_UNSAFE: "The requested edit cannot be applied without guessing or losing source fidelity.",
+  EDIT_TIMELINE_INVALID: "The edited Timeline IR failed validation.",
 };
 
 export type CoreRpcId = string;
@@ -664,6 +690,26 @@ export type AssetScanResult = Readonly<{ projectId: string; directory: string; i
 export type AssetListResult = Readonly<{ projectId: string; items: readonly AssetSummary[] }>;
 export type MediaParams = Readonly<{ projectId: string; assetId: string; timeoutMs?: number }>;
 export type TranscriptionParams = MediaParams;
+export type EditOperation = "delete" | "replace" | "move-forward" | "move-backward" | "shorten" | "extend" | "subtitle" | "cta";
+export type EditIntent = Readonly<{
+  schemaVersion: 1; editVersion: "edit-intent-v1"; policy: "deterministic-natural-language-v1";
+  operation: EditOperation; targetClipId?: string; targetSentenceId?: string; targetText?: string;
+  replacementClipId?: string; text?: string; amountMs?: number;
+}>;
+export type TimelineEditParams = Readonly<{
+  schemaVersion: 1; editVersion: "timeline-edit-v1"; policy: "deterministic-natural-language-v1";
+  projectId: string; timeline: TimelineProject; instruction?: string; intent?: EditIntent; timeoutMs?: number;
+}>;
+export type TimelineEditDiff = Readonly<{
+  changedClipIds: readonly string[]; removedClipIds: readonly string[]; movedClipIds: readonly string[];
+  durationDeltaMs: number; summary: string; preservedSourceIds: readonly string[]; preservedProvenanceIds: readonly string[];
+}>;
+export type TimelineEditResult = Readonly<{
+  schemaVersion: 1; editVersion: "timeline-edit-v1"; policy: "deterministic-natural-language-v1"; projectId: string;
+  inputKind: "natural-language" | "structured"; status: "applied" | "rejected"; sourceTimelineId: string;
+  resultTimeline: TimelineProject; intent: EditIntent; diff: TimelineEditDiff;
+  rejection: Readonly<{ code: string; message: string; targetClipId?: string }> | null; determinismDigest: string;
+}>;
 export type VadConfig = Readonly<{
   thresholdDb: number;
   minSpeechMs: number;
@@ -904,6 +950,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaPreviewRender) return isPreviewRenderParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaPreviewQualityCheck) return isPreviewQualityCheckParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaFinalExport) return isFinalMp4ExportParams(value.params);
+  if (value.method === CORE_RPC_METHODS.timelineEdit) return isTimelineEditParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -1574,6 +1621,57 @@ export function isFinalMp4ExportParams(value: unknown): value is FinalMp4ExportP
   if (value.outputName !== undefined && (typeof value.outputName !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\.mp4$/.test(value.outputName))) return false;
   if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
   return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
+export function isTimelineEditParams(value: unknown): value is TimelineEditParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["schemaVersion", "editVersion", "policy", "projectId", "timeline", "instruction", "intent", "timeoutMs"])) return false;
+  if (value.schemaVersion !== 1 || value.editVersion !== "timeline-edit-v1" || value.policy !== "deterministic-natural-language-v1" || !isUuid(value.projectId) || !isTimelineProject(value.timeline)) return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  const hasInstruction = typeof value.instruction === "string" && value.instruction.trim().length > 0 && isBoundedText(value.instruction, 2_048);
+  const hasIntent = value.intent !== undefined && isEditIntent(value.intent);
+  return hasInstruction !== hasIntent && isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
+export function isEditIntent(value: unknown): value is EditIntent {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["schemaVersion", "editVersion", "policy", "operation", "targetClipId", "targetSentenceId", "targetText", "replacementClipId", "text", "amountMs"])) return false;
+  if (value.schemaVersion !== 1 || value.editVersion !== "edit-intent-v1" || value.policy !== "deterministic-natural-language-v1") return false;
+  if (!["delete", "replace", "move-forward", "move-backward", "shorten", "extend", "subtitle", "cta"].includes(value.operation as string)) return false;
+  const selectors = [value.targetClipId, value.targetSentenceId, value.targetText].filter((item) => item !== undefined);
+  if (selectors.length !== 1) return false;
+  if (value.targetClipId !== undefined && !isTimelineId(value.targetClipId)) return false;
+  if (value.targetSentenceId !== undefined && !isTimelineId(value.targetSentenceId)) return false;
+  if (value.targetText !== undefined && (!isBoundedText(value.targetText, 256) || !value.targetText.trim())) return false;
+  if (value.replacementClipId !== undefined && (!isTimelineId(value.replacementClipId) || value.operation !== "replace")) return false;
+  if (value.operation === "replace" && value.replacementClipId === undefined) return false;
+  if (value.text !== undefined && (!isBoundedMultilineText(value.text, 8_192) || value.operation !== "subtitle" && value.operation !== "cta")) return false;
+  if ((value.operation === "subtitle" || value.operation === "cta") !== (value.text !== undefined)) return false;
+  if (value.amountMs !== undefined && (!isSafeInteger(value.amountMs, 1, 60_000) || value.operation !== "shorten" && value.operation !== "extend")) return false;
+  if ((value.operation === "shorten" || value.operation === "extend") !== (value.amountMs !== undefined)) return false;
+  return isBoundedCoreJsonValue(value, 16 * 1024);
+}
+
+export function isTimelineEditResult(value: unknown): value is TimelineEditResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "editVersion", "policy", "projectId", "inputKind", "status", "sourceTimelineId", "resultTimeline", "intent", "diff", "rejection", "determinismDigest"])) return false;
+  if (value.schemaVersion !== 1 || value.editVersion !== "timeline-edit-v1" || value.policy !== "deterministic-natural-language-v1" || !isUuid(value.projectId) || !isTimelineId(value.sourceTimelineId) || !isTimelineProject(value.resultTimeline) || !isEditIntent(value.intent) || !isSentenceCacheKey(value.determinismDigest)) return false;
+  if (value.inputKind !== "natural-language" && value.inputKind !== "structured") return false;
+  if (value.status !== "applied" && value.status !== "rejected") return false;
+  if (!isTimelineEditDiff(value.diff)) return false;
+  if (value.status === "applied" && value.resultTimeline.id === value.sourceTimelineId) return false;
+  if (value.status === "rejected" && value.resultTimeline.id !== value.sourceTimelineId) return false;
+  if (value.status === "applied" && value.rejection !== null || value.status === "rejected" && !isTimelineEditRejection(value.rejection)) return false;
+  return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
+function isTimelineEditDiff(value: unknown): value is TimelineEditDiff {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["changedClipIds", "removedClipIds", "movedClipIds", "durationDeltaMs", "summary", "preservedSourceIds", "preservedProvenanceIds"])) return false;
+  return [value.changedClipIds, value.removedClipIds, value.movedClipIds, value.preservedSourceIds, value.preservedProvenanceIds].every((items) => Array.isArray(items) && items.length <= 4_096 && items.every(isTimelineId))
+    && isSafeInteger(value.durationDeltaMs, -86_400_000, 86_400_000) && isBoundedText(value.summary, 256);
+}
+
+function isTimelineEditRejection(value: unknown): boolean {
+  return isPlainRecord(value) && hasNoUnexpectedKeys(value, ["code", "message", "targetClipId"])
+    && typeof value.code === "string" && ["EDIT_UNSUPPORTED_INSTRUCTION", "EDIT_TARGET_NOT_FOUND", "EDIT_AMBIGUOUS_TARGET", "EDIT_REPLACEMENT_NOT_FOUND", "EDIT_COMPLETE_SENTENCE_REQUIRED", "EDIT_TIMELINE_EMPTY", "EDIT_OPERATION_UNSAFE", "EDIT_TIMELINE_INVALID"].includes(value.code)
+    && isBoundedText(value.message, 256) && (value.targetClipId === undefined || isTimelineId(value.targetClipId));
 }
 
 export function isFinalMp4ExportResult(value: unknown): value is FinalMp4ExportResult {

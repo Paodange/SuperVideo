@@ -30,6 +30,7 @@ from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams
 from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.final_export_models import FinalMp4ExportParams
+from supervideo_core.media.edit_models import TimelineEditParams
 
 JSON_RPC_VERSION = "2.0"
 CORE_RPC_PROTOCOL_VERSION = 1
@@ -321,6 +322,8 @@ def validate_request(value: Any) -> RpcRequest:
         PreviewQualityCheckParams.model_validate(request.params)
     elif request.method == "media.final.export":
         FinalMp4ExportParams.model_validate(request.params)
+    elif request.method == "timeline.edit":
+        TimelineEditParams.model_validate(request.params)
     elif request.method == "job.smoke.start":
         JobSmokeStartParams.model_validate(request.params)
     elif request.method in {"job.get", "job.cancel", "job.retry"}:
@@ -396,6 +399,7 @@ def health_result() -> dict[str, object]:
             "media.preview.render",
             "media.preview.quality_check",
             "media.final.export",
+            "timeline.edit",
             "job.smoke.start",
             "job.get",
             "job.list",

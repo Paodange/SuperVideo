@@ -26,6 +26,7 @@ import {
   isPreviewRenderResult,
   isPreviewQualityCheckResult,
   isFinalMp4ExportResult,
+  isTimelineEditResult,
   type AgentWorkerMessage,
   type DesktopAgentEvent,
   type DesktopEnvironment,
@@ -65,6 +66,8 @@ import {
   type PreviewQualityCheckResult,
   type FinalMp4ExportParams,
   type FinalMp4ExportResult,
+  type TimelineEditParams,
+  type TimelineEditResult,
 } from "@supervideo/shared";
 import {
   createBrowserWindowOptions,
@@ -782,6 +785,11 @@ app.whenReady().then(() => {
     exportFinalMp4: async (_event, input: FinalMp4ExportParams): Promise<FinalMp4ExportResult> => {
       const result = await agentController.runProjectOperation("media-final-export", input, input.projectId);
       if (!isFinalMp4ExportResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
+      return result;
+    },
+    editTimeline: async (_event, input: TimelineEditParams): Promise<TimelineEditResult> => {
+      const result = await agentController.runProjectOperation("timeline-edit", input, input.projectId);
+      if (!isTimelineEditResult(result)) throw createDesktopPublicError("CORE_UNAVAILABLE");
       return result;
     },
     startSmokeJob: async (_event, input) => rememberJob(jobSummary(await agentController.runJobOperation(

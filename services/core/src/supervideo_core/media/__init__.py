@@ -17,7 +17,8 @@ from .subtitle_plan_models import SubtitlePlanParams, SubtitlePlanResult
 from .preview_render_models import PreviewRenderParams, PreviewRenderResult
 from .quality_check_models import PreviewQualityCheckParams, PreviewQualityCheckResult
 from .final_export_models import FinalMp4ExportParams, FinalMp4ExportResult
-__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService", "ArollCutJoinParams", "ArollCutJoinResult", "ArollCutJoinService", "SubtitlePlanParams", "SubtitlePlanResult", "SubtitlePlanService", "PreviewRenderParams", "PreviewRenderResult", "PreviewRenderService", "PreviewQualityCheckParams", "PreviewQualityCheckResult", "PreviewQualityCheckService", "FinalMp4ExportParams", "FinalMp4ExportResult", "FinalMp4ExportService"]
+from .edit_models import EditIntent, TimelineEditParams, TimelineEditResult
+__all__ = ["MediaError", "MediaProbeParams", "MediaProxyParams", "MediaService", "SentenceConfig", "SentenceParams", "SentenceResult", "SentenceService", "SentenceQaParams", "SentenceQaSaveParams", "SentenceQaContextResult", "SentenceQaSaveResult", "SentenceQaService", "SentenceIndexParams", "SentenceIndexResult", "SentenceIndexService", "RetrievalFilters", "RetrievalParams", "RetrievalResult", "SentenceRetrievalService", "RerankConfig", "RerankParams", "RerankResult", "SentenceQualityRerankService", "TranscriptionParams", "TranscriptionResult", "TranscriptionService", "VadParams", "VadResult", "VadService", "InformationSlot", "SlotAlignmentCandidate", "SlotAlignmentParams", "SlotAlignmentResult", "InformationSlotAlignmentService", "NarrativePlanParams", "NarrativePlanResult", "NarrativePlannerService", "DurationOptimizationParams", "DurationOptimizationResult", "DurationOptimizerService", "ArollCutJoinParams", "ArollCutJoinResult", "ArollCutJoinService", "SubtitlePlanParams", "SubtitlePlanResult", "SubtitlePlanService", "PreviewRenderParams", "PreviewRenderResult", "PreviewRenderService", "PreviewQualityCheckParams", "PreviewQualityCheckResult", "PreviewQualityCheckService", "FinalMp4ExportParams", "FinalMp4ExportResult", "FinalMp4ExportService", "EditIntent", "TimelineEditParams", "TimelineEditResult", "TimelineEditService"]
 
 
 def __getattr__(name: str):
@@ -85,4 +86,8 @@ def __getattr__(name: str):
         from .final_export import FinalMp4ExportService
 
         return FinalMp4ExportService
+    if name == "TimelineEditService":
+        from .edit_service import TimelineEditService
+
+        return TimelineEditService
     raise AttributeError(name)
