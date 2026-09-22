@@ -170,6 +170,16 @@ test("Agent Worker protocol accepts valid messages and rejects malformed wire da
     assert.equal(shared.isValidAgentWireMessage(message), false, String(message.type));
   }
   assert.equal(shared.isValidAgentWorkerMessage({ protocolVersion: 1, type: "ready", timestamp: now(), workerVersion: "0.1.0", capabilities: [] }), true);
+  const maxCapabilities = Array.from({ length: shared.AGENT_WORKER_MAX_CAPABILITIES }, (_, index) => `capability-${index}`);
+  const readyAtCapabilityLimit = { protocolVersion: 1, type: "ready", timestamp: now(), workerVersion: "0.1.0", capabilities: maxCapabilities };
+  assert.equal(shared.isValidAgentWorkerMessage(readyAtCapabilityLimit), true);
+  assert.equal(shared.isValidAgentWorkerMessage({ ...readyAtCapabilityLimit, capabilities: [...maxCapabilities, "overflow"] }), false);
+  const statusAtCapabilityLimit = {
+    status: "ready", generation: 1, activeRunId: null, runStatus: "idle", restartCount: 0,
+    lastErrorCode: null, workerVersion: "0.1.0", capabilities: maxCapabilities,
+  };
+  assert.equal(shared.isAgentWorkerStatusSnapshot(statusAtCapabilityLimit), true);
+  assert.equal(shared.isAgentWorkerStatusSnapshot({ ...statusAtCapabilityLimit, capabilities: [...maxCapabilities, "overflow"] }), false);
   assert.equal(shared.isAgentWorkerMessageWithinLimit({ protocolVersion: 1, type: "run-event", runId: "run-1", sequence: 1, timestamp: now(), event: { kind: "assistant-text-delta", delta: "x".repeat(70_000) } }), false);
   assert.equal(shared.isValidAgentWorkerCommand({ protocolVersion: 1, type: "run-smoke-task", runId: "run-1", steps: 4, extra: undefined }), false);
   assert.equal(shared.isValidAgentWorkerCommand({ protocolVersion: 1, type: "ping", value: 1n }), false);
