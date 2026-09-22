@@ -42,6 +42,8 @@ from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams, Subti
 from supervideo_core.media.preview_render_models import PreviewRenderParams, PreviewRenderResult
 from supervideo_core.media.preview_render import PreviewRenderService
 from supervideo_core.media.quality_check_models import PreviewQualityCheckParams, PreviewQualityCheckResult
+from supervideo_core.media.final_export_models import FinalMp4ExportParams, FinalMp4ExportResult
+from supervideo_core.media.final_export import FinalMp4ExportService
 
 from .errors import ProjectError, from_storage_error
 from .manifest import (
@@ -94,7 +96,7 @@ class _ScannedAsset:
 
 
 class ProjectService:
-    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None, preview_render_service: PreviewRenderService | None = None, preview_quality_check_service: PreviewQualityCheckService | None = None) -> None:
+    def __init__(self, media_service: MediaService | None = None, transcription_service: TranscriptionService | None = None, vad_service: VadService | None = None, sentence_service: SentenceService | None = None, sentence_qa_service: SentenceQaService | None = None, sentence_index_service: SentenceIndexService | None = None, sentence_retrieval_service: SentenceRetrievalService | None = None, sentence_rerank_service: SentenceQualityRerankService | None = None, slot_alignment_service: InformationSlotAlignmentService | None = None, narrative_planner_service: NarrativePlannerService | None = None, duration_optimizer_service: DurationOptimizerService | None = None, aroll_cut_join_service: ArollCutJoinService | None = None, subtitle_plan_service: SubtitlePlanService | None = None, preview_render_service: PreviewRenderService | None = None, preview_quality_check_service: PreviewQualityCheckService | None = None, final_export_service: FinalMp4ExportService | None = None) -> None:
         self._active: _ActiveSession | None = None
         self.media_service = media_service or MediaService()
         self.transcription_service = transcription_service or TranscriptionService()
@@ -111,6 +113,7 @@ class ProjectService:
         self.subtitle_plan_service = subtitle_plan_service or SubtitlePlanService()
         self.preview_render_service = preview_render_service or PreviewRenderService()
         self.preview_quality_check_service = preview_quality_check_service or PreviewQualityCheckService()
+        self.final_export_service = final_export_service or FinalMp4ExportService()
 
     @property
     def active_project_id(self) -> str | None:
@@ -213,6 +216,11 @@ class ProjectService:
         active = self._require_active(request.project_id)
         self.preview_quality_check_service.bind_session(active.root, active.database)
         return await self.preview_quality_check_service.check(request, cancelled)
+
+    async def export_final_mp4(self, request: FinalMp4ExportParams, cancelled: asyncio.Event) -> FinalMp4ExportResult:
+        active = self._require_active(request.project_id)
+        self.final_export_service.bind_session(active.root, active.database)
+        return await self.final_export_service.export(request, cancelled)
 
     def create(self, request: ProjectCreateRequest) -> ProjectSummary:
         try:

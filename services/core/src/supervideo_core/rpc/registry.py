@@ -33,6 +33,7 @@ from supervideo_core.media.aroll_cut_join_models import ArollCutJoinParams
 from supervideo_core.media.subtitle_plan_models import SubtitlePlanParams
 from supervideo_core.media.preview_render_models import PreviewRenderParams
 from supervideo_core.media.quality_check_models import PreviewQualityCheckParams
+from supervideo_core.media.final_export_models import FinalMp4ExportParams
 
 from .errors import RpcServiceError
 from .models import (
@@ -281,6 +282,15 @@ async def media_preview_quality_check_handler(
     return (await service.check_preview_quality(params, cancelled)).model_dump(by_alias=True)
 
 
+async def media_final_export_handler(
+    params: FinalMp4ExportParams,
+    _emit: ProgressEmitter,
+    cancelled: asyncio.Event,
+    service: ProjectService,
+) -> dict[str, object]:
+    return (await service.export_final_mp4(params, cancelled)).model_dump(by_alias=True)
+
+
 async def _project_create_with_jobs(params: ProjectCreateRequest, registry: "RpcRegistry") -> dict[str, object]:
     previous = registry.job_manager.active_project_id
     await registry.job_manager.pause_for_project_change()
@@ -416,6 +426,10 @@ class RpcRegistry:
             "media.preview.quality_check": (
                 PreviewQualityCheckParams,
                 lambda params, emit, cancelled: media_preview_quality_check_handler(params, emit, cancelled, self.project_service),
+            ),
+            "media.final.export": (
+                FinalMp4ExportParams,
+                lambda params, emit, cancelled: media_final_export_handler(params, emit, cancelled, self.project_service),
             ),
             "job.smoke.start": (
                 JobSmokeStartParams,

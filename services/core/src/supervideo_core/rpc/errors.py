@@ -165,6 +165,20 @@ ERRORS: Final[dict[str, RpcErrorDefinition]] = {
     "PREVIEW_QUALITY_OUTPUT_INVALID": RpcErrorDefinition(-32394, "The preview quality-check result was invalid."),
     "PREVIEW_QUALITY_TIMEOUT": RpcErrorDefinition(-32395, "The preview quality check timed out."),
     "PREVIEW_QUALITY_CANCELLED": RpcErrorDefinition(-32396, "The preview quality check was cancelled."),
+    "FINAL_EXPORT_INPUT_INVALID": RpcErrorDefinition(-32397, "The final export input is invalid or does not bind to the verified preview."),
+    "FINAL_EXPORT_PREVIEW_NOT_READY": RpcErrorDefinition(-32398, "The preview has not completed successfully and cannot be exported."),
+    "FINAL_EXPORT_AUDIO_NOT_READY": RpcErrorDefinition(-32408, "The C04 audio result has not completed successfully and cannot be muxed."),
+    "FINAL_EXPORT_AUDIO_INVALID": RpcErrorDefinition(-32409, "The C04 audio output is not a verified AAC stream of the expected duration."),
+    "FINAL_EXPORT_AUDIO_TAMPERED": RpcErrorDefinition(-32410, "The C04 audio output changed or does not match its recorded fingerprint."),
+    "FINAL_EXPORT_QUALITY_NOT_READY": RpcErrorDefinition(-32399, "The preview quality gate is not ready for final export."),
+    "FINAL_EXPORT_SOURCE_INVALID": RpcErrorDefinition(-32400, "The verified preview source is missing or outside the project boundary."),
+    "FINAL_EXPORT_SOURCE_TAMPERED": RpcErrorDefinition(-32401, "The verified preview source changed or does not match its recorded fingerprint."),
+    "FINAL_EXPORT_OUTPUT_INVALID": RpcErrorDefinition(-32402, "The final MP4 output or manifest was invalid."),
+    "FINAL_EXPORT_OUTPUT_CONFLICT": RpcErrorDefinition(-32403, "The requested final export path already contains a different output."),
+    "FINAL_EXPORT_CONTAINER_INVALID": RpcErrorDefinition(-32404, "The final MP4 container or media streams could not be verified."),
+    "FINAL_EXPORT_TOOL_UNAVAILABLE": RpcErrorDefinition(-32405, "The final export media verification tool is unavailable."),
+    "FINAL_EXPORT_TIMEOUT": RpcErrorDefinition(-32406, "The final MP4 export timed out."),
+    "FINAL_EXPORT_CANCELLED": RpcErrorDefinition(-32407, "The final MP4 export was cancelled."),
 }
 
 

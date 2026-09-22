@@ -44,6 +44,7 @@ export const CORE_RPC_METHODS = {
   mediaSubtitlePlan: "media.subtitle.plan",
   mediaPreviewRender: "media.preview.render",
   mediaPreviewQualityCheck: "media.preview.quality_check",
+  mediaFinalExport: "media.final.export",
   jobSmokeStart: "job.smoke.start",
   jobGet: "job.get",
   jobList: "job.list",
@@ -80,6 +81,7 @@ export type CoreRpcCallableMethod =
   | typeof CORE_RPC_METHODS.mediaSubtitlePlan
   | typeof CORE_RPC_METHODS.mediaPreviewRender
   | typeof CORE_RPC_METHODS.mediaPreviewQualityCheck
+  | typeof CORE_RPC_METHODS.mediaFinalExport
   | typeof CORE_RPC_METHODS.jobSmokeStart
   | typeof CORE_RPC_METHODS.jobGet
   | typeof CORE_RPC_METHODS.jobList
@@ -243,6 +245,20 @@ export const CORE_RPC_ERROR_CODES = {
   previewQualityOutputInvalid: "PREVIEW_QUALITY_OUTPUT_INVALID",
   previewQualityTimeout: "PREVIEW_QUALITY_TIMEOUT",
   previewQualityCancelled: "PREVIEW_QUALITY_CANCELLED",
+  finalExportInputInvalid: "FINAL_EXPORT_INPUT_INVALID",
+  finalExportPreviewNotReady: "FINAL_EXPORT_PREVIEW_NOT_READY",
+  finalExportAudioNotReady: "FINAL_EXPORT_AUDIO_NOT_READY",
+  finalExportAudioInvalid: "FINAL_EXPORT_AUDIO_INVALID",
+  finalExportAudioTampered: "FINAL_EXPORT_AUDIO_TAMPERED",
+  finalExportQualityNotReady: "FINAL_EXPORT_QUALITY_NOT_READY",
+  finalExportSourceInvalid: "FINAL_EXPORT_SOURCE_INVALID",
+  finalExportSourceTampered: "FINAL_EXPORT_SOURCE_TAMPERED",
+  finalExportOutputInvalid: "FINAL_EXPORT_OUTPUT_INVALID",
+  finalExportOutputConflict: "FINAL_EXPORT_OUTPUT_CONFLICT",
+  finalExportContainerInvalid: "FINAL_EXPORT_CONTAINER_INVALID",
+  finalExportToolUnavailable: "FINAL_EXPORT_TOOL_UNAVAILABLE",
+  finalExportTimeout: "FINAL_EXPORT_TIMEOUT",
+  finalExportCancelled: "FINAL_EXPORT_CANCELLED",
 } as const;
 
 export type CoreRpcErrorCode = (typeof CORE_RPC_ERROR_CODES)[keyof typeof CORE_RPC_ERROR_CODES];
@@ -402,6 +418,20 @@ export const CORE_RPC_ERROR_NUMBERS: Readonly<Record<CoreRpcErrorCode, number>> 
   PREVIEW_QUALITY_OUTPUT_INVALID: -32394,
   PREVIEW_QUALITY_TIMEOUT: -32395,
   PREVIEW_QUALITY_CANCELLED: -32396,
+  FINAL_EXPORT_INPUT_INVALID: -32397,
+  FINAL_EXPORT_PREVIEW_NOT_READY: -32398,
+  FINAL_EXPORT_AUDIO_NOT_READY: -32408,
+  FINAL_EXPORT_AUDIO_INVALID: -32409,
+  FINAL_EXPORT_AUDIO_TAMPERED: -32410,
+  FINAL_EXPORT_QUALITY_NOT_READY: -32399,
+  FINAL_EXPORT_SOURCE_INVALID: -32400,
+  FINAL_EXPORT_SOURCE_TAMPERED: -32401,
+  FINAL_EXPORT_OUTPUT_INVALID: -32402,
+  FINAL_EXPORT_OUTPUT_CONFLICT: -32403,
+  FINAL_EXPORT_CONTAINER_INVALID: -32404,
+  FINAL_EXPORT_TOOL_UNAVAILABLE: -32405,
+  FINAL_EXPORT_TIMEOUT: -32406,
+  FINAL_EXPORT_CANCELLED: -32407,
 };
 
 export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>> = {
@@ -559,6 +589,20 @@ export const CORE_RPC_ERROR_MESSAGES: Readonly<Record<CoreRpcErrorCode, string>>
   PREVIEW_QUALITY_OUTPUT_INVALID: "The preview quality-check result was invalid.",
   PREVIEW_QUALITY_TIMEOUT: "The preview quality check timed out.",
   PREVIEW_QUALITY_CANCELLED: "The preview quality check was cancelled.",
+  FINAL_EXPORT_INPUT_INVALID: "The final export input is invalid or does not bind to the verified preview.",
+  FINAL_EXPORT_PREVIEW_NOT_READY: "The preview has not completed successfully and cannot be exported.",
+  FINAL_EXPORT_AUDIO_NOT_READY: "The C04 audio result has not completed successfully and cannot be muxed.",
+  FINAL_EXPORT_AUDIO_INVALID: "The C04 audio output is not a verified AAC stream of the expected duration.",
+  FINAL_EXPORT_AUDIO_TAMPERED: "The C04 audio output changed or does not match its recorded fingerprint.",
+  FINAL_EXPORT_QUALITY_NOT_READY: "The preview quality gate is not ready for final export.",
+  FINAL_EXPORT_SOURCE_INVALID: "The verified preview source is missing or outside the project boundary.",
+  FINAL_EXPORT_SOURCE_TAMPERED: "The verified preview source changed or does not match its recorded fingerprint.",
+  FINAL_EXPORT_OUTPUT_INVALID: "The final MP4 output or manifest was invalid.",
+  FINAL_EXPORT_OUTPUT_CONFLICT: "The requested final export path already contains a different output.",
+  FINAL_EXPORT_CONTAINER_INVALID: "The final MP4 container or media streams could not be verified.",
+  FINAL_EXPORT_TOOL_UNAVAILABLE: "The final export media verification tool is unavailable.",
+  FINAL_EXPORT_TIMEOUT: "The final MP4 export timed out.",
+  FINAL_EXPORT_CANCELLED: "The final MP4 export was cancelled.",
 };
 
 export type CoreRpcId = string;
@@ -698,6 +742,10 @@ export type PreviewRenderResult = Readonly<{ schemaVersion: 1; planVersion: "pre
 export type PreviewQualityCheckParams = Readonly<{ projectId: string; previewResult: PreviewRenderResult; timeoutMs?: number }>;
 export type PreviewQualityIssue = Readonly<{ checkId: string; code: "QA_PLAN_BINDING_INVALID" | "QA_PLAN_DIGEST_MISMATCH" | "QA_PLAN_ORDER_INVALID" | "QA_PLAN_RANGE_INVALID" | "QA_PLAN_GAP" | "QA_EXECUTION_NOT_RUN" | "QA_OUTPUT_MISSING" | "QA_OUTPUT_PLAYBACK_URI_INVALID" | "QA_OUTPUT_PATH_INVALID" | "QA_OUTPUT_FILE_INVALID" | "QA_OUTPUT_SIZE_MISMATCH" | "QA_OUTPUT_FINGERPRINT_MISMATCH" | "QA_OUTPUT_MANIFEST_INVALID" | "QA_OUTPUT_DURATION_MISMATCH" | "QA_OUTPUT_CONTAINER_UNVERIFIED" | "QA_OUTPUT_CONTAINER_INVALID"; severity: "pass" | "warning" | "fail"; status: "verified" | "not-run"; message: string }>;
 export type PreviewQualityCheckResult = Readonly<{ schemaVersion: 1; qaVersion: "preview-quality-v1"; projectId: string; planDigest: string; phase: "plan" | "executed"; status: "pass" | "warning" | "fail"; readyForExport: boolean; executionVerified: boolean; issueCount: number; issues: readonly PreviewQualityIssue[] }>;
+export type FinalMp4ExportParams = Readonly<{ projectId: string; previewResult: PreviewRenderResult; qualityResult: PreviewQualityCheckResult; audioResult: ArollCutJoinResult; audioFingerprint: string; outputName?: string; timeoutMs?: number }>;
+export type FinalMp4Container = Readonly<{ formatName: string; videoCodec: "h264"; audioCodec: "aac"; width: 1080; height: 1920; frameRate: number | null }>;
+export type FinalMp4Output = Readonly<{ kind: "video"; relativePath: string; manifestRelativePath: string; sizeBytes: number; durationMs: number; outputFingerprint: string; container: FinalMp4Container }>;
+export type FinalMp4ExportResult = Readonly<{ schemaVersion: 1; exportVersion: "final-mp4-export-v1"; exportPolicy: "verified-preview-mux-v1"; projectId: string; timelineId: string; planDigest: string; qualityDigest: string; audioPlanDigest: string; audioFingerprint: string; status: "completed" | "cache-hit"; output: FinalMp4Output }>;
 export type SentenceQaParams = Readonly<{ projectId: string; assetId: string; sentenceCacheKey: string; sentenceIndex: number; contextBefore?: number; contextAfter?: number }>;
 export type SentenceQaMarkerInput = Readonly<{ sentenceIndex: number; issueType: "missing-text" | "half-sentence" | "low-confidence" | "boundary-uncertain" | "other"; status?: "open" | "resolved"; source?: "manual" | "automatic"; note?: string; expectedText?: string | null }>;
 export type SentenceQaMarker = SentenceQaMarkerInput & Readonly<{ markerId: string; status: "open" | "resolved"; source: "manual" | "automatic"; note: string; expectedText: string | null; createdAtMs: number; updatedAtMs: number }>;
@@ -855,6 +903,7 @@ export function isCoreRpcRequest(value: unknown): value is CoreRpcRequest {
   if (value.method === CORE_RPC_METHODS.mediaSubtitlePlan) return isSubtitlePlanParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaPreviewRender) return isPreviewRenderParams(value.params);
   if (value.method === CORE_RPC_METHODS.mediaPreviewQualityCheck) return isPreviewQualityCheckParams(value.params);
+  if (value.method === CORE_RPC_METHODS.mediaFinalExport) return isFinalMp4ExportParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobSmokeStart) return isJobSmokeStartParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobGet || value.method === CORE_RPC_METHODS.jobCancel || value.method === CORE_RPC_METHODS.jobRetry) return isJobReferenceParams(value.params);
   if (value.method === CORE_RPC_METHODS.jobList) return isJobListParams(value.params);
@@ -928,7 +977,7 @@ export function isCoreHealth(value: unknown): value is CoreHealth {
     && value.coreVersion.length > 0
     && value.coreVersion.length <= 32
     && Array.isArray(value.capabilities)
-    && value.capabilities.length <= 32
+    && value.capabilities.length <= 64
     && value.capabilities.every((capability) => typeof capability === "string" && capability.length > 0 && capability.length <= 64);
 }
 
@@ -1513,6 +1562,40 @@ export function isPreviewQualityCheckParams(value: unknown): value is PreviewQua
   if (!isUuid(value.projectId) || !isPreviewRenderResult(value.previewResult) || (value.previewResult as PreviewRenderResult).projectId !== value.projectId) return false;
   if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
   return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
+export function isFinalMp4ExportParams(value: unknown): value is FinalMp4ExportParams {
+  if (!isPlainRecord(value) || !hasNoUnexpectedKeys(value, ["projectId", "previewResult", "qualityResult", "audioResult", "audioFingerprint", "outputName", "timeoutMs"])) return false;
+  if (!isUuid(value.projectId) || !isPreviewRenderResult(value.previewResult) || !isPreviewQualityCheckResult(value.qualityResult) || !isArollCutJoinResult(value.audioResult)) return false;
+  if ((value.previewResult as PreviewRenderResult).projectId !== value.projectId || (value.qualityResult as PreviewQualityCheckResult).projectId !== value.projectId) return false;
+  if ((value.qualityResult as PreviewQualityCheckResult).planDigest !== (value.previewResult as PreviewRenderResult).planDigest) return false;
+  if ((value.audioResult as ArollCutJoinResult).projectId !== value.projectId || (value.audioResult as ArollCutJoinResult).timelineId !== (value.previewResult as PreviewRenderResult).timelineId) return false;
+  if (typeof value.audioFingerprint !== "string" || !isSentenceCacheKey(value.audioFingerprint)) return false;
+  if (value.outputName !== undefined && (typeof value.outputName !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\.mp4$/.test(value.outputName))) return false;
+  if (value.timeoutMs !== undefined && !isSafeInteger(value.timeoutMs, 1_000, 120_000)) return false;
+  return isBoundedCoreJsonValue(value, 512 * 1024);
+}
+
+export function isFinalMp4ExportResult(value: unknown): value is FinalMp4ExportResult {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "exportVersion", "exportPolicy", "projectId", "timelineId", "planDigest", "qualityDigest", "audioPlanDigest", "audioFingerprint", "status", "output"])) return false;
+  if (value.schemaVersion !== 1 || value.exportVersion !== "final-mp4-export-v1" || value.exportPolicy !== "verified-preview-mux-v1" || !isUuid(value.projectId) || !isTimelineId(value.timelineId) || !isSentenceCacheKey(value.planDigest) || !isSentenceCacheKey(value.qualityDigest) || !isSentenceCacheKey(value.audioPlanDigest) || !isSentenceCacheKey(value.audioFingerprint) || (value.status !== "completed" && value.status !== "cache-hit")) return false;
+  if (!isFinalMp4Output(value.output)) return false;
+  return isBoundedCoreJsonValue(value, 64 * 1024);
+}
+
+function isFinalMp4Output(value: unknown): value is FinalMp4Output {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["kind", "relativePath", "manifestRelativePath", "sizeBytes", "durationMs", "outputFingerprint", "container"])) return false;
+  if (value.kind !== "video" || typeof value.relativePath !== "string" || !/^exports\/videos\/[A-Za-z0-9][A-Za-z0-9._-]{0,95}\.mp4$/.test(value.relativePath)) return false;
+  if (value.manifestRelativePath !== value.relativePath.slice(0, -4) + ".manifest.json" || !/^exports\/videos\/[A-Za-z0-9][A-Za-z0-9._-]{0,95}\.manifest\.json$/.test(value.manifestRelativePath)) return false;
+  if (!isSafeInteger(value.sizeBytes, 1, 512 * 1024 * 1024) || !isSafeInteger(value.durationMs, 1, 86_400_000) || !isSentenceCacheKey(value.outputFingerprint)) return false;
+  return isFinalMp4Container(value.container);
+}
+
+function isFinalMp4Container(value: unknown): value is FinalMp4Container {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["formatName", "videoCodec", "audioCodec", "width", "height", "frameRate"])) return false;
+  return isSafeString(value.formatName, 128) && value.formatName.split(",").some((part) => part.trim().toLowerCase() === "mp4") && value.videoCodec === "h264" && value.audioCodec === "aac"
+    && value.width === 1080 && value.height === 1920
+    && (value.frameRate === null || isFiniteInRange(value.frameRate, 0, 1_000));
 }
 
 export function isSentenceQaSaveParams(value: unknown): value is SentenceQaSaveParams {
