@@ -14,11 +14,15 @@ from typing import Any
 from .remotion_models import (
     REMOTION_BUNDLE_VERSION, REMOTION_JOB_TYPE, REMOTION_MAX_OUTPUT_BYTES, REMOTION_RENDER_VERSION,
     REMOTION_RUNTIME_MODE, REMOTION_TEMPLATE_ID, REMOTION_TEMPLATE_VERSION,
-    RemotionRenderParams, RemotionRenderResult,
+    RemotionRenderParams, RemotionRenderResult, compute_remotion_cache_key, compute_remotion_timeline_digest,
 )
 
 
 class RemotionRuntimeError(ValueError):
+    pass
+
+
+class RemotionRuntimeShutdown(Exception):
     pass
 
 
@@ -34,21 +38,19 @@ class RemotionRuntime:
         return await self.render(params, cancel_event=cancel_event, shutdown_event=shutdown_event, persist=persist)
 
     async def render(self, params: RemotionRenderParams, *, cancel_event: asyncio.Event, shutdown_event: asyncio.Event, persist: Any) -> dict[str, object]:
+        try:
+            return await self._render(params, cancel_event=cancel_event, shutdown_event=shutdown_event, persist=persist)
+        except OSError as error:
+            raise RemotionRuntimeError("Remotion filesystem operation failed") from error
+
+    async def _render(self, params: RemotionRenderParams, *, cancel_event: asyncio.Event, shutdown_event: asyncio.Event, persist: Any) -> dict[str, object]:
         self._ensure_boundary()
         if cancel_event.is_set():
             raise asyncio.CancelledError
         timeline = params.input_props.timeline.model_dump(by_alias=True, exclude_none=True)
-        timeline_digest = self._digest(timeline)
+        timeline_digest = compute_remotion_timeline_digest(params)
         bundle_cache_key = self._digest({"bundleVersion": REMOTION_BUNDLE_VERSION, "templateId": REMOTION_TEMPLATE_ID, "templateVersion": REMOTION_TEMPLATE_VERSION})
-        cache_key = self._digest({
-            "contractVersion": params.input_props.contract_version,
-            "renderVersion": REMOTION_RENDER_VERSION,
-            "projectId": params.project_id,
-            "templateId": REMOTION_TEMPLATE_ID,
-            "templateVersion": REMOTION_TEMPLATE_VERSION,
-            "bundleVersion": REMOTION_BUNDLE_VERSION,
-            "timelineDigest": timeline_digest,
-        })
+        cache_key = compute_remotion_cache_key(params)
         output_rel = f"generated/remotion-v1/renders/{cache_key}.json"
         manifest_rel = f"generated/remotion-v1/renders/{cache_key}.manifest.json"
         output_path = self._safe_path(output_rel)
@@ -60,7 +62,7 @@ class RemotionRuntime:
         if cancel_event.is_set():
             raise asyncio.CancelledError
         if shutdown_event.is_set():
-            raise RuntimeError("shutdown")
+            raise RemotionRuntimeShutdown()
         bundle_path = self._safe_path(f"generated/remotion-v1/bundles/{bundle_cache_key}.json")
         self._atomic_json_write(bundle_path, {"schemaVersion": 1, "bundleVersion": REMOTION_BUNDLE_VERSION, "templateId": REMOTION_TEMPLATE_ID, "templateVersion": REMOTION_TEMPLATE_VERSION, "runtimeMode": REMOTION_RUNTIME_MODE})
         artifact = {

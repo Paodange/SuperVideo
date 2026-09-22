@@ -10,9 +10,10 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from supervideo_core.jobs import JobManager
+from supervideo_core.jobs.models import RemotionJobInput
 from supervideo_core.media.remotion import RemotionRuntime, RemotionRuntimeError
-from supervideo_core.media.remotion_models import RemotionRenderParams
-from supervideo_core.storage import Database, ProjectCreate, ProjectRepository
+from supervideo_core.media.remotion_models import RemotionRenderParams, RemotionRenderResult, compute_remotion_cache_key
+from supervideo_core.storage import Database, JobCreate, JobRepository, ProjectCreate, ProjectRepository, new_id
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -76,6 +77,81 @@ class RemotionRuntimeTests(unittest.TestCase):
             with self.assertRaises(RemotionRuntimeError):
                 service._safe_path("generated/remotion-v1/../outside.json")
         asyncio.run(scenario())
+
+    def test_result_paths_are_bound_to_cache_key(self) -> None:
+        async def scenario() -> None:
+            service = RemotionRuntime(self.root)
+            async def persist(_step: int, _stage: str, _checkpoint: dict[str, object]) -> None: pass
+            result = await service.render(make_params(), cancel_event=asyncio.Event(), shutdown_event=asyncio.Event(), persist=persist)
+            self.assertIsInstance(RemotionRenderResult.model_validate(result), RemotionRenderResult)
+            for field, suffix in (("relativePath", ".json"), ("manifestPath", ".manifest.json")):
+                invalid = dict(result)
+                invalid["output"] = dict(result["output"])
+                invalid["output"][field] = f"generated/remotion-v1/renders/{'e' * 64}{suffix}"
+                with self.assertRaises(ValidationError):
+                    RemotionRenderResult.model_validate(invalid)
+        asyncio.run(scenario())
+
+    def test_mismatched_remotion_checkpoint_recovers_to_needs_attention(self) -> None:
+        database = Database.open(self.root / "project.db")
+        database.migrate()
+        project_root = self.root / "project"
+        project_root.mkdir()
+        ProjectRepository(database).create(ProjectCreate(id=PROJECT_ID, name="D03", project_root=str(project_root), target_platform="douyin", created_at_ms=1, updated_at_ms=1))
+        params = make_params()
+        input_json = RemotionJobInput(render=params).model_dump(by_alias=True)
+        checkpoint = {
+            "executor": "remotion.render", "executorVersion": 1, "checkpointVersion": 1,
+            "cacheKey": "e" * 64, "timelineDigest": "c" * 64,
+        }
+        job, _ = JobRepository(database).create_job_with_event(JobCreate(
+            id=new_id(), project_id=PROJECT_ID, job_type="remotion.render", status="running", progress=1.0,
+            stage="bundle-validated", input_json=input_json, idempotency_key="recovery-key", attempt=1,
+            checkpoint_json=checkpoint, checkpoint_version=1, executor_version=1, created_at_ms=1, updated_at_ms=1,
+        ))
+        self.assertNotEqual(checkpoint["cacheKey"], compute_remotion_cache_key(params))
+        async def scenario() -> None:
+            manager = JobManager(_ActiveProject(PROJECT_ID, database, project_root))
+            await manager.activate(PROJECT_ID)
+            current = manager.get(PROJECT_ID, job.id)
+            self.assertEqual(current.status, "needs_attention")
+            self.assertEqual(current.error_code, "JOB_CHECKPOINT_INVALID")
+            await manager.shutdown()
+        try:
+            asyncio.run(scenario())
+        finally:
+            database.close()
+
+    def test_filesystem_error_does_not_leave_remotion_job_running(self) -> None:
+        database = Database.open(self.root / "project.db")
+        database.migrate()
+        project_root = self.root / "project"
+        project_root.mkdir()
+        ProjectRepository(database).create(ProjectCreate(id=PROJECT_ID, name="D03", project_root=str(project_root), target_platform="douyin", created_at_ms=1, updated_at_ms=1))
+        original_write = RemotionRuntime._atomic_bytes_write
+
+        def fail_write(_path: Path, _data: bytes) -> None:
+            raise PermissionError("test filesystem failure")
+
+        RemotionRuntime._atomic_bytes_write = staticmethod(fail_write)
+        async def scenario() -> None:
+            manager = JobManager(_ActiveProject(PROJECT_ID, database, project_root))
+            await manager.activate(PROJECT_ID)
+            job = await manager.start_remotion(make_params())
+            for _ in range(100):
+                current = manager.get(PROJECT_ID, job.job_id)
+                if current.status in {"needs_attention", "failed"}:
+                    break
+                await asyncio.sleep(0.01)
+            current = manager.get(PROJECT_ID, job.job_id)
+            self.assertEqual(current.status, "needs_attention")
+            self.assertEqual(current.error_code, "REMOTION_OUTPUT_INVALID")
+            await manager.shutdown()
+        try:
+            asyncio.run(scenario())
+        finally:
+            RemotionRuntime._atomic_bytes_write = staticmethod(original_write)
+            database.close()
 
     def test_persistent_job_uses_sqlite_and_is_idempotent(self) -> None:
         database = Database.open(self.root / "project.db")

@@ -101,7 +101,7 @@ export function isRemotionRenderResult(value: unknown): value is RemotionRenderR
   if (value.cacheStatus !== "created" && value.cacheStatus !== "cache-hit") return false;
   if (!isSha256(value.cacheKey) || !isSha256(value.bundleCacheKey) || !isSha256(value.timelineDigest)) return false;
   if (!isRecord(value.output) || !hasOnlyKeys(value.output, ["artifactKind", "relativePath", "manifestPath", "sizeBytes", "sha256"])) return false;
-  if (value.output.artifactKind !== "render-contract" || !isSafeRelativeOutput(value.output.relativePath) || !isSafeRelativeOutput(value.output.manifestPath)) return false;
+  if (value.output.artifactKind !== "render-contract" || !isCanonicalRenderPath(value.output.relativePath, value.cacheKey, false) || !isCanonicalRenderPath(value.output.manifestPath, value.cacheKey, true)) return false;
   if (!isSafeInteger(value.output.sizeBytes, 1, REMOTION_MAX_OUTPUT_BYTES) || !isSha256(value.output.sha256)) return false;
   if (!isRecord(value.player) || !hasOnlyKeys(value.player, ["availability", "compositionId", "playbackUri"])) return false;
   return value.player.availability === "contract-only" && value.player.compositionId === "timeline-preview-v1" && isPlaybackUri(value.player.playbackUri, value.projectId, value.cacheKey)
@@ -130,7 +130,10 @@ function isUuid(value: unknown): value is string { return typeof value === "stri
 function isSha256(value: unknown): value is string { return typeof value === "string" && SHA256.test(value); }
 function isSafeString(value: unknown, maximum: number): value is string { return typeof value === "string" && value.length > 0 && value.length <= maximum && !/[\u0000-\u001f\u007f]/.test(value); }
 function isSafeInteger(value: unknown, minimum: number, maximum: number): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= minimum && value <= maximum; }
-function isSafeRelativeOutput(value: unknown): value is string { return typeof value === "string" && value.length <= 512 && SAFE_PATH.test(value) && !value.split("/").includes("..") && !value.includes("\\"); }
+function isCanonicalRenderPath(value: unknown, cacheKey: string, manifest: boolean): value is string {
+  const expected = `generated/remotion-v1/renders/${cacheKey}${manifest ? ".manifest.json" : ".json"}`;
+  return typeof value === "string" && value === expected && value.length <= 512 && SAFE_PATH.test(value);
+}
 function isPlaybackUri(value: unknown, projectId: string, cacheKey: string): value is string { return value === `supervideo://remotion/${projectId}/${cacheKey}`; }
 
 function boundedJson(value: unknown, maximum: number): boolean {

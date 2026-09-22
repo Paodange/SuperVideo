@@ -16,6 +16,7 @@ from .executors import JobCancelled, JobShutdown, RemotionRenderExecutor, SmokeC
 from .models import JobEventPage, JobEventSummary, JobPage, JobSmokeInput, JobSummary, RemotionJobInput, RemotionRenderParams, RemotionRenderResult, TtsJobInput, TtsJobStartParams, TtsSynthesisResult
 from supervideo_core.media.tts_models import TTS_JOB_TYPE
 from supervideo_core.media.remotion_models import REMOTION_JOB_TYPE
+from supervideo_core.media.remotion_models import compute_remotion_cache_key
 from .state_machine import can_transition, require_transition
 
 JobEventListener = Callable[[JobEventRecord], None]
@@ -458,6 +459,8 @@ class JobManager:
                 adapter = self.tts_executor.service.registry.get(params.provider_id)
                 if adapter is None or job.checkpoint_json.get("cacheKey") != self.tts_executor.service.cache_key(job.project_id, params, adapter.adapter_version):
                     return False
+            elif job.job_type == REMOTION_JOB_TYPE and job.checkpoint_json.get("cacheKey") != compute_remotion_cache_key(params.render):
+                return False
             executor.validate_checkpoint(job.checkpoint_json, params)
         except (JobError, ValidationError, TypeError, ValueError):
             return False

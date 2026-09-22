@@ -64,5 +64,7 @@ test("D03 result contract exposes only project-relative controlled outputs", () 
   };
   assert.equal(isRemotionRenderResult(result), true);
   assert.equal(isRemotionRenderResult({ ...result, output: { ...result.output, relativePath: "C:/outside.json" } }), false);
+  assert.equal(isRemotionRenderResult({ ...result, output: { ...result.output, relativePath: `generated/remotion-v1/renders/${"e".repeat(64)}.json` } }), false);
+  assert.equal(isRemotionRenderResult({ ...result, output: { ...result.output, manifestPath: `generated/remotion-v1/renders/${"e".repeat(64)}.manifest.json` } }), false);
   assert.equal(isRemotionRenderResult({ ...result, player: { ...result.player, playbackUri: "file:///secret" } }), false);
 });

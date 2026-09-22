@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from typing import Any, Literal
 
@@ -142,11 +143,38 @@ class RemotionRenderResult(RemotionModel):
         expected = f"supervideo://remotion/{self.project_id}/{self.cache_key}"
         if self.player.playback_uri != expected:
             raise ValueError("player playback URI does not match render cache")
+        expected_output = f"generated/remotion-v1/renders/{self.cache_key}.json"
+        expected_manifest = f"generated/remotion-v1/renders/{self.cache_key}.manifest.json"
+        if self.output.relative_path != expected_output or self.output.manifest_path != expected_manifest:
+            raise ValueError("Remotion output paths do not match render cache")
         return self
 
 
+def compute_remotion_timeline_digest(params: RemotionRenderParams) -> str:
+    timeline = params.input_props.timeline.model_dump(by_alias=True, exclude_none=True)
+    return hashlib.sha256(_canonical_json(timeline)).hexdigest()
+
+
+def compute_remotion_cache_key(params: RemotionRenderParams) -> str:
+    timeline_digest = compute_remotion_timeline_digest(params)
+    value = {
+        "contractVersion": params.input_props.contract_version,
+        "renderVersion": REMOTION_RENDER_VERSION,
+        "projectId": params.project_id,
+        "templateId": REMOTION_TEMPLATE_ID,
+        "templateVersion": REMOTION_TEMPLATE_VERSION,
+        "bundleVersion": REMOTION_BUNDLE_VERSION,
+        "timelineDigest": timeline_digest,
+    }
+    return hashlib.sha256(_canonical_json(value)).hexdigest()
+
+
 def _encoded_size(value: object) -> int:
-    return len(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    return len(_canonical_json(value))
+
+
+def _canonical_json(value: object) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def _reject_forbidden_keys(value: Any, depth: int = 0) -> None:
@@ -168,4 +196,5 @@ __all__ = [
     "REMOTION_BUNDLE_VERSION", "REMOTION_CONTRACT_VERSION", "REMOTION_JOB_TYPE", "REMOTION_MAX_INPUT_BYTES", "REMOTION_MAX_OUTPUT_BYTES",
     "REMOTION_RENDER_VERSION", "REMOTION_RESULT_VERSION", "REMOTION_RUNTIME_MODE", "REMOTION_TEMPLATE_ID", "REMOTION_TEMPLATE_VERSION",
     "RemotionRenderInputProps", "RemotionRenderParams", "RemotionRenderOutput", "RemotionRenderResult",
+    "compute_remotion_cache_key", "compute_remotion_timeline_digest",
 ]

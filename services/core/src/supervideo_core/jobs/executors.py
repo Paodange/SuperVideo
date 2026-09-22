@@ -10,7 +10,8 @@ from .errors import JobError
 from .models import JobSmokeInput
 from supervideo_core.media.tts import TtsExecutionCancelled, TtsExecutionShutdown, TtsSynthesisService
 from supervideo_core.media.tts_models import TtsJobInput
-from supervideo_core.media.remotion import RemotionRuntime, RemotionRuntimeError
+from supervideo_core.media.remotion import RemotionRuntime, RemotionRuntimeError, RemotionRuntimeShutdown
+from supervideo_core.media.remotion_models import compute_remotion_cache_key
 from supervideo_core.jobs.models import RemotionJobInput
 
 
@@ -164,12 +165,21 @@ class RemotionRenderExecutor:
             result = await RemotionRuntime(project_root).renderMedia(params.render, cancel_event=cancel_event, shutdown_event=shutdown_event, persist=persist)
         except asyncio.CancelledError as error:
             raise JobCancelled() from error
+        except RemotionRuntimeShutdown as error:
+            raise JobShutdown() from error
         except RemotionRuntimeError as error:
+            raise JobError("REMOTION_OUTPUT_INVALID", cause=error) from error
+        except OSError as error:
             raise JobError("REMOTION_OUTPUT_INVALID", cause=error) from error
         except ValueError as error:
             raise JobError("REMOTION_INPUT_INVALID", cause=error) from error
         return result
 
     def validate_checkpoint(self, value: dict[str, Any], params: RemotionJobInput) -> None:
-        if value.get("executor") != self.name or value.get("executorVersion") != self.executor_version or value.get("checkpointVersion") != self.checkpoint_version or not isinstance(value.get("cacheKey"), str):
+        if (
+            value.get("executor") != self.name
+            or value.get("executorVersion") != self.executor_version
+            or value.get("checkpointVersion") != self.checkpoint_version
+            or value.get("cacheKey") != compute_remotion_cache_key(params.render)
+        ):
             raise JobError("JOB_CHECKPOINT_INVALID")
